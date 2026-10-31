@@ -1,0 +1,75 @@
+name: Release
+
+# Builds on a v* tag (and by hand). No tag without Squirrel's go-ahead.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            name: seihai-servertools-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: seihai-servertools-windows-x86_64
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            name: seihai-servertools-macos-x86_64
+          - os: macos-15
+            target: aarch64-apple-darwin
+            name: seihai-servertools-macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release -p seihai-servertools --target ${{ matrix.target }}
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist/${{ matrix.name }}
+          cp target/${{ matrix.target }}/release/seihai-servertools README.md LICENSE-MIT LICENSE-APACHE dist/${{ matrix.name }}/
+          cp scripts/lab/start.sh scripts/lab/start.command dist/${{ matrix.name }}/
+          tar czf ${{ matrix.name }}.tar.gz -C dist ${{ matrix.name }}
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force dist/${{ matrix.name }}
+          Copy-Item target/${{ matrix.target }}/release/seihai-servertools.exe,README.md,LICENSE-MIT,LICENSE-APACHE,scripts/lab/start.bat dist/${{ matrix.name }}/
+          Compress-Archive -Path dist/${{ matrix.name }} -DestinationPath ${{ matrix.name }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.zip
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "seihai-servertools ${TAG#v}" --notes ""
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*

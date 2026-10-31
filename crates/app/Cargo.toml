@@ -1,0 +1,18 @@
+[package]
+name = "servertools-app"
+description = "The seihai-servertools window: one page per tool (lab, server setup, LAT editors, world check)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "servertools_app"
+path = "src/lib.rs"
+
+[dependencies]
+setup-core.workspace = true
+lat-core.workspace = true
+eframe.workspace = true
+egui.workspace = true
