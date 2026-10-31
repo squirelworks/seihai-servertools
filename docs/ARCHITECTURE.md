@@ -66,9 +66,9 @@ Bumping a tag is its own PR here, with `cargo test` and the lab checks.
 | `config::options_txt` | `serveroptions.txt`, every line kept; `get`, `set` (in place, change comment), `diff`, `render` | working |
 | `config::backup` | `save` (dated backup, temp + rename), `backups`, `undo` (undoable) | working |
 | `stamp` | UTC `Stamp` for backup names and change comments, no dependency | working |
-| `config::listserver_toml` | `ListserverLab::scan` (bind, gserver port) | scan; editor is step 6 |
-| `profile` | `Profile`, `GSERVER_KEYS`, `LISTSERVER_KEYS` tables | tables; detection + Back to lab is step 2 |
-| `checks` | `Finding`, `Severity`, `check_gserver`, `may_save` | types; rules are step 2 |
+| `config::listserver_toml` | `ListserverLab::scan` (bind, gserver port, accounts, gserver_ip) | scan; editor is step 6 |
+| `profile` | `Profile`, key tables, `detect`, `back_to_lab` (localhost last), `apply_public` (`PublicAnswers`), `staff_with` | working |
+| `checks` | `check_gserver(options, target)` (refused combinations + safety check), `check_server_folder` (lab accounts, default account), `check_listserver`, `may_save` | working |
 | `net` | Interfaces, test connection, UPnP opt-in | contract only (step 4/5) |
 
 ### The one-step lab start
