@@ -31,3 +31,6 @@ Results:
 
 Not checked: a gserver registering with it and a client login through it
 (needs a built fork; see `docs/NEXT.md`).
+
+The real-fork run is handed to the team (Squirrel, 2026-10-31): see
+`docs/NEXT.md`, "Handed to the team".

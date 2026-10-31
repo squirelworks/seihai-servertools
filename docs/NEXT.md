@@ -3,6 +3,20 @@
 Work in this order, one branch and pull request each. Tick the box in the
 same PR. Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`.
 
+## Handed to the team (Squirrel, 2026-10-31)
+
+Squirrel left these for the other agents (Cursor, Grok, Chiaki); the Claude
+session that built the setup did not do them:
+
+- [ ] **Real-fork lab run** of the whole setup: build `seihai-gserver-v2`,
+      run it with `seihai-listserver` through `lab start`, take `default`
+      public with `setup public` (127.0.0.2 as the outside interface on
+      Linux), check `setup start` shows the gserver listening and linked, and
+      that a Seihai client gets it in the server list. Steps: "Step 4 lab
+      run" below and `docs/lab/HOWTO.md`. So far the gserver side was only a
+      stand-in script (`docs/lab/2026-10-31-lab-start.md`,
+      `docs/lab/2026-10-31-host-listserver.md`).
+
 ## Done
 
 - [x] Scaffold: workspace, licences, `AGENTS.md`, docs, CI, release workflow.
@@ -30,7 +44,7 @@ window wizard, the `setup` command line, and Host a listserver.
       "reachable from outside" always says it cannot be proven from here);
       `setup test-connection HOST[:PORT]` (`setup_core::net`). Tested with a
       stand-in gserver that prints the fork's console lines.
-- [ ] **Step 4 lab run** (needs a built fork): `seihai-listserver` on
+- [ ] **Step 4 lab run** (needs a built fork; handed to the team, see the top): `seihai-listserver` on
       `127.0.0.1`, the fork's `default` folder taken public with
       `setup public --interface 127.0.0.2 --listserver 127.0.0.1` on Linux,
       `setup start` shows listening on 127.0.0.2 and the listserver linked,
