@@ -1,0 +1,19 @@
+[package]
+name = "lat-core"
+description = "LAT (Level Administration Team) toolkit logic for seihai-servertools: remote files, levels, NPCs, ganis and the world checker. No UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "lat_core"
+path = "src/lib.rs"
+
+[dependencies]
+# Level, gmap and gani parsers: the same ones the Seihai client uses.
+seihai-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

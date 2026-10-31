@@ -1,0 +1,19 @@
+[package]
+name = "setup-core"
+description = "Server setup logic for seihai-servertools: one-step lab start, serveroptions.txt, profiles and safety checks. No UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "setup_core"
+path = "src/lib.rs"
+
+[target.'cfg(unix)'.dependencies]
+# SIGTERM, so gservers get a clean shutdown before the hard kill.
+libc = "0.2"
+
+[dev-dependencies]
+tempfile.workspace = true
