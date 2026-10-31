@@ -11,6 +11,9 @@ publish.workspace = true
 name = "setup_core"
 path = "src/lib.rs"
 
+[dependencies]
+toml_edit.workspace = true
+
 [target.'cfg(unix)'.dependencies]
 # SIGTERM, so gservers get a clean shutdown before the hard kill.
 libc = "0.2"

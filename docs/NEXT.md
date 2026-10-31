@@ -46,12 +46,16 @@ window wizard, the `setup` command line, and Host a listserver.
 - [ ] Window polish: a list of this machine's interfaces for "Listen on"
       (`net::interfaces`, planned), a folder picker, and a test that drives
       the page (egui_kittest or a state-only test of `Form::answers`).
-- [ ] **Step 6** Host a listserver: `config::listserver_toml` editor
-      (format-preserving), the wizard on the command line
-      (`setup --host-listserver`) and in the window; accounts file required,
-      `add-account` through the listserver binary. Until `seihai-listserver`
-      has its gserver allow-list, warn and tell the owner to keep the gserver
-      port closed to the outside.
+- [x] **Step 6** Host a listserver: `config::listserver_toml::ListserverToml`
+      (on `toml_edit`: comments, order and unknown keys kept),
+      `folder::ListserverConfig`, `setup host-listserver | listserver-lab |
+      listserver-undo` on the command line, the Host a listserver half of the
+      Server setup page, and the first account through
+      `seihai-listserver add-account` (password only in the child's
+      environment). Lab run: `docs/lab/2026-10-31-host-listserver.md`.
+- [ ] When `seihai-listserver` gets its gserver allow-list and HQ password
+      (its `docs/NEXT.md`), add the "Who may register" step's fields and
+      drop the warning.
 
 ## Lab track
 

@@ -18,7 +18,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use setup_core::checks::{check_server_folder, Finding, Severity};
-use setup_core::folder::{Preview, ServerFolder};
+use setup_core::config::listserver_toml::HostAnswers;
+use setup_core::folder::{ListserverConfig, ListserverPreview, Preview, ServerFolder};
 use setup_core::profile::{Profile, PublicAnswers};
 
 pub const USAGE: &str = "\
@@ -33,6 +34,14 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
   setup start  [--world DIR] [SERVER] [--gserver PATH] [--for SECS]
                start the server and show the three lights; Ctrl+C stops it
   setup test-connection HOST[:PORT]               one TCP connect to that address
+
+  setup host-listserver [--world DIR] [--bind ADDR] [--gserver-port N]
+               [--client-ports A,B,C] [--accounts FILE] [--gserver-ip peer|sent]
+               [--site-url URL] [--upgrade-url URL]
+               [--first-account NAME --password-env VAR] [--listserver-bin PATH] [--yes]
+               host a listserver for other machines (edits seihai-listserver.toml)
+  setup listserver-lab  [--world DIR] [--yes]     listserver back to 127.0.0.1
+  setup listserver-undo [--world DIR]             restore its last backup
 
 SERVER defaults to `default` (servers/default). --world defaults to the
 current folder. Values not given are asked for. Every save keeps a dated
@@ -53,6 +62,17 @@ struct Args {
     yes: bool,
     gserver: Option<PathBuf>,
     for_secs: Option<u64>,
+    // Host a listserver
+    bind: Option<String>,
+    gserver_port: Option<u16>,
+    client_ports: Option<Vec<u16>>,
+    accounts: Option<String>,
+    gserver_ip: Option<String>,
+    site_url: Option<String>,
+    upgrade_url: Option<String>,
+    first_account: Option<String>,
+    password_env: Option<String>,
+    listserver_bin: Option<PathBuf>,
 }
 
 fn parse(args: &[&str]) -> Result<Args, String> {
@@ -79,6 +99,26 @@ fn parse(args: &[&str]) -> Result<Args, String> {
                 a.for_secs = Some(value()?.parse().map_err(|_| "--for needs whole seconds")?)
             }
             "--yes" | "-y" => a.yes = true,
+            "--bind" => a.bind = Some(value()?),
+            "--gserver-port" => {
+                a.gserver_port = Some(
+                    value()?
+                        .parse()
+                        .map_err(|_| "--gserver-port needs a port")?,
+                )
+            }
+            "--client-ports" => {
+                let v = value()?;
+                let ports: Result<Vec<u16>, _> = v.split(',').map(|p| p.trim().parse()).collect();
+                a.client_ports = Some(ports.map_err(|_| format!("--client-ports: bad list {v}"))?);
+            }
+            "--accounts" => a.accounts = Some(value()?),
+            "--gserver-ip" => a.gserver_ip = Some(value()?),
+            "--site-url" => a.site_url = Some(value()?),
+            "--upgrade-url" => a.upgrade_url = Some(value()?),
+            "--first-account" => a.first_account = Some(value()?),
+            "--password-env" => a.password_env = Some(value()?),
+            "--listserver-bin" => a.listserver_bin = Some(value()?.into()),
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s if a.server.is_none() => a.server = Some(s.to_string()),
             s => return Err(format!("unexpected {s}")),
@@ -462,6 +502,261 @@ fn test_connection(io: &mut Io, target: &str) -> Result<ExitCode, String> {
     })
 }
 
+fn world_of(a: &Args) -> PathBuf {
+    a.world.clone().unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn review_and_save_listserver(
+    io: &mut Io,
+    c: &mut ListserverConfig,
+    p: &ListserverPreview,
+) -> Result<bool, String> {
+    io.say("");
+    io.say(&format!("Review ({}):", c.path.display()));
+    if p.diff.is_empty() {
+        io.say("  nothing to change.");
+    }
+    for (key, before, now) in &p.diff {
+        io.say(&format!(
+            "  {key}: {} -> {}",
+            before.as_deref().unwrap_or("(not set)"),
+            now.as_deref().unwrap_or("(removed)")
+        ));
+    }
+    if !p.findings.is_empty() {
+        io.say("Checks:");
+        print_findings(io, &p.findings);
+    }
+    if p.diff.is_empty() {
+        return Ok(true);
+    }
+    if !p.may_save() {
+        io.say("Not saved: fix the BLOCKED items first.");
+        return Ok(false);
+    }
+    if !io.confirm("Save these changes")? {
+        io.say("Not saved.");
+        return Ok(false);
+    }
+    let b = c.save(p)?;
+    io.say(&format!("Saved {}.", c.path.display()));
+    if let Some(b) = b {
+        io.say(&format!(
+            "Backup: {} (undo with `setup listserver-undo`).",
+            b.display()
+        ));
+    }
+    Ok(true)
+}
+
+fn find_listserver_bin(a: &Args, world: &std::path::Path) -> Option<PathBuf> {
+    let name = setup_core::lab::exe_name("seihai-listserver");
+    if let Some(p) = &a.listserver_bin {
+        return Some(p.clone());
+    }
+    let here = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(&name)));
+    [Some(world.join(&name)), here]
+        .into_iter()
+        .flatten()
+        .find(|p| p.is_file())
+}
+
+fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
+    let world = world_of(a);
+    let mut c = ListserverConfig::open(&world)?;
+    let cur = c.toml.settings();
+    let d = HostAnswers::default();
+    io.say(&format!(
+        "Host a listserver: {} ({}).",
+        c.path.display(),
+        if cur.is_loopback() {
+            "this machine only"
+        } else {
+            "reachable from other machines"
+        }
+    ));
+
+    io.say("");
+    io.say("1. Safety check");
+    io.say("  A listserver other machines can reach needs an accounts file (no open mode).");
+    let accounts = match &a.accounts {
+        Some(v) => v.clone(),
+        None => io.ask(
+            "Accounts file, next to seihai-listserver.toml",
+            Some(if cur.accounts.is_empty() {
+                d.accounts.as_str()
+            } else {
+                cur.accounts.as_str()
+            }),
+        )?,
+    };
+
+    io.say("");
+    io.say("2. Network");
+    let bind = match &a.bind {
+        Some(v) => v.clone(),
+        None => io.ask(
+            "Listen on: 0.0.0.0 (every IPv4 interface), :: or one address",
+            Some(&d.bind),
+        )?,
+    };
+    let gserver_port = match a.gserver_port {
+        Some(p) => p,
+        None => io
+            .ask(
+                "Port gservers register on",
+                Some(&cur.gserver_port.to_string()),
+            )?
+            .parse()
+            .map_err(|_| "not a port")?,
+    };
+    let client_ports = match &a.client_ports {
+        Some(p) => p.clone(),
+        None => {
+            let shown = c
+                .toml
+                .get("client_ports")
+                .unwrap_or_else(|| "14921,14922,14923".into());
+            let v = io.ask(
+                "Client ports, comma-separated",
+                Some(shown.trim_matches(['[', ']'])),
+            )?;
+            v.split(',')
+                .map(|p| p.trim().parse::<u16>())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| format!("bad port list {v}"))?
+        }
+    };
+
+    io.say("");
+    io.say("3. Who may register");
+    io.say(&format!(
+        "  seihai-listserver has no allow-list of gservers yet: keep port {gserver_port} closed to the outside"
+    ));
+    io.say(
+        "  (allow only your own gservers' addresses in the firewall, or run them on this machine).",
+    );
+
+    io.say("");
+    io.say("4. Addresses handed to clients");
+    let gserver_ip = match &a.gserver_ip {
+        Some(v) => v.clone(),
+        None => io.ask(
+            "peer (where each gserver connects from) or sent (what the gserver says); use sent for gservers on this machine",
+            Some(&d.gserver_ip),
+        )?,
+    };
+    if gserver_ip != "peer" && gserver_ip != "sent" {
+        return Err(format!("gserver_ip must be peer or sent, not {gserver_ip}"));
+    }
+
+    io.say("");
+    io.say("5. Site and upgrade URLs (empty is fine)");
+    let site_url = match &a.site_url {
+        Some(v) => v.clone(),
+        None => io.ask(
+            "Site URL",
+            Some(&c.toml.get("site_url").unwrap_or_default()),
+        )?,
+    };
+    let upgrade_url = match &a.upgrade_url {
+        Some(v) => v.clone(),
+        None => io.ask(
+            "Upgrade URL",
+            Some(&c.toml.get("upgrade_url").unwrap_or_default()),
+        )?,
+    };
+
+    io.say("");
+    io.say("6. Router");
+    let ports: Vec<String> = std::iter::once(gserver_port)
+        .chain(client_ports.iter().copied())
+        .map(|p| p.to_string())
+        .collect();
+    io.say(&format!(
+        "  Forward TCP ports {} to this machine (players need the client ports; only your gservers need {gserver_port}).",
+        ports.join(", ")
+    ));
+
+    let answers = HostAnswers {
+        bind,
+        gserver_port,
+        client_ports,
+        accounts,
+        gserver_ip,
+        site_url,
+        upgrade_url,
+    };
+    io.say("");
+    io.say("7. Review");
+    let p = c.preview_host(&answers);
+    if !review_and_save_listserver(io, &mut c, &p)? {
+        return Ok(ExitCode::FAILURE);
+    }
+
+    if let (Some(account), Some(path)) = (&a.first_account, c.accounts_path(&c.toml)) {
+        let var = a.password_env.clone().ok_or(
+            "--first-account needs --password-env VAR (the password is never on the command line)",
+        )?;
+        let bin = find_listserver_bin(a, &world).ok_or(
+            "no seihai-listserver found next to the world or this program (give --listserver-bin)",
+        )?;
+        let status = std::process::Command::new(&bin)
+            .arg("add-account")
+            .arg(&path)
+            .arg(account)
+            .arg("--password-env")
+            .arg(&var)
+            .status()
+            .map_err(|e| format!("{}: {e}", bin.display()))?;
+        if !status.success() {
+            return Err(format!("seihai-listserver add-account failed ({status})"));
+        }
+        io.say(&format!("Added account {account} to {}.", path.display()));
+    }
+
+    io.say("");
+    io.say("8. Your own gservers");
+    io.say("  Point gservers on this machine at it with:");
+    let saved = c.toml.settings();
+    let local = match saved.bind.as_str() {
+        "0.0.0.0" | "::" | "" => "127.0.0.1".to_string(),
+        b if b.contains(':') => format!("[{b}]"),
+        b => b.to_string(),
+    };
+    io.say(&format!(
+        "  seihai-servertools setup public --world {} --listserver {local}:{}",
+        world.display(),
+        saved.gserver_port
+    ));
+    io.say("  then start everything with `seihai-servertools lab start` or `setup start`.");
+    Ok(ExitCode::SUCCESS)
+}
+
+fn listserver_lab(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
+    let mut c = ListserverConfig::open(&world_of(a))?;
+    io.say(&format!("Listserver back to lab: {}", c.path.display()));
+    let p = c.preview_lab();
+    Ok(if review_and_save_listserver(io, &mut c, &p)? {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+fn listserver_undo(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
+    let mut c = ListserverConfig::open(&world_of(a))?;
+    let r = c.undo()?;
+    io.say(&format!(
+        "Restored {} from {}.",
+        c.path.display(),
+        r.display()
+    ));
+    Ok(ExitCode::SUCCESS)
+}
+
 /// Run `setup` with the process's standard input and output.
 pub fn run(args: &[&str]) -> ExitCode {
     let stdin = io::stdin();
@@ -513,9 +808,9 @@ fn run_with(args: &[&str], input: &mut dyn BufRead, out: &mut dyn Write) -> Exit
         "lab" | "--lab" => lab(&mut io, &a),
         "undo" => undo(&mut io, &a),
         "start" => start_and_check(&mut io, &a),
-        "--host-listserver" | "host-listserver" => {
-            Err("Host a listserver comes in setup step 6 (docs/NEXT.md)".into())
-        }
+        "--host-listserver" | "host-listserver" => host_listserver(&mut io, &a),
+        "listserver-lab" => listserver_lab(&mut io, &a),
+        "listserver-undo" => listserver_undo(&mut io, &a),
         "--help" | "-h" | "help" => {
             io.say(USAGE);
             Ok(ExitCode::SUCCESS)

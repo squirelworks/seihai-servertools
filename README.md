@@ -28,7 +28,7 @@ agent follows in [AGENTS.md](AGENTS.md).
 | One-step lab start: listserver + gservers, stopped together | `seihai-servertools lab start` | working |
 | Go-public setup: Join a listserver, Back to lab, undo | `seihai-servertools setup public\|lab\|undo\|status` | command line working ([design](docs/design/go-public.md)) |
 | Go-public setup in the window (same steps, Start and check lights) | `seihai-servertools gui --page setup` | working |
-| Host a listserver | `setup host-listserver`, window | planned |
+| Host a listserver (edits `seihai-listserver.toml`, adds the first account) | `setup host-listserver\|listserver-lab\|listserver-undo`, window | working |
 | LAT level editor: open, edit and upload levels on a live server | window page | planned ([design](docs/design/lat-tools.md)) |
 | NPC editor and gani editor | window pages | planned ([design](docs/design/lat-tools.md)) |
 | World and config checker | `seihai-servertools check WORLD` | first checks |
@@ -76,6 +76,20 @@ combinations, and saves only when you say yes. Every answer can also be
 given as an option for scripts (`setup --help`), with `--yes` to skip the
 questions. `serveroptions.txt` is edited line by line (comments and other
 keys stay) and a dated backup is kept next to it.
+
+### Host a listserver
+
+```
+seihai-servertools setup host-listserver --world path/to/world      # asks the wizard's questions
+GRAAL_PW=... seihai-servertools setup host-listserver --world path/to/world \
+    --yes --bind 0.0.0.0 --first-account owner --password-env GRAAL_PW
+seihai-servertools setup listserver-lab --world path/to/world       # back to 127.0.0.1
+```
+
+It edits `seihai-listserver.toml` in the world folder (comments and other
+keys stay, dated backup), refuses open mode on outside interfaces, and
+lists the ports to forward. `seihai-listserver` has no gserver allow-list
+yet, so keep its gserver port closed to the outside.
 
 ## Check a world
 

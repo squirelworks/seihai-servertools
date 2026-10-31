@@ -226,3 +226,45 @@ fn setup_test_connection_on_loopback() {
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains(": open"));
 }
+
+#[test]
+fn setup_host_listserver_then_back_to_lab() {
+    let w = lab_world();
+    let toml = w.path().join("seihai-listserver.toml");
+    fs::write(&toml, "# my listserver\nlist_name = \"Lab listserver\"\n").unwrap();
+    // Open mode on every interface is refused.
+    let (code, text) = setup(
+        w.path(),
+        &["host-listserver", "--yes", "--accounts", ""],
+        "",
+    );
+    assert_eq!(code, Some(1), "{text}");
+    assert!(text.contains("BLOCKED [accounts]"), "{text}");
+    // Defaults by prompts: accounts, bind, gserver port, client ports,
+    // gserver_ip, site, upgrade, save.
+    let (code, text) = setup(w.path(), &["host-listserver"], "\n\n\n\n\n\n\nyes\n");
+    assert_eq!(code, Some(0), "{text}");
+    assert!(text.contains("bind: (not set) -> 0.0.0.0"), "{text}");
+    assert!(text.contains("does not exist yet"), "{text}");
+    assert!(text.contains("--listserver 127.0.0.1:14900"), "{text}");
+    let t = fs::read_to_string(&toml).unwrap();
+    assert!(
+        t.starts_with("# my listserver\nlist_name = \"Lab listserver\"\n"),
+        "{t}"
+    );
+    assert!(
+        t.contains("bind = \"0.0.0.0\"") && t.contains("accounts = \"accounts.txt\""),
+        "{t}"
+    );
+
+    let (code, text) = setup(w.path(), &["listserver-lab", "--yes"], "");
+    assert_eq!(code, Some(0), "{text}");
+    assert!(fs::read_to_string(&toml)
+        .unwrap()
+        .contains("bind = \"127.0.0.1\""));
+    let (code, _) = setup(w.path(), &["listserver-undo"], "");
+    assert_eq!(code, Some(0));
+    assert!(fs::read_to_string(&toml)
+        .unwrap()
+        .contains("bind = \"0.0.0.0\""));
+}
