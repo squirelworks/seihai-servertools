@@ -8,8 +8,8 @@
 //! | [`lab`] | Find the binaries of a lab world and plan the one-step start | working |
 //! | [`run`] | Start a set of processes, log their consoles, stop them together | working |
 //! | [`config`] | `serveroptions.txt` (read, set, diff), backups and undo; listserver TOML (scan) | working; TOML editor in step 6 |
-//! | [`profile`] | The lab / public / host-listserver key tables, as data | tables only |
-//! | [`checks`] | Safety check and the combinations the wizard refuses | types only |
+//! | [`profile`] | Key tables, detect, Back to lab, apply the public answers | working |
+//! | [`checks`] | Safety check and the combinations the wizard refuses | working |
 //! | [`net`] | Interfaces, "test connection", opt-in UPnP | planned |
 //!
 //! The plan for each module is in `docs/ARCHITECTURE.md` and the order of
