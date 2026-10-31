@@ -10,7 +10,8 @@
 //! | [`config`] | `serveroptions.txt` (read, set, diff), backups and undo; listserver TOML (scan) | working; TOML editor in step 6 |
 //! | [`profile`] | Key tables, detect, Back to lab, apply the public answers | working |
 //! | [`checks`] | Safety check and the combinations the wizard refuses | working |
-//! | [`net`] | Interfaces, "test connection", opt-in UPnP | planned |
+//! | [`lights`] | The three "Start and check" lights, read from a gserver console | working |
+//! | [`net`] | "Test connection" (working); interfaces, opt-in UPnP (planned) | partly |
 //!
 //! The plan for each module is in `docs/ARCHITECTURE.md` and the order of
 //! the work in `docs/NEXT.md`. Rules: `AGENTS.md`.
@@ -18,6 +19,7 @@
 pub mod checks;
 pub mod config;
 pub mod lab;
+pub mod lights;
 pub mod net;
 pub mod profile;
 pub mod run;

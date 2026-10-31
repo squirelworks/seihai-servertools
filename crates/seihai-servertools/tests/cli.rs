@@ -166,3 +166,63 @@ fn setup_saying_no_writes_nothing() {
     assert!(text.contains("Not saved."), "{text}");
     assert_eq!(options(w.path()), LAB);
 }
+
+/// A stand-in gserver: prints the console lines the fork prints when it
+/// starts and links to the listserver, then waits.
+fn stand_in(dir: &std::path::Path) -> std::path::PathBuf {
+    if cfg!(windows) {
+        let p = dir.join("gs2emu-standin.bat");
+        fs::write(
+            &p,
+            "@echo off\r\necho Listening on: 0.0.0.0:14802.\r\necho listserver - Connected to 127.0.0.1:14900.\r\nping -n 30 127.0.0.1 > nul\r\n",
+        )
+        .unwrap();
+        p
+    } else {
+        let p = dir.join("gs2emu-standin");
+        fs::write(
+            &p,
+            "#!/bin/sh\necho 'Listening on: 0.0.0.0:14802.'\necho 'listserver - Connected to 127.0.0.1:14900.'\nexec sleep 30\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        p
+    }
+}
+
+#[test]
+fn setup_start_shows_the_lights() {
+    let w = lab_world();
+    let g = stand_in(w.path());
+    let (code, text) = setup(
+        w.path(),
+        &["start", "--for", "3", "--gserver", g.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(code, Some(0), "{text}");
+    assert!(
+        text.contains("Listening on:            [ ok ] 0.0.0.0:14802"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Listserver:              [ ok ] connected to 127.0.0.1:14900"),
+        "{text}"
+    );
+    assert!(text.contains("Reachable from outside:  [ ?? ]"), "{text}");
+}
+
+#[test]
+fn setup_test_connection_on_loopback() {
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let out = bin()
+        .args(["setup", "test-connection", &format!("127.0.0.1:{port}")])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains(": open"));
+}
