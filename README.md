@@ -26,7 +26,8 @@ agent follows in [AGENTS.md](AGENTS.md).
 | Tool | Command | State |
 |---|---|---|
 | One-step lab start: listserver + gservers, stopped together | `seihai-servertools lab start` | working |
-| Go-public setup: Join a listserver, Host a listserver, Back to lab | `seihai-servertools setup ...`, window page | planned ([design](docs/design/go-public.md)) |
+| Go-public setup: Join a listserver, Back to lab, undo | `seihai-servertools setup public\|lab\|undo\|status` | command line working ([design](docs/design/go-public.md)) |
+| Go-public setup in the window, Host a listserver | window page, `setup host-listserver` | planned |
 | LAT level editor: open, edit and upload levels on a live server | window page | planned ([design](docs/design/lat-tools.md)) |
 | NPC editor and gani editor | window pages | planned ([design](docs/design/lat-tools.md)) |
 | World and config checker | `seihai-servertools check WORLD` | first checks |
@@ -57,6 +58,23 @@ present). Each console goes to `servers/<name>/logs/console.txt` and
 `logs/listserver-console.txt`. Ctrl+C stops everything. A server that stops
 right away is reported with the end of its console. Without a listserver,
 the gservers start alone (`--no-listserver` does that on purpose).
+
+## Take a server public (and back)
+
+```
+seihai-servertools setup status --world path/to/world default
+seihai-servertools setup public --world path/to/world default     # asks the wizard's questions
+seihai-servertools setup lab    --world path/to/world default     # Back to lab
+seihai-servertools setup undo   --world path/to/world default     # restore the last backup
+```
+
+`setup public` walks through the safety check, server details, network,
+listserver (an address you type; there is no built-in list) and router
+steps, shows a before/after of the changed lines, refuses unsafe
+combinations, and saves only when you say yes. Every answer can also be
+given as an option for scripts (`setup --help`), with `--yes` to skip the
+questions. `serveroptions.txt` is edited line by line (comments and other
+keys stay) and a dated backup is kept next to it.
 
 ## Check a world
 

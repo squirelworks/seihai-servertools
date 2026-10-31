@@ -113,7 +113,10 @@ calls the core crates; a page never parses a file itself.
 
 ## Command line
 
-Hand-written in `crates/seihai-servertools/src/main.rs`, like the other
+`src/main.rs` dispatches; `src/lab.rs` is `lab start|plan`; `src/setup.rs` is
+the setup wizard as prompts (`status`, `public`, `lab`, `undo`). Prompts go
+through a small `Io` (input, output, `--yes`) so tests drive the wizard by
+piping answers to the binary (`tests/cli.rs`). The parser is hand-written in `crates/seihai-servertools/src/main.rs`, like the other
 stack repos. When `setup` grows its subcommands, switching to `clap`
 (MIT/Apache) is fine; keep the documented option names.
 

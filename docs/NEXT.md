@@ -22,7 +22,7 @@ window wizard, the `setup` command line, and Host a listserver.
 - [x] **Step 2** `profile` (detect Lab / Public, Back to lab in the
       `GSERVER_KEYS` order, `localhost = true` last) and `checks` (every
       safety-check rule and refused combination, one test each).
-- [ ] **Step 3** `seihai-servertools setup --public | --lab` on the command
+- [x] **Step 3** `seihai-servertools setup --public | --lab` on the command
       line: the wizard's steps as prompts, `--yes` plus options for scripts,
       a before/after diff before saving.
 - [ ] **Step 4** Start and check: run the server with `run`, tail its log,

@@ -3,6 +3,7 @@
 //! place that prints or reads the environment (see docs/ARCHITECTURE.md).
 
 mod lab;
+mod setup;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -15,7 +16,9 @@ Usage:
                                [--gserver PATH] [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
   seihai-servertools check WORLD
-  seihai-servertools setup ...      go-public setup (not built yet, see docs/NEXT.md)
+  seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
+                                    take a gserver folder public or back to the lab
+                                    (`setup --help` for the options)
   seihai-servertools gui            open the window
   seihai-servertools --version | --help
 
@@ -41,10 +44,7 @@ fn main() -> ExitCode {
         ["lab", "start", rest @ ..] => lab::run(rest, true),
         ["lab", "plan", rest @ ..] => lab::run(rest, false),
         ["check", world] => check(Path::new(world)),
-        ["setup", ..] => {
-            eprintln!("seihai-servertools setup: not built yet. The plan is in docs/NEXT.md.");
-            ExitCode::from(2)
-        }
+        ["setup", rest @ ..] => setup::run(rest),
         ["gui"] => gui(),
         _ => {
             eprintln!("{USAGE}");
