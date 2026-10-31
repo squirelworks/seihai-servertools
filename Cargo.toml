@@ -23,6 +23,8 @@ seihai-core = { git = "https://github.com/squirelworks/seihai", tag = "v0.0.3", 
 eframe = "0.29"
 egui = "0.29"
 ctrlc = "3"
+# Edits seihai-listserver.toml keeping comments, order and unknown keys.
+toml_edit = "0.22"
 tempfile = "3"
 
 setup-core = { path = "crates/setup-core" }

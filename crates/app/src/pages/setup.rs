@@ -92,6 +92,8 @@ pub struct Page {
     test: Option<Receiver<Reach>>,
     test_result: String,
     started: Option<Started>,
+    hosting: bool,
+    host: super::host::Host,
 }
 
 impl Default for Page {
@@ -106,11 +108,13 @@ impl Default for Page {
             test: None,
             test_result: String::new(),
             started: None,
+            hosting: false,
+            host: super::host::Host::default(),
         }
     }
 }
 
-fn finding_line(ui: &mut egui::Ui, f: &Finding) {
+pub(super) fn finding_line(ui: &mut egui::Ui, f: &Finding) {
     let (tag, color) = match f.severity {
         Severity::Block => ("BLOCKED", Color32::from_rgb(220, 60, 60)),
         Severity::Warn => ("warning", Color32::from_rgb(220, 160, 40)),
@@ -154,6 +158,7 @@ impl Page {
 
     fn open(&mut self) {
         self.preview = None;
+        self.host.open(std::path::Path::new(self.world.trim()));
         match ServerFolder::open(std::path::Path::new(self.world.trim()), self.server.trim()) {
             Ok(f) => {
                 self.form = Form::from_folder(&f);
@@ -182,6 +187,14 @@ impl Page {
         });
         if !self.message.is_empty() {
             ui.label(&self.message);
+        }
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.hosting, false, "Join a listserver");
+            ui.selectable_value(&mut self.hosting, true, "Host a listserver");
+        });
+        if self.hosting {
+            egui::ScrollArea::vertical().show(ui, |ui| self.host.show(ui));
+            return;
         }
         let Some(folder) = self.folder.as_ref() else {
             ui.label("Open a server folder to start.");

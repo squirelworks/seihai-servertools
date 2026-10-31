@@ -3,6 +3,20 @@
 Work in this order, one branch and pull request each. Tick the box in the
 same PR. Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`.
 
+## Handed to the team (Squirrel, 2026-10-31)
+
+Squirrel left these for the other agents (Cursor, Grok, Chiaki); the Claude
+session that built the setup did not do them:
+
+- [ ] **Real-fork lab run** of the whole setup: build `seihai-gserver-v2`,
+      run it with `seihai-listserver` through `lab start`, take `default`
+      public with `setup public` (127.0.0.2 as the outside interface on
+      Linux), check `setup start` shows the gserver listening and linked, and
+      that a Seihai client gets it in the server list. Steps: "Step 4 lab
+      run" below and `docs/lab/HOWTO.md`. So far the gserver side was only a
+      stand-in script (`docs/lab/2026-10-31-lab-start.md`,
+      `docs/lab/2026-10-31-host-listserver.md`).
+
 ## Done
 
 - [x] Scaffold: workspace, licences, `AGENTS.md`, docs, CI, release workflow.
@@ -30,7 +44,7 @@ window wizard, the `setup` command line, and Host a listserver.
       "reachable from outside" always says it cannot be proven from here);
       `setup test-connection HOST[:PORT]` (`setup_core::net`). Tested with a
       stand-in gserver that prints the fork's console lines.
-- [ ] **Step 4 lab run** (needs a built fork): `seihai-listserver` on
+- [ ] **Step 4 lab run** (needs a built fork; handed to the team, see the top): `seihai-listserver` on
       `127.0.0.1`, the fork's `default` folder taken public with
       `setup public --interface 127.0.0.2 --listserver 127.0.0.1` on Linux,
       `setup start` shows listening on 127.0.0.2 and the listserver linked,
@@ -46,12 +60,16 @@ window wizard, the `setup` command line, and Host a listserver.
 - [ ] Window polish: a list of this machine's interfaces for "Listen on"
       (`net::interfaces`, planned), a folder picker, and a test that drives
       the page (egui_kittest or a state-only test of `Form::answers`).
-- [ ] **Step 6** Host a listserver: `config::listserver_toml` editor
-      (format-preserving), the wizard on the command line
-      (`setup --host-listserver`) and in the window; accounts file required,
-      `add-account` through the listserver binary. Until `seihai-listserver`
-      has its gserver allow-list, warn and tell the owner to keep the gserver
-      port closed to the outside.
+- [x] **Step 6** Host a listserver: `config::listserver_toml::ListserverToml`
+      (on `toml_edit`: comments, order and unknown keys kept),
+      `folder::ListserverConfig`, `setup host-listserver | listserver-lab |
+      listserver-undo` on the command line, the Host a listserver half of the
+      Server setup page, and the first account through
+      `seihai-listserver add-account` (password only in the child's
+      environment). Lab run: `docs/lab/2026-10-31-host-listserver.md`.
+- [ ] When `seihai-listserver` gets its gserver allow-list and HQ password
+      (its `docs/NEXT.md`), add the "Who may register" step's fields and
+      drop the warning.
 
 ## Lab track
 

@@ -61,13 +61,13 @@ Bumping a tag is its own PR here, with `cargo test` and the lab checks.
 
 | Module | What | State |
 |---|---|---|
-| `folder` | `ServerFolder`: open, `profile`, `status_findings`, `preview_public` / `preview_lab` (`Preview` with diff and findings), `save` (refuses blocked), `undo`. The command line and the window both use it | working |
+| `folder` | `ListserverConfig` (the listserver's TOML: preview host / lab, findings incl. a missing accounts file, save, undo) and `ServerFolder`: open, `profile`, `status_findings`, `preview_public` / `preview_lab` (`Preview` with diff and findings), `save` (refuses blocked), `undo`. The command line and the window both use it | working |
 | `lab` | Lab world layout, finding `gs2emu` and `seihai-listserver`, the start `Plan` | working |
 | `run` | `ProcessSpec`, `start`, `Group` (wait, stop together: SIGTERM then kill), `tail` | working |
 | `config::options_txt` | `serveroptions.txt`, every line kept; `get`, `set` (in place, change comment), `diff`, `render` | working |
 | `config::backup` | `save` (dated backup, temp + rename), `backups`, `undo` (undoable) | working |
 | `stamp` | UTC `Stamp` for backup names and change comments, no dependency | working |
-| `config::listserver_toml` | `ListserverLab::scan` (bind, gserver port, accounts, gserver_ip) | scan; editor is step 6 |
+| `config::listserver_toml` | `ListserverLab::scan` for the lab start; `ListserverToml` editor (toml_edit), `HostAnswers`, `apply_host`, `listserver_back_to_lab` | working |
 | `profile` | `Profile`, key tables, `detect`, `back_to_lab` (localhost last), `apply_public` (`PublicAnswers`), `staff_with` | working |
 | `checks` | `check_gserver(options, target)` (refused combinations + safety check), `check_server_folder` (lab accounts, default account), `check_listserver`, `may_save` | working |
 | `lights` | `Lights::read(console, public)`: listening on, listserver, reachable (always unknown) | working |

@@ -1,6 +1,7 @@
 //! One module per page. See the crate docs for how to add one.
 
 pub mod check;
+pub mod host;
 pub mod lab;
 pub mod setup;
 
