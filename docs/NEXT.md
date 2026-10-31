@@ -37,8 +37,15 @@ window wizard, the `setup` command line, and Host a listserver.
       a Seihai client gets the server in the list. Write it up in
       `docs/lab/`. If the fork prints its lines differently, fix
       `lights.rs` and its table.
-- [ ] **Step 5** Window: the Join a listserver page (same steps, same core
-      calls, no logic in the page).
+- [x] **Step 5** Window: the Server setup page (`crates/app/src/pages/setup.rs`):
+      the seven steps on one page, Test connection on a worker thread,
+      Review Join a listserver / Back to lab with the diff and findings,
+      Save only when nothing blocks, Undo, Start and check with the lights.
+      All through `setup_core::folder::ServerFolder`, which the command line
+      uses too. `seihai-servertools gui --world DIR --page setup` opens it.
+- [ ] Window polish: a list of this machine's interfaces for "Listen on"
+      (`net::interfaces`, planned), a folder picker, and a test that drives
+      the page (egui_kittest or a state-only test of `Form::answers`).
 - [ ] **Step 6** Host a listserver: `config::listserver_toml` editor
       (format-preserving), the wizard on the command line
       (`setup --host-listserver`) and in the window; accounts file required,

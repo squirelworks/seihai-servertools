@@ -27,7 +27,8 @@ agent follows in [AGENTS.md](AGENTS.md).
 |---|---|---|
 | One-step lab start: listserver + gservers, stopped together | `seihai-servertools lab start` | working |
 | Go-public setup: Join a listserver, Back to lab, undo | `seihai-servertools setup public\|lab\|undo\|status` | command line working ([design](docs/design/go-public.md)) |
-| Go-public setup in the window, Host a listserver | window page, `setup host-listserver` | planned |
+| Go-public setup in the window (same steps, Start and check lights) | `seihai-servertools gui --page setup` | working |
+| Host a listserver | `setup host-listserver`, window | planned |
 | LAT level editor: open, edit and upload levels on a live server | window page | planned ([design](docs/design/lat-tools.md)) |
 | NPC editor and gani editor | window pages | planned ([design](docs/design/lat-tools.md)) |
 | World and config checker | `seihai-servertools check WORLD` | first checks |

@@ -19,7 +19,8 @@ Usage:
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
-  seihai-servertools gui            open the window
+  seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|check]
+                                    open the window
   seihai-servertools --version | --help
 
 lab start: starts the listserver (if one is found) and then the gservers of a
@@ -45,7 +46,7 @@ fn main() -> ExitCode {
         ["lab", "plan", rest @ ..] => lab::run(rest, false),
         ["check", world] => check(Path::new(world)),
         ["setup", rest @ ..] => setup::run(rest),
-        ["gui"] => gui(),
+        ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -82,8 +83,26 @@ fn check(world: &Path) -> ExitCode {
 }
 
 #[cfg(feature = "gui")]
-fn gui() -> ExitCode {
-    match servertools_app::run() {
+fn gui(args: &[&str]) -> ExitCode {
+    let mut opts = servertools_app::StartOptions::default();
+    let mut it = args.iter();
+    while let Some(&a) = it.next() {
+        match (a, it.next()) {
+            ("--world", Some(w)) => opts.world = Some(w.into()),
+            ("--page", Some(p)) => match servertools_app::Tab::from_name(p) {
+                Some(t) => opts.tab = Some(t),
+                None => {
+                    eprintln!("gui: no page {p} (lab, setup, levels, npcs, ganis, check)");
+                    return ExitCode::from(2);
+                }
+            },
+            _ => {
+                eprintln!("gui [--world DIR] [--page NAME]");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    match servertools_app::run(opts) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("gui: {e}");
@@ -93,7 +112,7 @@ fn gui() -> ExitCode {
 }
 
 #[cfg(not(feature = "gui"))]
-fn gui() -> ExitCode {
+fn gui(_: &[&str]) -> ExitCode {
     eprintln!("gui: this build has no window (built without the `gui` feature)");
     ExitCode::from(2)
 }

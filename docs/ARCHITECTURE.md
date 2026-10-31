@@ -61,6 +61,7 @@ Bumping a tag is its own PR here, with `cargo test` and the lab checks.
 
 | Module | What | State |
 |---|---|---|
+| `folder` | `ServerFolder`: open, `profile`, `status_findings`, `preview_public` / `preview_lab` (`Preview` with diff and findings), `save` (refuses blocked), `undo`. The command line and the window both use it | working |
 | `lab` | Lab world layout, finding `gs2emu` and `seihai-listserver`, the start `Plan` | working |
 | `run` | `ProcessSpec`, `start`, `Group` (wait, stop together: SIGTERM then kill), `tail` | working |
 | `config::options_txt` | `serveroptions.txt`, every line kept; `get`, `set` (in place, change comment), `diff`, `render` | working |
@@ -108,8 +109,8 @@ on a local folder (tests, owner on the same machine) and a live server
 ## app (the window)
 
 `App` has a side bar of `Tab`s and one module per page in `src/pages/`.
-Today: Lab (shows the plan), World check (runs the checker). Server setup,
-Level editor, NPC editor and Gani editor show what they will do. Each page
+Today: Lab (shows the plan), Server setup (the Join a listserver wizard,
+Back to lab, undo, Start and check), World check (runs the checker). Level editor, NPC editor and Gani editor show what they will do. Each page
 calls the core crates; a page never parses a file itself.
 
 ## Command line

@@ -14,6 +14,10 @@ pub struct Page {
 }
 
 impl Page {
+    pub fn set_world(&mut self, world: &str) {
+        self.world = world.to_string();
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("World folder:");
