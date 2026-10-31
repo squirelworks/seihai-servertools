@@ -10,7 +10,7 @@
 /// Default port gservers register on.
 pub const DEFAULT_GSERVER_PORT: u16 = 14900;
 
-/// The two settings the lab start needs, read with a plain line scan so a
+/// The settings the lab start and the safety check need, read with a plain line scan so a
 /// half-edited file still starts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListserverLab {
@@ -18,6 +18,10 @@ pub struct ListserverLab {
     pub bind: String,
     /// `gserver_port`, or [`DEFAULT_GSERVER_PORT`] when missing or not a number.
     pub gserver_port: u16,
+    /// `accounts`: empty means open mode (every account gets in).
+    pub accounts: String,
+    /// `gserver_ip`: `peer` (the default) or `sent`.
+    pub gserver_ip: String,
 }
 
 impl Default for ListserverLab {
@@ -25,6 +29,8 @@ impl Default for ListserverLab {
         ListserverLab {
             bind: "127.0.0.1".into(),
             gserver_port: DEFAULT_GSERVER_PORT,
+            accounts: String::new(),
+            gserver_ip: "peer".into(),
         }
     }
 }
@@ -45,6 +51,8 @@ impl ListserverLab {
             let value = value.split('#').next().unwrap_or("").trim();
             match key.trim() {
                 "bind" => out.bind = value.trim_matches('"').to_string(),
+                "accounts" => out.accounts = value.trim_matches('"').to_string(),
+                "gserver_ip" => out.gserver_ip = value.trim_matches('"').to_string(),
                 "gserver_port" => {
                     if let Ok(port) = value.parse() {
                         out.gserver_port = port;

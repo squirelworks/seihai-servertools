@@ -19,7 +19,7 @@ window wizard, the `setup` command line, and Host a listserver.
       `# Changed by Seihai server setup, YYYY-MM-DD` comment) and
       `config::backup` (dated backup, temp + rename, undo). Round-trip tests:
       comments, unknown keys, CRLF and order survive.
-- [ ] **Step 2** `profile` (detect Lab / Public, Back to lab in the
+- [x] **Step 2** `profile` (detect Lab / Public, Back to lab in the
       `GSERVER_KEYS` order, `localhost = true` last) and `checks` (every
       safety-check rule and refused combination, one test each).
 - [ ] **Step 3** `seihai-servertools setup --public | --lab` on the command
