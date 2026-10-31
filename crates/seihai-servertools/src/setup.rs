@@ -32,6 +32,9 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
                [--interface AUTO|ADDR] [--server-ip AUTO|ADDR] [--upnp] [--yes]
   setup lab    [--world DIR] [SERVER] [--yes]      Back to lab
   setup undo   [--world DIR] [SERVER]              restore the last backup
+  setup start  [--world DIR] [SERVER] [--gserver PATH] [--for SECS]
+               start the server and show the three lights; Ctrl+C stops it
+  setup test-connection HOST[:PORT]               one TCP connect to that address
 
 SERVER defaults to `default` (servers/default). --world defaults to the
 current folder. Values not given are asked for. Every save keeps a dated
@@ -50,6 +53,8 @@ struct Args {
     server_ip: Option<String>,
     upnp: bool,
     yes: bool,
+    gserver: Option<PathBuf>,
+    for_secs: Option<u64>,
 }
 
 fn parse(args: &[&str]) -> Result<Args, String> {
@@ -71,6 +76,10 @@ fn parse(args: &[&str]) -> Result<Args, String> {
             "--interface" => a.interface = Some(value()?),
             "--server-ip" => a.server_ip = Some(value()?),
             "--upnp" => a.upnp = true,
+            "--gserver" => a.gserver = Some(value()?.into()),
+            "--for" => {
+                a.for_secs = Some(value()?.parse().map_err(|_| "--for needs whole seconds")?)
+            }
             "--yes" | "-y" => a.yes = true,
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s if a.server.is_none() => a.server = Some(s.to_string()),
@@ -371,7 +380,7 @@ fn public(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     io.say("6. Review");
     let code = review_and_save(io, &f, &after, Profile::Public)?;
     if code == ExitCode::SUCCESS {
-        io.say("Next: start the server and check that it registers with the listserver.");
+        io.say("Next: `seihai-servertools setup start` starts it and shows whether it registers.");
     }
     Ok(code)
 }
@@ -396,6 +405,88 @@ fn undo(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Start the server folder's gserver and show the lights until Ctrl+C or
+/// `--for` seconds, then stop it.
+fn start_and_check(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
+    use setup_core::lab::exe_name;
+    use setup_core::lights::Lights;
+    use setup_core::run::{start, tail, Group, ProcessSpec};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    let f = open_folder(a)?;
+    let world = a.world.clone().unwrap_or_else(|| PathBuf::from("."));
+    let name = a.server.clone().unwrap_or_else(|| "default".into());
+    let program = a
+        .gserver
+        .clone()
+        .unwrap_or_else(|| world.join(exe_name("gs2emu")));
+    if !program.is_file() {
+        return Err(format!(
+            "no gserver at {} (give --gserver)",
+            program.display()
+        ));
+    }
+    let public = detect(&f.options) != Profile::Lab;
+    let spec = ProcessSpec {
+        label: name.clone(),
+        program,
+        args: vec!["--server".into(), name.clone()],
+        cwd: world,
+        console: f.dir.join("logs").join("console.txt"),
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    {
+        let stop = stop.clone();
+        let _ = ctrlc::set_handler(move || stop.store(true, Ordering::SeqCst));
+    }
+    let mut group = Group::default();
+    group.push(start(&spec).map_err(|e| e.to_string())?);
+    io.say(&format!(
+        "Started {name}; console in {}. Stop with Ctrl+C.",
+        spec.console.display()
+    ));
+    let deadline = a.for_secs.map(|s| Instant::now() + Duration::from_secs(s));
+    let mut shown = String::new();
+    let mut code = ExitCode::SUCCESS;
+    loop {
+        let text = std::fs::read_to_string(&spec.console).unwrap_or_default();
+        let lights = Lights::read(&text, public).to_string();
+        if lights != shown {
+            io.say("");
+            io.say(&lights);
+            shown = lights;
+        }
+        if let Some((_, status)) = group.stopped().into_iter().next() {
+            io.say(&format!(
+                "{name} stopped ({status}). The end of its console:"
+            ));
+            io.say(&tail(&spec.console, 15));
+            code = ExitCode::FAILURE;
+            break;
+        }
+        if stop.load(Ordering::SeqCst) || deadline.is_some_and(|d| Instant::now() >= d) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+    io.say("Stopping...");
+    group.stop_all(Duration::from_secs(5));
+    Ok(code)
+}
+
+fn test_connection(io: &mut Io, target: &str) -> Result<ExitCode, String> {
+    let (host, port) = split_host_port(target)?;
+    let reach = setup_core::net::test_connection(&host, port, std::time::Duration::from_secs(5));
+    io.say(&format!("{host}:{port}: {reach}"));
+    Ok(if reach == setup_core::net::Reach::Open {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
 /// Run `setup` with the process's standard input and output.
 pub fn run(args: &[&str]) -> ExitCode {
     let stdin = io::stdin();
@@ -412,6 +503,23 @@ fn run_with(args: &[&str], input: &mut dyn BufRead, out: &mut dyn Write) -> Exit
             return ExitCode::from(2);
         }
     };
+    if cmd == "test-connection" {
+        let mut io = Io {
+            input,
+            out,
+            yes: true,
+        };
+        return match rest {
+            [target] => test_connection(&mut io, target).unwrap_or_else(|e| {
+                eprintln!("setup: {e}");
+                ExitCode::FAILURE
+            }),
+            _ => {
+                eprintln!("setup test-connection HOST[:PORT]");
+                ExitCode::from(2)
+            }
+        };
+    }
     let a = match parse(rest) {
         Ok(a) => a,
         Err(e) => {
@@ -429,6 +537,7 @@ fn run_with(args: &[&str], input: &mut dyn BufRead, out: &mut dyn Write) -> Exit
         "public" | "--public" => public(&mut io, &a),
         "lab" | "--lab" => lab(&mut io, &a),
         "undo" => undo(&mut io, &a),
+        "start" => start_and_check(&mut io, &a),
         "--host-listserver" | "host-listserver" => {
             Err("Host a listserver comes in setup step 6 (docs/NEXT.md)".into())
         }

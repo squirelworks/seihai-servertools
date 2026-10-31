@@ -25,11 +25,18 @@ window wizard, the `setup` command line, and Host a listserver.
 - [x] **Step 3** `seihai-servertools setup --public | --lab` on the command
       line: the wizard's steps as prompts, `--yes` plus options for scripts,
       a before/after diff before saving.
-- [ ] **Step 4** Start and check: run the server with `run`, tail its log,
-      the three lights (listening on, listserver registered, reachable from
-      outside: cannot be proven behind NAT, say so). Loopback e2e test with
-      `seihai-listserver` on `127.0.0.1` and `127.0.0.2` as the "outside"
-      interface on Linux.
+- [x] **Step 4** Start and check: `setup start` runs the server with `run`,
+      reads its console and shows the three lights (`setup_core::lights`;
+      "reachable from outside" always says it cannot be proven from here);
+      `setup test-connection HOST[:PORT]` (`setup_core::net`). Tested with a
+      stand-in gserver that prints the fork's console lines.
+- [ ] **Step 4 lab run** (needs a built fork): `seihai-listserver` on
+      `127.0.0.1`, the fork's `default` folder taken public with
+      `setup public --interface 127.0.0.2 --listserver 127.0.0.1` on Linux,
+      `setup start` shows listening on 127.0.0.2 and the listserver linked,
+      a Seihai client gets the server in the list. Write it up in
+      `docs/lab/`. If the fork prints its lines differently, fix
+      `lights.rs` and its table.
 - [ ] **Step 5** Window: the Join a listserver page (same steps, same core
       calls, no logic in the page).
 - [ ] **Step 6** Host a listserver: `config::listserver_toml` editor
