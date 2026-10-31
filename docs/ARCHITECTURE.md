@@ -63,8 +63,9 @@ Bumping a tag is its own PR here, with `cargo test` and the lab checks.
 |---|---|---|
 | `lab` | Lab world layout, finding `gs2emu` and `seihai-listserver`, the start `Plan` | working |
 | `run` | `ProcessSpec`, `start`, `Group` (wait, stop together: SIGTERM then kill), `tail` | working |
-| `config::options_txt` | `serveroptions.txt`, every line kept; `get`, `render` | reader; writer is setup step 1 |
-| `config::backup` | Dated backups, write through temp + rename, undo | contract only (step 1) |
+| `config::options_txt` | `serveroptions.txt`, every line kept; `get`, `set` (in place, change comment), `diff`, `render` | working |
+| `config::backup` | `save` (dated backup, temp + rename), `backups`, `undo` (undoable) | working |
+| `stamp` | UTC `Stamp` for backup names and change comments, no dependency | working |
 | `config::listserver_toml` | `ListserverLab::scan` (bind, gserver port) | scan; editor is step 6 |
 | `profile` | `Profile`, `GSERVER_KEYS`, `LISTSERVER_KEYS` tables | tables; detection + Back to lab is step 2 |
 | `checks` | `Finding`, `Severity`, `check_gserver`, `may_save` | types; rules are step 2 |

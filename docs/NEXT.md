@@ -15,7 +15,7 @@ same PR. Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`.
 Squirrel asked for all three parts in the first version (2026-10-31): the
 window wizard, the `setup` command line, and Host a listserver.
 
-- [ ] **Step 1** `config::options_txt` writer (`set`, `remove`, the
+- [x] **Step 1** `config::options_txt` writer (`set`, `remove`, the
       `# Changed by Seihai server setup, YYYY-MM-DD` comment) and
       `config::backup` (dated backup, temp + rename, undo). Round-trip tests:
       comments, unknown keys, CRLF and order survive.

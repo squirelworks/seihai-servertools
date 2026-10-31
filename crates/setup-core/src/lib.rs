@@ -7,7 +7,7 @@
 //! |---|---|---|
 //! | [`lab`] | Find the binaries of a lab world and plan the one-step start | working |
 //! | [`run`] | Start a set of processes, log their consoles, stop them together | working |
-//! | [`config`] | Read and (later) write `serveroptions.txt` and the listserver TOML | reader only |
+//! | [`config`] | `serveroptions.txt` (read, set, diff), backups and undo; listserver TOML (scan) | working; TOML editor in step 6 |
 //! | [`profile`] | The lab / public / host-listserver key tables, as data | tables only |
 //! | [`checks`] | Safety check and the combinations the wizard refuses | types only |
 //! | [`net`] | Interfaces, "test connection", opt-in UPnP | planned |
@@ -21,3 +21,4 @@ pub mod lab;
 pub mod net;
 pub mod profile;
 pub mod run;
+pub mod stamp;
