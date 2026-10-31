@@ -5,6 +5,7 @@
 //!
 //! | Module | What | State |
 //! |---|---|---|
+//! | [`folder`] | One server folder: open, preview a change, check, save with backup, undo | working |
 //! | [`lab`] | Find the binaries of a lab world and plan the one-step start | working |
 //! | [`run`] | Start a set of processes, log their consoles, stop them together | working |
 //! | [`config`] | `serveroptions.txt` (read, set, diff), backups and undo; listserver TOML (scan) | working; TOML editor in step 6 |
@@ -18,6 +19,7 @@
 
 pub mod checks;
 pub mod config;
+pub mod folder;
 pub mod lab;
 pub mod lights;
 pub mod net;

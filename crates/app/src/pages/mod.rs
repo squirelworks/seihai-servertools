@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod lab;
+pub mod setup;
 
 use eframe::egui;
 

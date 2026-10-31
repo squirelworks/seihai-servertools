@@ -247,15 +247,23 @@ pub fn apply_public(options: &mut OptionsTxt, a: &PublicAnswers, date: &str) -> 
     ];
     values
         .into_iter()
-        .filter(|(key, value)| options.set(key, value, date))
+        // An empty optional text (description, url) is not added as a new key.
+        .filter(|(key, value)| {
+            !(value.is_empty() && options.get(key).is_none()) && options.set(key, value, date)
+        })
         .map(|(key, _)| key)
         .collect()
 }
 
 /// The `staff` list with `YOURACCOUNT` replaced by `account`, or `account`
-/// added when neither is in it. Entries like `(Manager)` are kept.
+/// added when neither is in it. Entries like `(Manager)` are kept. An empty
+/// `account` leaves the list as it is (so the safety check still blocks a
+/// `YOURACCOUNT`).
 pub fn staff_with(staff: &str, account: &str) -> String {
     let account = account.trim();
+    if account.is_empty() {
+        return staff.to_string();
+    }
     let mut parts: Vec<String> = staff
         .split(',')
         .map(|p| p.trim().to_string())
@@ -300,6 +308,14 @@ mod tests {
             url: String::new(),
             staff_account: "owner".into(),
         }
+    }
+
+    #[test]
+    fn empty_optional_texts_are_not_added() {
+        let mut o = OptionsTxt::parse(LAB);
+        apply_public(&mut o, &answers(), "2026-10-31");
+        assert_eq!(o.get("url"), None);
+        assert_eq!(o.get("description"), Some("A test world"));
     }
 
     #[test]
@@ -354,6 +370,10 @@ mod tests {
         assert_eq!(staff_with("a, b", "owner"), "a,b,owner");
         assert_eq!(staff_with("", "owner"), "owner");
         assert_eq!(staff_with("YOURACCOUNT,owner", "owner"), "owner");
+        assert_eq!(
+            staff_with("(Manager),YOURACCOUNT", " "),
+            "(Manager),YOURACCOUNT"
+        );
     }
 
     #[test]

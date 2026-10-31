@@ -17,11 +17,9 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use setup_core::checks::{check_gserver, check_server_folder, may_save, Finding, Severity};
-use setup_core::config::backup;
-use setup_core::config::options_txt::OptionsTxt;
-use setup_core::profile::{apply_public, back_to_lab, detect, Profile, PublicAnswers};
-use setup_core::stamp::Stamp;
+use setup_core::checks::{check_server_folder, Finding, Severity};
+use setup_core::folder::{Preview, ServerFolder};
+use setup_core::profile::{Profile, PublicAnswers};
 
 pub const USAGE: &str = "\
 seihai-servertools setup: take a gserver folder from the lab to the public and back
@@ -153,27 +151,10 @@ fn print_findings(io: &mut Io, findings: &[Finding]) {
     }
 }
 
-struct Folder {
-    dir: PathBuf,
-    options_path: PathBuf,
-    options: OptionsTxt,
-}
-
-fn open_folder(a: &Args) -> Result<Folder, String> {
+fn open_folder(a: &Args) -> Result<ServerFolder, String> {
     let world = a.world.clone().unwrap_or_else(|| PathBuf::from("."));
     let name = a.server.clone().unwrap_or_else(|| "default".into());
-    if name.contains(['/', '\\']) || name == ".." {
-        return Err(format!("bad server folder name {name}"));
-    }
-    let dir = world.join("servers").join(&name);
-    let options_path = dir.join("config").join("serveroptions.txt");
-    let options = OptionsTxt::load(&options_path)
-        .map_err(|e| format!("cannot read {}: {e}", options_path.display()))?;
-    Ok(Folder {
-        dir,
-        options_path,
-        options,
-    })
+    ServerFolder::open(&world, &name)
 }
 
 fn profile_name(p: Profile) -> &'static str {
@@ -187,30 +168,27 @@ fn profile_name(p: Profile) -> &'static str {
 /// Show the before/after, check, confirm and save. Returns the exit code.
 fn review_and_save(
     io: &mut Io,
-    f: &Folder,
-    after: &OptionsTxt,
-    target: Profile,
+    f: &mut ServerFolder,
+    preview: &Preview,
 ) -> Result<ExitCode, String> {
-    let diff = f.options.diff(after);
     io.say("");
     io.say("Review:");
-    if diff.is_empty() {
+    if preview.diff.is_empty() {
         io.say("  nothing to change.");
         return Ok(ExitCode::SUCCESS);
     }
-    for (key, before, now) in &diff {
+    for (key, before, now) in &preview.diff {
         io.say(&format!(
             "  {key}: {} -> {}",
             before.as_deref().unwrap_or("(not set)"),
             now.as_deref().unwrap_or("(removed)")
         ));
     }
-    let findings = check_gserver(after, target);
-    if !findings.is_empty() {
+    if !preview.findings.is_empty() {
         io.say("Checks:");
-        print_findings(io, &findings);
+        print_findings(io, &preview.findings);
     }
-    if !may_save(&findings) {
+    if !preview.may_save() {
         io.say("Not saved: fix the BLOCKED items first.");
         return Ok(ExitCode::FAILURE);
     }
@@ -218,8 +196,7 @@ fn review_and_save(
         io.say("Not saved.");
         return Ok(ExitCode::FAILURE);
     }
-    let backup = backup::save(&f.options_path, after.render().as_bytes(), Stamp::now())
-        .map_err(|e| format!("cannot save {}: {e}", f.options_path.display()))?;
+    let backup = f.save(preview)?;
     io.say(&format!("Saved {}.", f.options_path.display()));
     if let Some(b) = backup {
         io.say(&format!(
@@ -232,8 +209,11 @@ fn review_and_save(
 
 fn status(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     let f = open_folder(a)?;
-    let p = detect(&f.options);
-    io.say(&format!("{}: {}", f.dir.display(), profile_name(p)));
+    io.say(&format!(
+        "{}: {}",
+        f.dir.display(),
+        profile_name(f.profile())
+    ));
     for key in [
         "serverinterface",
         "serverip",
@@ -250,9 +230,7 @@ fn status(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
             f.options.get(key).unwrap_or("(not set)")
         ));
     }
-    let mut findings = check_gserver(&f.options, p);
-    findings.extend(check_server_folder(&f.dir));
-    print_findings(io, &findings);
+    print_findings(io, &f.status_findings());
     Ok(ExitCode::SUCCESS)
 }
 
@@ -279,11 +257,11 @@ fn split_host_port(s: &str) -> Result<(String, u16), String> {
 }
 
 fn public(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
-    let f = open_folder(a)?;
+    let mut f = open_folder(a)?;
     io.say(&format!(
         "Join a listserver: {} is now {}.",
         f.dir.display(),
-        profile_name(detect(&f.options))
+        profile_name(f.profile())
     ));
 
     io.say("");
@@ -374,11 +352,10 @@ fn public(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
         url,
         staff_account: account,
     };
-    let mut after = f.options.clone();
-    apply_public(&mut after, &answers, &Stamp::now().date());
+    let preview = f.preview_public(&answers);
     io.say("");
     io.say("6. Review");
-    let code = review_and_save(io, &f, &after, Profile::Public)?;
+    let code = review_and_save(io, &mut f, &preview)?;
     if code == ExitCode::SUCCESS {
         io.say("Next: `seihai-servertools setup start` starts it and shows whether it registers.");
     }
@@ -386,17 +363,15 @@ fn public(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
 }
 
 fn lab(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
-    let f = open_folder(a)?;
+    let mut f = open_folder(a)?;
     io.say(&format!("Back to lab: {}", f.dir.display()));
-    let mut after = f.options.clone();
-    back_to_lab(&mut after, &Stamp::now().date());
-    review_and_save(io, &f, &after, Profile::Lab)
+    let preview = f.preview_lab();
+    review_and_save(io, &mut f, &preview)
 }
 
 fn undo(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
-    let f = open_folder(a)?;
-    let restored = backup::undo(&f.options_path, Stamp::now())
-        .map_err(|e| format!("undo {}: {e}", f.options_path.display()))?;
+    let mut f = open_folder(a)?;
+    let restored = f.undo()?;
     io.say(&format!(
         "Restored {} from {} (the replaced file was kept as a backup).",
         f.options_path.display(),
@@ -428,13 +403,13 @@ fn start_and_check(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
             program.display()
         ));
     }
-    let public = detect(&f.options) != Profile::Lab;
+    let public = f.profile() != Profile::Lab;
     let spec = ProcessSpec {
         label: name.clone(),
         program,
         args: vec!["--server".into(), name.clone()],
         cwd: world,
-        console: f.dir.join("logs").join("console.txt"),
+        console: f.console_path(),
     };
     let stop = Arc::new(AtomicBool::new(false));
     {
