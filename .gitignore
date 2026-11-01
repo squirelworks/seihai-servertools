@@ -1,1 +1,11 @@
 /target
+
+# Recovered notes only. Ignore raw dumps, binaries, archives, and decompiler databases.
+/recovered-drive-tools/**
+!/recovered-drive-tools/**/
+!/recovered-drive-tools/**/*.md
+/recovered-hacks/**
+!/recovered-hacks/**/
+!/recovered-hacks/**/*.md
+!/recovered-hacks/**/*.json
+!/recovered-hacks/**/*.BLOCKED.txt
