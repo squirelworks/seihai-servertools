@@ -100,7 +100,7 @@ The window's Lab page will run the same `Plan` on a worker thread.
 | `level` | `open` via `seihai_core::assets::Level` | open only |
 | `gani` | `open` via `seihai_core::assets::Gani` | open only |
 | `npc` | Level NPCs and NPC-server NPCs | contract only |
-| `check` | `check_world`: parse errors, missing link targets, gmap holes | first checks |
+| `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds | working |
 
 Every editor reads and writes through `RemoteFiles`, so the same editor works
 on a local folder (tests, owner on the same machine) and a live server

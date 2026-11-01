@@ -99,7 +99,8 @@ window wizard, the `setup` command line, and Host a listserver.
 
 ## Checker track
 
-- [ ] Missing images and sounds named by levels, NPCs and ganis.
-- [ ] GS1 syntax errors in level NPCs.
+- [x] Missing images and sounds named by levels, NPCs and ganis.
+- [ ] GS1 syntax errors in level NPCs (and the images and sounds those
+      scripts name, such as `showimg` and `play`).
 - [ ] `serveroptions.txt` checks from `setup_core::checks` (after setup step 2).
 - [ ] `check --json`.
