@@ -18,8 +18,9 @@ client: [seihai](https://github.com/squirelworks/seihai).
 world checker. The setup wizard and the LAT editors are planned and laid
 out. The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the ordered to-do list in
-[docs/NEXT.md](docs/NEXT.md), and the rules every contributor and coding
-agent follows in [AGENTS.md](AGENTS.md).
+[docs/NEXT.md](docs/NEXT.md), operator security notes in
+[docs/security/README.md](docs/security/README.md), and the rules every
+contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 
 ## What is in it
 
