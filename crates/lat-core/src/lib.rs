@@ -11,7 +11,7 @@
 //! | [`level`] | Open levels through `seihai-core`'s parser | open only |
 //! | [`gani`] | Open ganis through `seihai-core`'s parser | open only |
 //! | [`npc`] | NPC scripts in levels and on the NPC-server | planned |
-//! | [`check`] | The world and config checker | first checks |
+//! | [`check`] | The world and config checker | parse, links, images and sounds |
 //!
 //! Parsers come from `seihai-core`, pinned by tag in the workspace
 //! `Cargo.toml`. Do not write a second level or gani parser here: fix or

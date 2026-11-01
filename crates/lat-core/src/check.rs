@@ -6,18 +6,22 @@
 //! - levels (`.nw`, `.graal`, `.zelda`) that `seihai-core` cannot parse;
 //! - level links whose destination level is not in the world;
 //! - gmaps that do not parse, and gmap cells naming a level that is missing;
-//! - ganis that do not parse.
+//! - ganis that do not parse;
+//! - images and sounds a level NPC or a gani names, when `seihai-core`'s
+//!   asset resolver cannot find them in this folder (a warning: the world
+//!   still loads).
 //!
-//! **Planned** (`docs/NEXT.md`): missing images and sounds that NPCs and
-//! ganis name (with `seihai-core`'s asset resolver), GS1 syntax errors,
-//! `serveroptions.txt` and folder config checks (`setup_core::checks`), a
-//! `--json` report for CI.
+//! **Planned** (`docs/NEXT.md`): GS1 syntax errors in level NPCs (and the
+//! images and sounds those scripts name), `serveroptions.txt` checks
+//! (`setup_core::checks`), a `--json` report for CI.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use seihai_core::assets::{AssetResolver, AssetRoot};
 use seihai_core::gmap::Gmap;
+use seihai_core::protocol::ClientVersion;
 
 /// How serious a finding is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -96,6 +100,10 @@ pub fn check_world(root: &Path) -> Report {
     let exists = |name: &str| names.contains(&name.to_ascii_lowercase());
 
     let mut report = Report::default();
+    // 2.22's profile accepts a `.png` where a `.gif` was named, and the
+    // other way around. The question here is whether the file is in the
+    // folder, not whether one older build can draw it.
+    let assets = AssetResolver::new(AssetRoot::new(root), ClientVersion::V222.profile());
     for path in &files {
         let file = rel(root, path);
         let name = path
@@ -127,6 +135,17 @@ pub fn check_world(root: &Path) -> Report {
                             });
                         }
                     }
+                    let mut seen = BTreeSet::new();
+                    for npc in &level.npcs {
+                        note_image(
+                            &mut report,
+                            &mut seen,
+                            &file,
+                            &npc.image,
+                            "NPC image",
+                            &assets,
+                        );
+                    }
                 }
             }
         } else if lower.ends_with(".gmap") {
@@ -156,14 +175,120 @@ pub fn check_world(root: &Path) -> Report {
             }
         } else if lower.ends_with(".gani") {
             report.ganis += 1;
-            if let Err(e) = crate::gani::open(&bytes) {
-                report.findings.push(Finding {
+            match crate::gani::open(&bytes) {
+                Err(e) => report.findings.push(Finding {
                     severity: Severity::Error,
                     file,
                     text: format!("gani does not parse: {e}"),
-                });
+                }),
+                Ok(gani) => check_gani(&mut report, &file, &gani, &assets),
             }
         }
     }
     report
+}
+
+/// A gani `SPRITE` sheet that means one of the player's own pictures, not a
+/// file in the world. Any other sheet is a file name.
+const SYMBOLIC_SHEETS: &[&str] = &[
+    "BODY", "HEAD", "SPRITES", "SWORD", "SHIELD", "ATTR1", "ATTR2", "ATTR3", "ATTR4", "ATTR5",
+];
+
+fn symbolic_sheet(name: &str) -> bool {
+    SYMBOLIC_SHEETS.iter().any(|s| s.eq_ignore_ascii_case(name))
+}
+
+/// An image name that is a file. `-` is the empty NPC picture (`NPC - x y`
+/// in seihai-core's level sample). A name starting with `@` is a text
+/// picture (`@font@style@text`): the client draws it and does not load a file.
+fn picture_file(name: &str) -> bool {
+    !name.is_empty() && name != "-" && !name.starts_with('@')
+}
+
+fn note_image(
+    report: &mut Report,
+    seen: &mut BTreeSet<String>,
+    file: &str,
+    name: &str,
+    role: &str,
+    assets: &AssetResolver,
+) {
+    let name = name.trim();
+    if !picture_file(name) {
+        return;
+    }
+    if !seen.insert(format!("image:{}", name.to_ascii_lowercase())) {
+        return;
+    }
+    if assets.image(name).is_none() {
+        report.findings.push(Finding {
+            severity: Severity::Warn,
+            file: file.to_string(),
+            text: format!("image {name} ({role}) is not in the world"),
+        });
+    }
+}
+
+fn note_sound(
+    report: &mut Report,
+    seen: &mut BTreeSet<String>,
+    file: &str,
+    name: &str,
+    assets: &AssetResolver,
+) {
+    let name = name.trim();
+    let key = name.trim_start_matches('+');
+    if key.is_empty() {
+        return;
+    }
+    if !seen.insert(format!("sound:{}", key.to_ascii_lowercase())) {
+        return;
+    }
+    if assets.sound(name).is_none() {
+        report.findings.push(Finding {
+            severity: Severity::Warn,
+            file: file.to_string(),
+            text: format!("sound {name} (gani PLAYSOUND) is not in the world"),
+        });
+    }
+}
+
+fn check_gani(report: &mut Report, file: &str, gani: &crate::gani::Gani, assets: &AssetResolver) {
+    let mut seen = BTreeSet::new();
+    for sprite in &gani.sprites {
+        if symbolic_sheet(sprite.sheet.trim()) {
+            continue;
+        }
+        note_image(
+            report,
+            &mut seen,
+            file,
+            &sprite.sheet,
+            "gani sprite",
+            assets,
+        );
+    }
+    if let Some(name) = &gani.default_head {
+        note_image(report, &mut seen, file, name, "gani default head", assets);
+    }
+    if let Some(name) = &gani.default_body {
+        note_image(report, &mut seen, file, name, "gani default body", assets);
+    }
+    for (i, name) in gani.default_attrs.iter().enumerate() {
+        if let Some(name) = name {
+            note_image(
+                report,
+                &mut seen,
+                file,
+                name,
+                &format!("gani attribute {}", i + 1),
+                assets,
+            );
+        }
+    }
+    for frame in &gani.frames {
+        for sound in &frame.sounds {
+            note_sound(report, &mut seen, file, &sound.file, assets);
+        }
+    }
 }

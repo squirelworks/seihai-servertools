@@ -32,7 +32,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Host a listserver (edits `seihai-listserver.toml`, adds the first account) | `setup host-listserver\|listserver-lab\|listserver-undo`, window | working |
 | LAT level editor: open, edit and upload levels on a live server | window page | planned ([design](docs/design/lat-tools.md)) |
 | NPC editor and gani editor | window pages | planned ([design](docs/design/lat-tools.md)) |
-| World and config checker | `seihai-servertools check WORLD` | first checks |
+| World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds |
 | The window | `seihai-servertools gui` | pages laid out |
 
 The level editor here is for staff editing a live server. The Seihai
@@ -100,8 +100,9 @@ seihai-servertools check path/to/world
 
 Reads every level, gmap and gani with the Seihai client's own parsers and
 reports files that do not parse, links to levels that are not in the world,
-and gmap cells naming missing levels. The exit code is 1 when there are
-errors, so it can run in CI.
+gmap cells naming missing levels, and images or sounds that a level NPC or
+a gani names but the world folder does not have. The exit code is 1 when
+there are errors (a missing image or sound is a warning), so it can run in CI.
 
 ## Build
 
