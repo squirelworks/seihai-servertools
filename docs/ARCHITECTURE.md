@@ -13,12 +13,13 @@ crates/setup-core           lab start, process runner, serveroptions.txt,
    │                        listserver TOML, profiles, safety checks, network
 crates/lat-core             LAT: remote file link, levels, ganis, NPCs, world check
    │
-seihai-core                 squirelworks/seihai, pinned tag: level/gmap/gani
+seihai-core                 squirelworks/seihai, pinned commit: level/gmap/gani
                             parsers, GS1, protocol, framing
-(later) shared drawing      squirelworks/seihai, pinned tag: tile and sprite
-   + level document         drawing and the level editor's document
-(later) seihai-rc           squirelworks/seihai-rc, pinned tag: RC session,
-                            file browser, NC login
+seihai-draw                 squirelworks/seihai, same commit: tile and gani
+                            RGBA. The level document is still the client's
+                            offline editor, not a library
+seihai-rc                   squirelworks/seihai-rc, pinned commit: RC session
+                            and the file link (list, get, put)
 ```
 
 Rules for the layers:
@@ -37,23 +38,23 @@ Rules for the layers:
 ## Code shared with Seihai
 
 The rule: one copy of every parser and every drawing routine, in the
-`seihai` repo, used here through a pinned git tag (`[workspace.dependencies]`
-in `Cargo.toml`).
+`seihai` repo, used here through a pinned git commit
+(`[workspace.dependencies]` in `Cargo.toml`). A tag is preferred when one
+contains the crate. `seihai-draw` is on seihai `main` and not in a tag yet
+(`v0.0.5` is older), so `seihai-core` and `seihai-draw` are both pinned to
+that merge (`72bb8d2`). `seihai-rc`'s file link is on its `main` (`294f2c1`)
+and has no tag, so it is pinned to that commit too. Do not follow a branch.
 
 | What | Where today | Used here through |
 |---|---|---|
-| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` tag `v0.0.3` |
-| GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (when the NPC editor and RC link need them) |
-| Tile and sprite drawing | `seihai-mae` (`seihai::render`), the client binary crate | **not yet**: needs a shared crate |
-| Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: needs a shared crate |
-| RC session, file browser, NC login | `seihai-rc` (stage 1 done; file browser is stage 4) | **not yet**: `seihai-rc` library by tag |
+| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` commit `72bb8d2` |
+| GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (when the NPC editor needs them) |
+| Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` commit `72bb8d2` |
+| Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
+| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `294f2c1` |
 
-The two "needs a shared crate" rows are the first step of the LAT track
-(`docs/NEXT.md`): in the `seihai` repo, move the drawing out of `seihai-mae`
-and the `Document` out of `tools/level-editor` into a library crate (for
-example `crates/seihai-edit`, depending on `seihai-core` and `egui` only),
-keep the client and its offline editor using it, tag, and pin the tag here.
-Do not depend on `seihai-mae` itself: it pulls in the game window and sound.
+Do not depend on `seihai-mae`: it pulls in the game window and sound. The
+client's offline level editor stays in the Seihai repo.
 
 Bumping a tag is its own PR here, with `cargo test` and the lab checks.
 
@@ -96,22 +97,25 @@ The window's Lab page will run the same `Plan` on a worker thread.
 
 | Module | What | State |
 |---|---|---|
-| `remote` | `RemoteFiles` trait (list, get, put), `LocalFolder`, `safe_relative` | working for local folders |
-| `level` | `open` via `seihai_core::assets::Level` | open only |
-| `gani` | `open` via `seihai_core::assets::Gani` | open only |
+| `remote` | `RemoteFiles` (list, get, put), `LocalFolder`, `RcFiles` over `seihai-rc`, `safe_relative` | working |
+| `level` | `LevelDoc`: open, `set_tile`, `encode` (`GLEVNW01` text), `paint` via `seihai-draw` | editing |
+| `gani` | `GaniDoc`: open, `set_sprite_frame`, `encode`, `paint` via `seihai-draw` | editing |
+| `preview` | RGBA buffer, stand-in tile colours and a stand-in sprite picture | working |
 | `npc` | Level NPCs and NPC-server NPCs | contract only |
 | `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds | working |
 
 Every editor reads and writes through `RemoteFiles`, so the same editor works
-on a local folder (tests, owner on the same machine) and a live server
-(`RcFiles`, once `seihai-rc` has the file browser).
+on a local folder and on a live server (`RcFiles`). The directory reply is
+names only, so a listing does not say which names are folders.
 
 ## app (the window)
 
 `App` has a side bar of `Tab`s and one module per page in `src/pages/`.
 Today: Lab (shows the plan), Server setup (the Join a listserver wizard,
-Back to lab, undo, Start and check), World check (runs the checker). Level editor, NPC editor and Gani editor show what they will do. Each page
-calls the core crates; a page never parses a file itself.
+Back to lab, undo, Start and check), World check (runs the checker),
+Level editor and Gani editor (open, edit, preview the RGBA buffer, upload).
+The NPC editor still says what it will do. Each page calls the core crates;
+a page never parses a file itself.
 
 ## Command line
 

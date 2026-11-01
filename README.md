@@ -14,9 +14,10 @@ Part of the Seihai server stack:
 [seihai-gserver-v2](https://github.com/squirelworks/seihai-gserver-v2) (GPL fork of GServer-v2, ships first) ·
 client: [seihai](https://github.com/squirelworks/seihai).
 
-**Status: scaffold.** Working today: the one-step lab start and a first
-world checker. The setup wizard and the LAT editors are planned and laid
-out. The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
+**Status: scaffold.** Working today: the one-step lab start, the setup
+wizard, a world checker, and the first LAT level and gani editors (open,
+change, preview, upload through the RC file link or a local folder). The
+plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the ordered to-do list in
 [docs/NEXT.md](docs/NEXT.md), operator security notes in
 [docs/security/README.md](docs/security/README.md), and the rules every
@@ -30,8 +31,9 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Go-public setup: Join a listserver, Back to lab, undo | `seihai-servertools setup public\|lab\|undo\|status` | command line working ([design](docs/design/go-public.md)) |
 | Go-public setup in the window (same steps, Start and check lights) | `seihai-servertools gui --page setup` | working |
 | Host a listserver (edits `seihai-listserver.toml`, adds the first account) | `setup host-listserver\|listserver-lab\|listserver-undo`, window | working |
-| LAT level editor: open, edit and upload levels on a live server | window page | planned ([design](docs/design/lat-tools.md)) |
-| NPC editor and gani editor | window pages | planned ([design](docs/design/lat-tools.md)) |
+| LAT level editor: open, change a tile, preview, upload | `seihai-servertools gui --page levels` | working ([design](docs/design/lat-tools.md)) |
+| Gani editor: open, change a sprite frame, preview, upload | `seihai-servertools gui --page ganis` | working ([design](docs/design/lat-tools.md)) |
+| NPC editor | window page | planned ([design](docs/design/lat-tools.md)) |
 | World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds |
 | The window | `seihai-servertools gui` | pages laid out |
 

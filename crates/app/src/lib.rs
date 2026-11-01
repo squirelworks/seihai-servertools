@@ -7,6 +7,7 @@
 //! ui)`, add it to [`Tab`] and to [`App::update`].
 
 mod pages;
+mod preview;
 
 use eframe::egui;
 
@@ -48,6 +49,8 @@ pub struct App {
     pub tab: Tab,
     lab: pages::lab::Page,
     setup: pages::setup::Page,
+    levels: pages::levels::Page,
+    ganis: pages::ganis::Page,
     check: pages::check::Page,
 }
 
@@ -57,6 +60,8 @@ impl Default for App {
             tab: Tab::Lab,
             lab: pages::lab::Page::default(),
             setup: pages::setup::Page::default(),
+            levels: pages::levels::Page::default(),
+            ganis: pages::ganis::Page::default(),
             check: pages::check::Page::default(),
         }
     }
@@ -78,18 +83,12 @@ impl eframe::App for App {
                 Tab::Lab => self.lab.show(ui),
                 Tab::Check => self.check.show(ui),
                 Tab::Setup => self.setup.show(ui),
-                Tab::Levels => pages::planned(
-                    ui,
-                    "Open a level on a live server through the RC file browser, edit it, upload it with LAT rights. Plan: docs/design/lat-tools.md.",
-                ),
+                Tab::Levels => self.levels.show(ui),
                 Tab::Npcs => pages::planned(
                     ui,
                     "Level NPC scripts, and database NPCs, classes and weapons through an NC login. Plan: docs/design/lat-tools.md.",
                 ),
-                Tab::Ganis => pages::planned(
-                    ui,
-                    "Frames, sprites and a preview, uploaded through the file link. Plan: docs/design/lat-tools.md.",
-                ),
+                Tab::Ganis => self.ganis.show(ui),
             }
         });
     }
@@ -131,6 +130,8 @@ impl App {
             app.lab.set_world(&w);
             app.check.set_world(&w);
             app.setup.open_world(&w);
+            app.levels.set_folder(&w);
+            app.ganis.set_folder(&w);
         }
         app
     }

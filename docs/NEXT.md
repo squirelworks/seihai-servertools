@@ -82,20 +82,23 @@ window wizard, the `setup` command line, and Host a listserver.
 
 ## LAT track, `docs/design/lat-tools.md`
 
-- [ ] **Shared drawing and level document** (in `squirelworks/seihai`, ask
-      Squirrel first): move tile/sprite drawing out of `seihai-mae` and the
-      `Document` out of `tools/level-editor` into a library crate, keep the
-      client and its offline editor on it, tag a release, then pin the tag
-      here.
-- [ ] Level editor on a local folder (`LocalFolder`), using the shared crate.
-- [ ] `RcFiles`: `RemoteFiles` over `seihai-rc`'s file browser, once
-      `seihai-rc` stage 4 is merged and tagged. Fake file browser in tests,
-      lab run against the fork with a LAT account.
-- [ ] Level editor on a live server: download, edit, diff, refuse when the
-      server's copy changed, upload.
+- [x] **Shared drawing** is `seihai-draw` on seihai `main` (not in a tag
+      yet). Pinned here at `72bb8d2`, with `seihai-core` on that same
+      commit. The level *document* (line-preserving save) is still only in
+      the client's offline editor; this editor writes `GLEVNW01` text from
+      the parsed level.
+- [x] Level editor on a local folder (`LocalFolder`) and through `RcFiles`:
+      open, change one tile, encode, paint.
+- [x] `RcFiles`: `RemoteFiles` over `seihai-rc`'s `list_dir` / `get_file` /
+      `put_file` (seihai-rc `294f2c1`, no tag yet). Fake file server on
+      `127.0.0.1` in `crates/lat-core/tests/rc_edit.rs`. A lab run against
+      the fork with a LAT account is still open.
+- [ ] Level editor: show a diff against the downloaded bytes, and refuse
+      the upload when the server's copy changed in between.
 - [ ] NPC editor: level NPCs with a GS1 syntax check; NC objects after
       `seihai-rc` stage 5.
-- [ ] Gani editor with preview.
+- [x] Gani editor with preview: open, change one sprite frame, encode,
+      paint one frame.
 
 ## Checker track
 
