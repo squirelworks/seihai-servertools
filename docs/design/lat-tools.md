@@ -13,12 +13,12 @@ offline mode, as the original client's editor did, and stays there.
 
 | Block | Where | State |
 |---|---|---|
-| File link: list, download, upload | `lat_core::remote::RemoteFiles`; `LocalFolder` now, `RcFiles` later | trait + local |
-| RC login and file browser (ids 89 to 93, 96 to 98, 155/156, 160) | `seihai-rc` stage 4, used as a library by tag | not built in `seihai-rc` yet |
-| NC login (database NPCs, classes, weapons) | `seihai-rc` stage 5 | not built |
-| Level, gmap, gani, GS1 parsers | `seihai-core` (tag) | in use |
-| Level document (line-preserving edit, objects, NPC pane) | `tools/level-editor` in `seihai`, to move into a shared crate | in Seihai, not shared yet |
-| Tile and sprite drawing | `seihai-mae` in `seihai`, to move into the same shared crate | in Seihai, not shared yet |
+| File link: list, download, upload | `lat_core::remote::RemoteFiles`; `LocalFolder` and `RcFiles` | working |
+| RC login and file link (list, get, put) | `seihai-rc`, pinned commit | in use |
+| NC login (database NPCs, classes, weapons) | `seihai-rc` | not used here yet |
+| Level, gmap, gani, GS1 parsers | `seihai-core` (pinned commit) | in use |
+| Level document (line-preserving edit, objects, NPC pane) | `tools/level-editor` in `seihai` | still only the offline editor; LAT writes `GLEVNW01` text |
+| Tile grid and one gani frame | `seihai-draw` | in use |
 
 ## Level editor (LAT)
 

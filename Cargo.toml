@@ -16,9 +16,18 @@ publish = false
 
 [workspace.dependencies]
 # Protocol, asset parsers (levels, gmaps, ganis) and scripting shared with
-# the Seihai client. Pinned by tag; bump it on purpose, never follow a branch.
+# the Seihai client. Pinned on purpose; never follow a branch.
 # See docs/ARCHITECTURE.md, "Code shared with Seihai".
-seihai-core = { git = "https://github.com/squirelworks/seihai", tag = "v0.0.3", default-features = false }
+#
+# seihai-draw (tile and gani RGBA) is on seihai main, merge 72bb8d2, and is
+# not in a tag yet (v0.0.5 is the newest tag, and it does not contain the
+# crate). seihai-core is pinned to that same commit so a Level or Gani from
+# the parser is the same type seihai-draw paints. Bump both together.
+seihai-core = { git = "https://github.com/squirelworks/seihai", rev = "72bb8d29a977e7185bb7499bd36b732751ea0c6e", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai", rev = "72bb8d29a977e7185bb7499bd36b732751ea0c6e" }
+# RC file link: list_dir, get_file, put_file. Those methods are on
+# seihai-rc main (294f2c1, file link in #5, NPC commands in #6). No tag yet.
+seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "294f2c119e0d2f00a6241cc64eefef535ca166f5" }
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
 egui = "0.29"

@@ -7,19 +7,20 @@
 //!
 //! | Module | What | State |
 //! |---|---|---|
-//! | [`remote`] | The file link: list, download, upload. A local folder today; the RC file browser later | trait + local folder |
-//! | [`level`] | Open levels through `seihai-core`'s parser | open only |
-//! | [`gani`] | Open ganis through `seihai-core`'s parser | open only |
+//! | [`remote`] | The file link: list, download, upload. A local folder, or [`remote::RcFiles`] over `seihai-rc` | working |
+//! | [`level`] | Open a level, change a tile, write `GLEVNW01` text, paint with `seihai-draw` | editing |
+//! | [`gani`] | Open a gani, change a sprite frame, write it back, paint one frame | editing |
+//! | [`preview`] | The RGBA buffers those editors hand the window | working |
 //! | [`npc`] | NPC scripts in levels and on the NPC-server | planned |
 //! | [`check`] | The world and config checker | parse, links, images and sounds |
 //!
-//! Parsers come from `seihai-core`, pinned by tag in the workspace
-//! `Cargo.toml`. Do not write a second level or gani parser here: fix or
-//! extend the shared one in `squirelworks/seihai` and bump the tag
-//! (`docs/ARCHITECTURE.md`, "Code shared with Seihai").
+//! Parsers come from `seihai-core` and painting from `seihai-draw`, both
+//! pinned in the workspace `Cargo.toml`. Do not write a second level or
+//! gani parser, and do not copy the drawing (`docs/ARCHITECTURE.md`).
 
 pub mod check;
 pub mod gani;
 pub mod level;
 pub mod npc;
+pub mod preview;
 pub mod remote;
