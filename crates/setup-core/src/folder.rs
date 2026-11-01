@@ -8,7 +8,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::checks::{
-    check_gserver, check_listserver, check_server_folder, may_save, Finding, Severity,
+    check_gserver, check_listserver, check_listserver_accounts, check_server_folder, may_save,
+    Finding, Severity,
 };
 use crate::config::backup;
 use crate::config::listserver_toml::{
@@ -75,8 +76,8 @@ impl ServerFolder {
         detect(&self.options)
     }
 
-    /// The folder's own findings (lab accounts, default account) plus the
-    /// options' findings for its current profile.
+    /// The folder's own findings (lab accounts, default staff login, default
+    /// account) plus the options' findings for its current profile.
     pub fn status_findings(&self) -> Vec<Finding> {
         let mut f = check_gserver(&self.options, self.profile());
         f.extend(check_server_folder(&self.dir));
@@ -93,10 +94,21 @@ impl ServerFolder {
     }
 
     /// What Join a listserver with these answers would change.
+    ///
+    /// Blocking folder findings (the default staff login) are included, so
+    /// Save stays off until those files are gone. Warnings stay on the
+    /// safety check ([`Self::status_findings`]) and do not by themselves
+    /// refuse the save.
     pub fn preview_public(&self, answers: &PublicAnswers) -> Preview {
         let mut after = self.options.clone();
         apply_public(&mut after, answers, &Stamp::now().date());
-        self.preview(Profile::Public, after)
+        let mut preview = self.preview(Profile::Public, after);
+        preview.findings.extend(
+            check_server_folder(&self.dir)
+                .into_iter()
+                .filter(|f| f.severity == Severity::Block),
+        );
+        preview
     }
 
     /// What Back to lab would change.
@@ -198,6 +210,11 @@ impl ListserverConfig {
                         p.display()
                     ),
                 });
+            } else if !toml.settings().is_loopback() {
+                // Lab bind does not publish the file. A public bind does.
+                if let Ok(text) = std::fs::read_to_string(&p) {
+                    f.extend(check_listserver_accounts(&text));
+                }
             }
         }
         f
@@ -284,6 +301,53 @@ mod tests {
         f.undo().unwrap();
         assert_eq!(f.profile(), Profile::Lab);
         assert_eq!(fs::read_to_string(&f.options_path).unwrap(), LAB);
+    }
+
+    #[test]
+    fn public_preview_blocks_a_default_staff_account_file() {
+        let w = world();
+        let acc = w.path().join("servers/default/accounts");
+        fs::create_dir_all(&acc).unwrap();
+        fs::write(acc.join("super.txt"), "PASSWORD super\n").unwrap();
+        let mut f = ServerFolder::open(w.path(), "default").unwrap();
+        let answers = PublicAnswers {
+            interface: "AUTO".into(),
+            server_ip: "AUTO".into(),
+            list_host: "127.0.0.1".into(),
+            list_port: 14900,
+            upnp: false,
+            name: "World".into(),
+            description: String::new(),
+            url: String::new(),
+            staff_account: "owner".into(),
+        };
+        let p = f.preview_public(&answers);
+        assert!(!p.may_save(), "{:?}", p.findings);
+        assert!(p
+            .findings
+            .iter()
+            .any(|f| { f.severity == Severity::Block && f.text.contains("super.txt") }));
+        assert!(f.save(&p).is_err());
+    }
+
+    #[test]
+    fn host_preview_blocks_a_plaintext_default_staff_password() {
+        let w = world();
+        fs::write(w.path().join("accounts.txt"), "super super\n").unwrap();
+        let c = ListserverConfig::open(w.path()).unwrap();
+        let p = c.preview_host(&HostAnswers::default());
+        assert!(!p.may_save(), "{:?}", p.findings);
+        assert!(p.findings.iter().any(|f| {
+            f.severity == Severity::Block
+                && f.text.contains("super")
+                && !f.text.contains("super super")
+        }));
+        let back = c.preview_lab();
+        assert!(
+            back.may_save(),
+            "back to lab is not a publish: {:?}",
+            back.findings
+        );
     }
 
     #[test]

@@ -1,9 +1,11 @@
 //! Safety check and the combinations the setup wizard refuses to save.
 //!
 //! The rules come from `docs/design/go-public.md` ("Safety check" and
-//! "Combinations the GUI refuses to save"). Each has a test. The command
-//! line and the window both show these findings and both refuse to save
-//! while any is [`Severity::Block`] ([`may_save`]).
+//! "Combinations the GUI refuses to save"). Each has a test. Publishing
+//! also refuses a default staff login (`YOURACCOUNT`, password `super`)
+//! and warns about open lab accounts and bot-farm account files. The
+//! command line and the window both show these findings and both refuse
+//! to save while any is [`Severity::Block`] ([`may_save`]).
 
 use std::fs;
 use std::path::Path;
@@ -100,6 +102,16 @@ pub fn check_gserver(options: &OptionsTxt, target: Profile) -> Vec<Finding> {
                 "staff still says YOURACCOUNT: put your own account there.",
             ));
         }
+        if staff
+            .split(',')
+            .any(|s| s.trim().eq_ignore_ascii_case("super"))
+        {
+            out.push(finding(
+                Block,
+                "staff",
+                "staff still lists super, the default staff account (password super): replace it with your own account.",
+            ));
+        }
         if is_placeholder(listip) {
             out.push(finding(
                 Block,
@@ -129,42 +141,317 @@ pub fn check_gserver(options: &OptionsTxt, target: Profile) -> Vec<Finding> {
 }
 
 /// Check a server folder (`servers/<name>`) before going public: accounts
-/// left from lab testing, and what new players get.
+/// left from lab testing, the default staff login, and what new players get.
 pub fn check_server_folder(dir: &Path) -> Vec<Finding> {
     let mut out = Vec::new();
     let accounts = dir.join("accounts");
-    let mut names: Vec<String> = fs::read_dir(&accounts)
+    let mut files: Vec<(String, std::path::PathBuf)> = fs::read_dir(&accounts)
         .map(|rd| {
             rd.filter_map(Result::ok)
                 .filter(|e| e.path().is_file())
-                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .map(|e| (e.file_name().to_string_lossy().into_owned(), e.path()))
                 .collect()
         })
         .unwrap_or_default();
-    names.sort();
-    let default = names
-        .iter()
-        .position(|n| n.eq_ignore_ascii_case("defaultaccount.txt"))
-        .map(|i| names.remove(i));
-    if !names.is_empty() {
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut staff = Vec::new();
+    let mut open = Vec::new();
+    let mut bots = Vec::new();
+    let mut other = Vec::new();
+    let mut defaults = Vec::new();
+    for (name, path) in files {
+        let stem = account_stem(&name);
+        if is_default_template(stem) {
+            defaults.push(name);
+            continue;
+        }
+        // The NPC server's own account. It is not a player leftover.
+        if is_npc_account(stem) {
+            continue;
+        }
+        match account_kind(stem, password_field_in(&path).as_deref()) {
+            AccountKind::Staff => staff.push(name),
+            AccountKind::OpenLab => open.push(name),
+            AccountKind::BotFarm => bots.push(name),
+            AccountKind::Other => other.push(name),
+        }
+    }
+    if !staff.is_empty() {
+        out.push(finding(
+            Severity::Block,
+            "",
+            format!(
+                "accounts/ still has the default staff login in: {}. Remove those files, or give them a password other than super, before publishing.",
+                staff.join(", ")
+            ),
+        ));
+    }
+    if !open.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "",
+            format!(
+                "{} open lab account(s) in accounts/: {}. Remove them before publishing; they are shared lab logins or use the account name as the password.",
+                open.len(),
+                open.join(", ")
+            ),
+        ));
+    }
+    if !bots.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "",
+            format!(
+                "{} bot-farm account file(s) in accounts/: {}. Remove them before publishing.",
+                bots.len(),
+                bots.join(", ")
+            ),
+        ));
+    }
+    if !other.is_empty() {
         out.push(finding(
             Severity::Warn,
             "",
             format!(
                 "{} account file(s) in accounts/ (lab test accounts?): {}. Remove the ones you do not want on a public server.",
-                names.len(),
-                names.join(", ")
+                other.len(),
+                other.join(", ")
             ),
         ));
     }
-    if let Some(d) = default {
+    if !defaults.is_empty() {
         out.push(finding(
             Severity::Info,
             "",
-            format!("New players start from accounts/{d}: check its start level and items."),
+            format!(
+                "New players start from accounts/{}: check its start level and items.",
+                defaults.join(", ")
+            ),
         ));
     }
     out
+}
+
+/// Check a listserver accounts file (`account secret` per line) before that
+/// listserver is reachable from other machines.
+///
+/// A hashed line is fine. A plaintext `super` password, or the lab staff
+/// account stored in the clear, blocks publishing. Open lab names, bot-farm
+/// names and any other plaintext password are warnings. The password itself
+/// is never copied into the finding.
+pub fn check_listserver_accounts(text: &str) -> Vec<Finding> {
+    let mut staff = Vec::new();
+    let mut hashed_staff = Vec::new();
+    let mut open = Vec::new();
+    let mut bots = Vec::new();
+    let mut plain = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let (Some(account), Some(secret)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let hashed = is_stored_hash(secret);
+        if !hashed
+            && (secret.eq_ignore_ascii_case("super")
+                || account.eq_ignore_ascii_case("super")
+                || account.eq_ignore_ascii_case("youraccount"))
+        {
+            staff.push(account.to_string());
+        } else if hashed
+            && (account.eq_ignore_ascii_case("super")
+                || account.eq_ignore_ascii_case("youraccount"))
+        {
+            hashed_staff.push(account.to_string());
+        } else if looks_like_open_lab(account) || (!hashed && secret.eq_ignore_ascii_case(account))
+        {
+            open.push(account.to_string());
+        } else if looks_like_bot_farm(account) {
+            bots.push(account.to_string());
+        } else if !hashed {
+            plain.push(account.to_string());
+        }
+    }
+    for names in [
+        &mut staff,
+        &mut hashed_staff,
+        &mut open,
+        &mut bots,
+        &mut plain,
+    ] {
+        names.sort();
+    }
+    let mut out = Vec::new();
+    if !staff.is_empty() {
+        out.push(finding(
+            Severity::Block,
+            "accounts",
+            format!(
+                "The listserver accounts file still has a default staff login in the clear ({}). Remove those lines and add the accounts again with a hash before publishing.",
+                staff.join(", ")
+            ),
+        ));
+    }
+    if !hashed_staff.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "accounts",
+            format!(
+                "The listserver accounts file still lists the default staff name: {}. If that password is still super, change it before publishing.",
+                hashed_staff.join(", ")
+            ),
+        ));
+    }
+    if !open.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "accounts",
+            format!(
+                "The listserver accounts file still has open lab accounts: {}. Remove them before publishing.",
+                open.join(", ")
+            ),
+        ));
+    }
+    if !bots.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "accounts",
+            format!(
+                "The listserver accounts file still has bot-farm accounts: {}. Remove them before publishing.",
+                bots.join(", ")
+            ),
+        ));
+    }
+    if !plain.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "accounts",
+            format!(
+                "The listserver accounts file still has plaintext passwords for: {}. Add those accounts again so the passwords are hashed before publishing.",
+                plain.join(", ")
+            ),
+        ));
+    }
+    out
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AccountKind {
+    Staff,
+    OpenLab,
+    BotFarm,
+    Other,
+}
+
+fn account_stem(file_name: &str) -> &str {
+    let n = file_name.len();
+    if n >= 4 && file_name[n - 4..].eq_ignore_ascii_case(".txt") {
+        &file_name[..n - 4]
+    } else {
+        file_name
+    }
+}
+
+fn is_default_template(stem: &str) -> bool {
+    let s = stem.to_ascii_lowercase();
+    s == "defaultaccount" || s == "(defaultaccount)"
+}
+
+fn is_npc_account(stem: &str) -> bool {
+    let s = stem.to_ascii_lowercase();
+    s == "npcserver" || s == "(npcserver)"
+}
+
+fn account_kind(stem: &str, password: Option<&str>) -> AccountKind {
+    let password_is_super = password.is_some_and(|p| p.eq_ignore_ascii_case("super"));
+    let password_is_name = password.is_some_and(|p| !p.is_empty() && p.eq_ignore_ascii_case(stem));
+    if stem.eq_ignore_ascii_case("youraccount")
+        || stem.eq_ignore_ascii_case("super")
+        || password_is_super
+    {
+        AccountKind::Staff
+    } else if looks_like_open_lab(stem) || password_is_name {
+        AccountKind::OpenLab
+    } else if looks_like_bot_farm(stem) {
+        AccountKind::BotFarm
+    } else {
+        AccountKind::Other
+    }
+}
+
+/// `guest`, `test`, or `test` plus digits (`test1`, `test205`).
+fn looks_like_open_lab(stem: &str) -> bool {
+    let s = stem.to_ascii_lowercase();
+    if matches!(s.as_str(), "guest" | "test") {
+        return true;
+    }
+    let Some(rest) = s.strip_prefix("test") else {
+        return false;
+    };
+    !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Obvious bot-farm file names: `bot`, `afk`, `farm`, `miner`, `macro`,
+/// optionally followed by digits or `-`/`_`, plus a few joined names
+/// (`afkbot`, `botfarm`). `both` and `farming` do not match.
+fn looks_like_bot_farm(stem: &str) -> bool {
+    let s = stem.to_ascii_lowercase();
+    if matches!(s.as_str(), "afkbot" | "botfarm" | "idlebot" | "autofarm") {
+        return true;
+    }
+    for prefix in ["bot", "afk", "farm", "miner", "macro"] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            if rest.is_empty()
+                || rest.starts_with(|c: char| c.is_ascii_digit() || c == '_' || c == '-')
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_stored_hash(secret: &str) -> bool {
+    secret.starts_with("$argon2") || secret.to_ascii_lowercase().starts_with("pbkdf2-")
+}
+
+/// The first `PASSWORD` token in an account file.
+///
+/// Only the start of the file is read. A stored hash is returned as-is and
+/// does not match the default password. An empty field is returned as empty:
+/// a listserver-backed account often has no local password, and that is not
+/// an open login.
+fn password_field_in(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = fs::File::open(path).ok()?;
+    let mut buf = [0u8; 64 * 1024];
+    let n = file.read(&mut buf).ok()?;
+    password_field(&String::from_utf8_lossy(&buf[..n]))
+}
+
+fn password_field(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let line = line.trim().trim_start_matches('\u{feff}');
+        if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
+            continue;
+        }
+        let (key, value) = if let Some((k, v)) = line.split_once('=') {
+            (k.trim(), v.trim())
+        } else if let Some((k, v)) = line.split_once(char::is_whitespace) {
+            (k.trim(), v.trim())
+        } else {
+            continue;
+        };
+        if key.eq_ignore_ascii_case("PASSWORD") {
+            let token = value.split_whitespace().next().unwrap_or("");
+            return Some(token.to_string());
+        }
+    }
+    None
 }
 
 /// Check listserver settings before saving them.
@@ -289,13 +576,156 @@ mod tests {
         }
         let f = check_server_folder(dir.path());
         assert_eq!(f.len(), 2);
+        assert_eq!(f[0].severity, Severity::Warn);
+        assert!(f[0].text.contains("open lab"), "{}", f[0].text);
         assert!(
             f[0].text.contains("test1.txt, test205.txt"),
             "{}",
             f[0].text
         );
+        assert!(may_save(&f));
         assert_eq!(f[1].severity, Severity::Info);
+        assert!(f[1].text.contains("defaultaccount.txt"), "{}", f[1].text);
         assert!(check_server_folder(&dir.path().join("none")).is_empty());
+    }
+
+    #[test]
+    fn stock_template_names_are_not_lab_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let acc = dir.path().join("accounts");
+        fs::create_dir_all(&acc).unwrap();
+        fs::write(acc.join("(defaultaccount).txt"), "GRACC001\n").unwrap();
+        fs::write(acc.join("(npcserver).txt"), "GRACC001\n").unwrap();
+        let f = check_server_folder(dir.path());
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Info);
+        assert!(f[0].text.contains("(defaultaccount).txt"), "{}", f[0].text);
+        assert!(!f[0].text.contains("npcserver"), "{}", f[0].text);
+    }
+
+    #[test]
+    fn default_staff_open_lab_and_bot_farm_accounts() {
+        let dir = tempfile::tempdir().unwrap();
+        let acc = dir.path().join("accounts");
+        fs::create_dir_all(&acc).unwrap();
+        let write = |name: &str, body: &str| fs::write(acc.join(name), body).unwrap();
+        write("YOURACCOUNT.txt", "");
+        write("super.txt", "PASSWORD something-else\n");
+        write("owner.txt", "PASSWORD super\n");
+        write("carol.txt", "PASSWORD pbkdf2-sha256:1:aa:bb\n");
+        write("guest.txt", "");
+        write("keeper.txt", "PASSWORD keeper\n");
+        write("bot1.txt", "");
+        write("afk-2.txt", "");
+        write("botfarm.txt", "");
+        write("both.txt", "");
+        write("farming.txt", "");
+        write("alice.txt", "NICK alice\n");
+        let f = check_server_folder(dir.path());
+        assert!(!may_save(&f), "{f:?}");
+        let block = f.iter().find(|x| x.severity == Severity::Block).unwrap();
+        assert!(
+            block.text.contains("YOURACCOUNT.txt, owner.txt, super.txt"),
+            "{}",
+            block.text
+        );
+        let open = f.iter().find(|x| x.text.contains("open lab")).unwrap();
+        assert_eq!(open.severity, Severity::Warn);
+        assert!(open.text.contains("guest.txt, keeper.txt"), "{}", open.text);
+        let bots = f.iter().find(|x| x.text.contains("bot-farm")).unwrap();
+        assert!(
+            bots.text.contains("afk-2.txt, bot1.txt, botfarm.txt"),
+            "{}",
+            bots.text
+        );
+        let other = f
+            .iter()
+            .find(|x| x.text.contains("lab test accounts?"))
+            .unwrap();
+        assert!(
+            other
+                .text
+                .contains("alice.txt, both.txt, carol.txt, farming.txt"),
+            "{}",
+            other.text
+        );
+        assert!(may_save(
+            &f.iter()
+                .filter(|x| x.severity != Severity::Block)
+                .cloned()
+                .collect::<Vec<_>>()
+        ));
+    }
+
+    #[test]
+    fn default_staff_name_super_blocks_only_when_public() {
+        let lab = LAB.replace("YOURACCOUNT", "super");
+        assert!(
+            check_gserver(&opts(&lab), Profile::Lab).is_empty(),
+            "lab may keep the name until publish"
+        );
+        let public = PUBLIC
+            .replace("<listserver-host>", "127.0.0.1")
+            .replace("staff = (Manager),owner", "staff = (Manager),super");
+        let f = check_gserver(&opts(&public), Profile::Public);
+        assert_eq!(keys(&f, Severity::Block), ["staff"]);
+        assert!(f[0].text.contains("password super"), "{}", f[0].text);
+        assert!(!may_save(&f));
+        let supervisor = public.replace("staff = (Manager),super", "staff = (Manager),supervisor");
+        assert!(
+            check_gserver(&opts(&supervisor), Profile::Public).is_empty(),
+            "supervisor is not the default staff account"
+        );
+    }
+
+    #[test]
+    fn listserver_accounts_flag_default_staff_and_leftovers() {
+        assert!(check_listserver_accounts("").is_empty());
+        assert!(check_listserver_accounts("# comment\n").is_empty());
+        let hashed = "alice $argon2id$v=19$m=1,t=1,p=1$c2FsdA$aGFzaA\n";
+        assert!(
+            check_listserver_accounts(hashed).is_empty(),
+            "a hashed account is not a leftover"
+        );
+        let hashed_super = "super $argon2id$v=19$m=1,t=1,p=1$c2FsdA$aGFzaA\n";
+        let f = check_listserver_accounts(hashed_super);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Warn);
+        assert!(may_save(&f), "{f:?}");
+        assert!(!f[0].text.contains("$argon2"), "the hash is not repeated");
+
+        let text = "\
+# lab
+super super
+YOURACCOUNT lab-only
+guest guest
+test205 secret
+keeper keeper
+bot12 x
+afkbot x
+bob hunter2
+alice $argon2id$v=19$m=1,t=1,p=1$c2FsdA$aGFzaA
+";
+        let f = check_listserver_accounts(text);
+        assert!(!may_save(&f), "{f:?}");
+        let block = f.iter().find(|x| x.severity == Severity::Block).unwrap();
+        assert!(block.text.contains("YOURACCOUNT, super"), "{}", block.text);
+        assert!(
+            !block.text.contains("lab-only") && !block.text.contains("hunter2"),
+            "passwords stay out of the finding: {}",
+            block.text
+        );
+        let open = f.iter().find(|x| x.text.contains("open lab")).unwrap();
+        assert!(
+            open.text.contains("guest, keeper, test205"),
+            "{}",
+            open.text
+        );
+        let bots = f.iter().find(|x| x.text.contains("bot-farm")).unwrap();
+        assert!(bots.text.contains("afkbot, bot12"), "{}", bots.text);
+        let plain = f.iter().find(|x| x.text.contains("bob")).unwrap();
+        assert!(plain.text.contains("plaintext"), "{}", plain.text);
+        assert!(!plain.text.contains("hunter2"), "{}", plain.text);
     }
 
     #[test]
