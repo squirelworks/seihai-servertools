@@ -42,5 +42,12 @@ Make a Graal server easy to run and easy to look after:
 | Setup | Join a listserver, Host a listserver, Back to lab | `design/go-public.md` | the fork's `serveroptions.txt`, `seihai-listserver.toml` |
 | LAT | Level, NPC and gani editors on a live server | `design/lat-tools.md` | `seihai-rc` file browser (stage 4) and NC login (stage 5); shared drawing crate in `seihai` |
 | Check | World and config checker | `design/lat-tools.md` | `seihai-core` parsers |
+| Graal3D lab (after Seihai M3) | Start/stop a February 2000 Graal3D host on loopback; optional `.x`+BMP world check | Seihai `documentation/plannedmilestones.md` (Graal3D M3–M5) | Seihai G3D-9 Rust host; Graal_analysis `graal3d/formats.md` |
+
+February 2000 Graal3D does **not** use the listserver, RC, NC or 2D level
+editors. Its worlds are DirectX `.x` meshes plus local BMPs, not `.nw` /
+`.graal`. Do not extend LAT or Setup for it until Seihai's G3D-9 host
+exists; then add only a lab kind and a texture-presence check (see
+[NEXT.md](NEXT.md)).
 
 The order of the work is in [NEXT.md](NEXT.md).
