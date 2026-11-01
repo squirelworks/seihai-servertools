@@ -79,6 +79,19 @@ window wizard, the `setup` command line, and Host a listserver.
       run a world folder.
 - [ ] Lab run with a real `gs2emu` from a fork release (today's run used a
       stand-in; `docs/lab/2026-10-31-lab-start.md`).
+- [ ] **Graal3D lab kind** (after Seihai plannedmilestones M3 / G3D-9): start
+      and stop the Rust Graal3D host on loopback with a `levels/` folder of
+      `.x` files; document the recipe next to the 2D lab. Not the fork and
+      not `seihai-gserver`. No listserver registration (the 2000 protocol
+      has none).
+
+## Checker track (Graal3D)
+
+Held until Seihai M4 or M5 asks for it:
+
+- [ ] **`.x` world check**: every texture file named by a level mesh (and
+      the default player mesh/texture set) exists beside the world; refuse
+      binary/compressed `.x`. Separate from the 2D missing-image checker.
 
 ## LAT track, `docs/design/lat-tools.md`
 
@@ -107,3 +120,5 @@ window wizard, the `setup` command line, and Host a listserver.
       scripts name, such as `showimg` and `play`).
 - [ ] `serveroptions.txt` checks from `setup_core::checks` (after setup step 2).
 - [ ] `check --json`.
+- (Graal3D `.x` texture check: see "Checker track (Graal3D)" under Lab
+  above; do not fold it into the 2D checker.)
