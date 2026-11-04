@@ -35,8 +35,8 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Host a listserver (edits `seihai-listserver.toml`, adds the first account) | `setup host-listserver\|listserver-lab\|listserver-undo`, window | working |
 | LAT level editor: open, change a tile, preview, upload | `seihai-servertools gui --page levels` | working ([design](docs/design/lat-tools.md)) |
 | Gani editor: open, change a sprite frame, preview, upload | `seihai-servertools gui --page ganis` | working ([design](docs/design/lat-tools.md)) |
-| NPC editor | window page | planned ([design](docs/design/lat-tools.md)) |
-| World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds |
+| NPC editor: level NPC scripts with the GS1 check, upload | `seihai-servertools gui --page npcs` | level NPCs working; NPC-server objects planned ([design](docs/design/lat-tools.md)) |
+| World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts |
 | The window | `seihai-servertools gui` | pages laid out |
 
 The level editor here is for staff editing a live server. The Seihai
