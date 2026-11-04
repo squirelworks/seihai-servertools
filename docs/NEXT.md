@@ -138,6 +138,7 @@ Held until Seihai M4 or M5 asks for it:
       `setup_core::folder::check_world_config` runs them on every server
       folder (accounts of public folders too) and on
       `seihai-listserver.toml`, in `check` and on the Check page.
-- [ ] `check --json`.
+- [x] `check --json`: one object (`format` 1, counts, findings with level,
+      source, file, key, text) for CI.
 - (Graal3D `.x` texture check: see "Checker track (Graal3D)" under Lab
   above; do not fold it into the 2D checker.)

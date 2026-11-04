@@ -55,6 +55,47 @@ fn check_fails_on_a_broken_level() {
 }
 
 #[test]
+fn check_json_reports_both_kinds_of_findings() {
+    let w = lab_world();
+    fs::write(w.path().join("bad.nw"), "nope").unwrap();
+    let cfg = w.path().join("servers/default/config/serveroptions.txt");
+    fs::write(
+        &cfg,
+        LAB.replace("serverinterface = 127.0.0.1", "serverinterface = AUTO"),
+    )
+    .unwrap();
+    for args in [["check", "--json"], ["check", ""]] {
+        let mut cmd = bin();
+        cmd.arg(args[0]);
+        if !args[1].is_empty() {
+            cmd.arg(args[1]);
+        }
+        cmd.arg(w.path());
+        if args[1].is_empty() {
+            cmd.arg("--json");
+        }
+        let out = cmd.output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(1), "{text}");
+        let text = text.trim();
+        assert_eq!(text.lines().count(), 1, "one object: {text}");
+        assert!(
+            text.starts_with("{\"format\":1,\"levels\":1,\"gmaps\":0,\"ganis\":0,\"errors\":"),
+            "{text}"
+        );
+        assert!(text.ends_with("]}"), "{text}");
+        assert!(
+            text.contains("{\"level\":\"error\",\"source\":\"world\",\"file\":\"bad.nw\",\"key\":null,\"text\":\"level does not parse"),
+            "{text}"
+        );
+        assert!(
+            text.contains("{\"level\":\"error\",\"source\":\"settings\",\"file\":\"servers/default/config/serveroptions.txt\",\"key\":\"localhost\",\"text\":\"localhost = true lets"),
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn check_runs_the_setup_checks_on_server_folders() {
     let w = lab_world();
     let out = bin().arg("check").arg(w.path()).output().unwrap();

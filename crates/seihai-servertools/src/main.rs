@@ -15,7 +15,7 @@ Usage:
   seihai-servertools lab start [--world DIR] [--listserver PATH | --no-listserver]
                                [--gserver PATH] [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
-  seihai-servertools check WORLD
+  seihai-servertools check [--json] WORLD
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
@@ -33,7 +33,10 @@ level NPC or a gani names that are not in the folder. It also runs the setup
 checks on every servers/<name>/config/serveroptions.txt (and the accounts/ of
 public folders) and on seihai-listserver.toml: a setting `setup` would refuse
 to save is an error. Exit code 1 on errors (a missing image or sound is a
-warning).";
+warning). --json prints one JSON object instead, for CI: format (1), the
+counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
+(error, warning, note), source (world or settings), file, key (or null) and
+text.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -49,7 +52,8 @@ fn main() -> ExitCode {
         }
         ["lab", "start", rest @ ..] => lab::run(rest, true),
         ["lab", "plan", rest @ ..] => lab::run(rest, false),
-        ["check", world] => check(Path::new(world)),
+        ["check", world] => check(Path::new(world), false),
+        ["check", "--json", world] | ["check", world, "--json"] => check(Path::new(world), true),
         ["setup", rest @ ..] => setup::run(rest),
         ["gui", rest @ ..] => gui(rest),
         _ => {
@@ -59,52 +63,112 @@ fn main() -> ExitCode {
     }
 }
 
-fn check(world: &Path) -> ExitCode {
+/// One line of the `check` report.
+struct Line {
+    /// `error`, `warning` or `note`.
+    level: &'static str,
+    /// `world` (levels, gmaps, ganis) or `settings` (the setup checks).
+    source: &'static str,
+    file: String,
+    key: Option<String>,
+    text: String,
+}
+
+fn check(world: &Path, json: bool) -> ExitCode {
     if !world.is_dir() {
         eprintln!("check: no folder {}", world.display());
         return ExitCode::from(2);
     }
     let report = lat_core::check::check_world(world);
-    let mut errors = report.errors();
-    let mut warnings = report.findings.len() - report.errors();
-    for f in &report.findings {
-        let level = match f.severity {
-            lat_core::check::Severity::Error => "error",
-            lat_core::check::Severity::Warn => "warning",
-        };
-        println!("{level}: {}: {}", f.file, f.text);
-    }
+    let mut lines: Vec<Line> = report
+        .findings
+        .iter()
+        .map(|f| Line {
+            level: match f.severity {
+                lat_core::check::Severity::Error => "error",
+                lat_core::check::Severity::Warn => "warning",
+            },
+            source: "world",
+            file: f.file.clone(),
+            key: None,
+            text: f.text.clone(),
+        })
+        .collect();
     // The setup checks: a setting `setup` would refuse to save is an error.
-    let config = setup_core::folder::check_world_config(world);
-    for c in &config {
-        let level = match c.finding.severity {
-            setup_core::checks::Severity::Block => {
-                errors += 1;
-                "error"
-            }
-            setup_core::checks::Severity::Warn => {
-                warnings += 1;
-                "warning"
-            }
-            setup_core::checks::Severity::Info => "note",
-        };
-        let key = c
-            .finding
-            .key
-            .as_deref()
-            .map(|k| format!(" [{k}]"))
-            .unwrap_or_default();
-        println!("{level}: {}{key}: {}", c.file, c.finding.text);
+    for c in setup_core::folder::check_world_config(world) {
+        lines.push(Line {
+            level: match c.finding.severity {
+                setup_core::checks::Severity::Block => "error",
+                setup_core::checks::Severity::Warn => "warning",
+                setup_core::checks::Severity::Info => "note",
+            },
+            source: "settings",
+            file: c.file,
+            key: c.finding.key,
+            text: c.finding.text,
+        });
     }
-    println!(
-        "checked {} levels, {} gmaps, {} ganis and the server settings: {errors} errors, {warnings} warnings",
-        report.levels, report.gmaps, report.ganis,
-    );
+    let count = |level: &str| lines.iter().filter(|l| l.level == level).count();
+    let (errors, warnings) = (count("error"), count("warning"));
+    if json {
+        let findings: Vec<String> = lines
+            .iter()
+            .map(|l| {
+                format!(
+                    "{{\"level\":{},\"source\":{},\"file\":{},\"key\":{},\"text\":{}}}",
+                    json_str(l.level),
+                    json_str(l.source),
+                    json_str(&l.file),
+                    l.key.as_deref().map(json_str).unwrap_or("null".into()),
+                    json_str(&l.text)
+                )
+            })
+            .collect();
+        println!(
+            "{{\"format\":1,\"levels\":{},\"gmaps\":{},\"ganis\":{},\"errors\":{errors},\"warnings\":{warnings},\"findings\":[{}]}}",
+            report.levels,
+            report.gmaps,
+            report.ganis,
+            findings.join(",")
+        );
+    } else {
+        for l in &lines {
+            let key = l
+                .key
+                .as_deref()
+                .map(|k| format!(" [{k}]"))
+                .unwrap_or_default();
+            println!("{}: {}{key}: {}", l.level, l.file, l.text);
+        }
+        println!(
+            "checked {} levels, {} gmaps, {} ganis and the server settings: {errors} errors, {warnings} warnings",
+            report.levels, report.gmaps, report.ganis,
+        );
+    }
     if errors > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// A JSON string literal.
+fn json_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 #[cfg(feature = "gui")]
@@ -140,4 +204,19 @@ fn gui(args: &[&str]) -> ExitCode {
 fn gui(_: &[&str]) -> ExitCode {
     eprintln!("gui: this build has no window (built without the `gui` feature)");
     ExitCode::from(2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::json_str;
+
+    #[test]
+    fn json_strings_are_escaped() {
+        assert_eq!(json_str("plain"), "\"plain\"");
+        assert_eq!(
+            json_str("a \"b\" c\\d\ne\tf\u{1}"),
+            "\"a \\\"b\\\" c\\\\d\\ne\\tf\\u0001\""
+        );
+        assert_eq!(json_str("Grüße"), "\"Grüße\"");
+    }
 }
