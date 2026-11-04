@@ -94,8 +94,9 @@ window wizard, the `setup` command line, and Host a listserver.
 
 ## Lab track
 
-- [ ] Lab page in the window: start and stop the plan on a worker thread,
-      show each console's tail.
+- [x] Lab page in the window: start and stop the plan on a worker thread
+      (`setup_core::lab_run::LabRun`), show each console's tail. Lab run:
+      `docs/lab/2026-11-04-lab-page.md`.
 - [ ] Rust gserver: a gserver kind in `LabOptions` once `seihai-gserver` can
       run a world folder.
 - [ ] Lab run with a real `gs2emu` from a fork release (today's run used a
