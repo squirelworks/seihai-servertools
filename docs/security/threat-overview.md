@@ -141,7 +141,7 @@ published, lab accounts removed before publish. If that old listserver
 binary ever ran on a staff machine, replace every saved Graal password,
 not only the server's.
 
-**Where:** listserver for hashes and the future allow-list; this repo
+**Where:** listserver for hashes and the allow-list; this repo
 for the publish Blocks below.
 
 ### T7 — Hostile world content
@@ -181,7 +181,9 @@ the name `localhost`. The listserver check is narrower: only the bind
 | Listserver bind is outside its loopback set and `accounts` is empty | Block | Listserver save. Open mode would accept every password |
 | Server name still "My Server" | Warn | Saving a public profile. Players see it in the list |
 | Extra files in `accounts/` besides `defaultaccount.txt` | Warn | Folder check. Saving is still allowed |
-| Listserver gserver port has no allow-list yet | Warn | Listserver save off loopback. Anyone who reaches the port can register and check passwords |
+| Listserver `gservers` allow-list is empty | Warn | Listserver save off loopback. Anyone who reaches the port can register and check passwords |
+| An allow-list row has no HQ password | Warn | Listserver save off loopback. Any program on that address can register |
+| An allow-list row is not an IP address, or its HQ password has a line break | Block | Listserver save. The listserver would not start |
 | The accounts path is set and the file is not there | Warn | Listserver save. Nobody can log in until the first account is added |
 | `defaultaccount.txt` present | Info | Folder check. New players start from that file |
 | `gserver_ip = "peer"` | Info | Listserver save off loopback. A local gserver is advertised as `127.0.0.1`, which other players cannot use |
@@ -202,7 +204,8 @@ target, and checks the TOML with the listserver rows.
 3. Movement, inventory, and chest authority on `seihai-gserver` (T5).
    That repo's own plan already reserves this work. A new crate here
    would not see the packets.
-4. Listserver allow-list for who may register, on top of hashed accounts.
+4. ~~Listserver allow-list for who may register~~: done (squirelworks/seihai-listserver#6,
+   and the wizard's "Who may register" step).
 5. Tell players whether the world accepts classic logins, `SEI00001`
    only, or both.
 6. Grow `lat-core` checks (GS1, hostile grants) along [NEXT.md](../NEXT.md).

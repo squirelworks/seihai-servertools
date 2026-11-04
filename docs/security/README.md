@@ -36,7 +36,7 @@ them in a new crate here would not see the packets.
 
 The Rust listserver
 ([seihai-listserver](https://github.com/squirelworks/seihai-listserver))
-owns account hashes and, later, the gserver allow-list. The GPL fork stays
+owns account hashes and the gserver allow-list. The GPL fork stays
 in its own repo.
 
 Written 2026-11-01 from a static review dated 2026-10-31. No client was run

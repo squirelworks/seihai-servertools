@@ -91,8 +91,12 @@ seihai-servertools setup listserver-lab --world path/to/world       # back to 12
 
 It edits `seihai-listserver.toml` in the world folder (comments and other
 keys stay, dated backup), refuses open mode on outside interfaces, and
-lists the ports to forward. `seihai-listserver` has no gserver allow-list
-yet, so keep its gserver port closed to the outside.
+lists the ports to forward. "Who may register" writes the listserver's
+`gservers` allow-list: only the addresses you list may register, each after
+sending its HQ password (`hq_password` in that gserver's
+`config/adminconfig.txt`). Give the password in an environment variable
+(`--allow-gserver 127.0.0.1 --hq-password-env HQ_PW`) or at the prompt; it is
+never printed. Still open the gserver port only to those addresses.
 
 ## Check a world
 

@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use setup_core::checks::{check_server_folder, Finding, Severity};
-use setup_core::config::listserver_toml::HostAnswers;
+use setup_core::config::listserver_toml::{AllowedGserver, HostAnswers};
 use setup_core::folder::{ListserverConfig, ListserverPreview, Preview, ServerFolder};
 use setup_core::profile::{Profile, PublicAnswers};
 
@@ -38,6 +38,7 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
   setup host-listserver [--world DIR] [--bind ADDR] [--gserver-port N]
                [--client-ports A,B,C] [--accounts FILE] [--gserver-ip peer|sent]
                [--site-url URL] [--upgrade-url URL]
+               [--allow-gserver ADDR]... [--hq-password-env VAR] [--any-gserver]
                [--first-account NAME --password-env VAR] [--listserver-bin PATH] [--yes]
                host a listserver for other machines (edits seihai-listserver.toml)
   setup listserver-lab  [--world DIR] [--yes]     listserver back to 127.0.0.1
@@ -45,7 +46,14 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
 
 SERVER defaults to `default` (servers/default). --world defaults to the
 current folder. Values not given are asked for. Every save keeps a dated
-backup of serveroptions.txt next to it.";
+backup of serveroptions.txt next to it.
+
+Who may register (host-listserver): --allow-gserver ADDR, once per gserver
+address, lets only those addresses register; each must send the HQ password
+from the environment variable named by --hq-password-env (the same text as
+hq_password in that gserver's config/adminconfig.txt). An address already in
+the file keeps its password when no variable is given. --any-gserver empties
+the list. With --yes and neither option, the list is left as it is.";
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct Args {
@@ -73,6 +81,9 @@ struct Args {
     first_account: Option<String>,
     password_env: Option<String>,
     listserver_bin: Option<PathBuf>,
+    allow_gservers: Vec<String>,
+    hq_password_env: Option<String>,
+    any_gserver: bool,
 }
 
 fn parse(args: &[&str]) -> Result<Args, String> {
@@ -119,6 +130,9 @@ fn parse(args: &[&str]) -> Result<Args, String> {
             "--first-account" => a.first_account = Some(value()?),
             "--password-env" => a.password_env = Some(value()?),
             "--listserver-bin" => a.listserver_bin = Some(value()?.into()),
+            "--allow-gserver" => a.allow_gservers.push(value()?),
+            "--hq-password-env" => a.hq_password_env = Some(value()?),
+            "--any-gserver" => a.any_gserver = true,
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s if a.server.is_none() => a.server = Some(s.to_string()),
             s => return Err(format!("unexpected {s}")),
@@ -563,6 +577,100 @@ fn find_listserver_bin(a: &Args, world: &std::path::Path) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// The "Who may register" answers: the listserver's `gservers` allow-list.
+/// Passwords come from `--hq-password-env` or a prompt, never from the
+/// command line, and are never printed.
+fn who_may_register(
+    io: &mut Io,
+    a: &Args,
+    current: Vec<AllowedGserver>,
+) -> Result<Vec<AllowedGserver>, String> {
+    let addrs: Vec<String> = if a.any_gserver {
+        if !a.allow_gservers.is_empty() {
+            return Err("--any-gserver and --allow-gserver do not go together".into());
+        }
+        Vec::new()
+    } else if !a.allow_gservers.is_empty() {
+        a.allow_gservers.clone()
+    } else if io.yes {
+        return Ok(current);
+    } else {
+        let shown = if current.is_empty() {
+            "127.0.0.1".to_string()
+        } else {
+            current
+                .iter()
+                .map(|g| g.ip.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let v = io.ask(
+            "Gserver addresses that may register, comma-separated (none: any gserver)",
+            Some(&shown),
+        )?;
+        if v.trim().eq_ignore_ascii_case("none") {
+            Vec::new()
+        } else {
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }
+    };
+    if addrs.is_empty() {
+        io.say("  Any gserver that reaches the gserver port may register.");
+        return Ok(Vec::new());
+    }
+    let from_env = match &a.hq_password_env {
+        Some(var) => Some(
+            std::env::var(var)
+                .map_err(|_| format!("--hq-password-env {var}: that variable is not set"))?,
+        ),
+        None => None,
+    };
+    let mut out: Vec<AllowedGserver> = Vec::new();
+    for ip in addrs {
+        if ip.parse::<std::net::IpAddr>().is_err() {
+            return Err(format!("{ip:?} is not an IP address (Who may register)"));
+        }
+        if out.iter().any(|g| g.ip == ip) {
+            continue;
+        }
+        let kept = current
+            .iter()
+            .find(|g| g.ip == ip)
+            .map(|g| g.hq_password.clone());
+        let hq_password = match (&from_env, kept) {
+            (Some(p), _) => p.clone(),
+            (None, Some(p)) if io.yes => p,
+            (None, Some(p)) => {
+                let v = io.ask(
+                    &format!("HQ password for {ip} (empty keeps the current one)"),
+                    Some(""),
+                )?;
+                if v.is_empty() {
+                    p
+                } else {
+                    v
+                }
+            }
+            (None, None) if io.yes => {
+                return Err(format!(
+                    "{ip} needs an HQ password: give --hq-password-env VAR (never on the command line)"
+                ))
+            }
+            (None, None) => io.ask(
+                &format!(
+                    "HQ password for {ip} (kept as plain text in seihai-listserver.toml, which the listserver reads)"
+                ),
+                None,
+            )?,
+        };
+        out.push(AllowedGserver { ip, hq_password });
+    }
+    Ok(out)
+}
+
 fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     let world = world_of(a);
     let mut c = ListserverConfig::open(&world)?;
@@ -632,12 +740,14 @@ fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
 
     io.say("");
     io.say("3. Who may register");
-    io.say(&format!(
-        "  seihai-listserver has no allow-list of gservers yet: keep port {gserver_port} closed to the outside"
-    ));
     io.say(
-        "  (allow only your own gservers' addresses in the firewall, or run them on this machine).",
+        "  Only the gserver addresses listed here may register, each after sending its HQ password",
     );
+    io.say("  (hq_password in that gserver's config/adminconfig.txt). Gservers on this machine connect from 127.0.0.1.");
+    io.say(&format!(
+        "  Still open port {gserver_port} in the firewall only to these addresses."
+    ));
+    let gservers = who_may_register(io, a, cur.gservers.clone())?;
 
     io.say("");
     io.say("4. Addresses handed to clients");
@@ -686,6 +796,7 @@ fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
         client_ports,
         accounts,
         gserver_ip,
+        gservers,
         site_url,
         upgrade_url,
     };

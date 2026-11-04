@@ -241,10 +241,24 @@ fn setup_host_listserver_then_back_to_lab() {
     assert_eq!(code, Some(1), "{text}");
     assert!(text.contains("BLOCKED [accounts]"), "{text}");
     // Defaults by prompts: accounts, bind, gserver port, client ports,
-    // gserver_ip, site, upgrade, save.
-    let (code, text) = setup(w.path(), &["host-listserver"], "\n\n\n\n\n\n\nyes\n");
+    // who may register (127.0.0.1) and its HQ password, gserver_ip, site,
+    // upgrade, save.
+    let (code, text) = setup(
+        w.path(),
+        &["host-listserver"],
+        "\n\n\n\n\nlab-hq-pw\n\n\n\nyes\n",
+    );
     assert_eq!(code, Some(0), "{text}");
     assert!(text.contains("bind: (not set) -> 0.0.0.0"), "{text}");
+    assert!(
+        text.contains("gservers: (not set) -> 127.0.0.1 (HQ password set)"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("lab-hq-pw"),
+        "password never echoed back: {text}"
+    );
+    assert!(!text.contains("warning [gservers]"), "{text}");
     assert!(text.contains("does not exist yet"), "{text}");
     assert!(text.contains("--listserver 127.0.0.1:14900"), "{text}");
     let t = fs::read_to_string(&toml).unwrap();
@@ -254,6 +268,10 @@ fn setup_host_listserver_then_back_to_lab() {
     );
     assert!(
         t.contains("bind = \"0.0.0.0\"") && t.contains("accounts = \"accounts.txt\""),
+        "{t}"
+    );
+    assert!(
+        t.contains("gservers = [{ ip = \"127.0.0.1\", hq_password = \"lab-hq-pw\" }]"),
         "{t}"
     );
 
@@ -267,4 +285,73 @@ fn setup_host_listserver_then_back_to_lab() {
     assert!(fs::read_to_string(&toml)
         .unwrap()
         .contains("bind = \"0.0.0.0\""));
+}
+
+#[test]
+fn host_listserver_who_may_register_by_options() {
+    let w = lab_world();
+    let toml = w.path().join("seihai-listserver.toml");
+    let base = ["host-listserver", "--yes", "--accounts", "accounts.txt"];
+
+    // --yes with neither option leaves the list alone and warns.
+    let (code, text) = setup(w.path(), &base, "");
+    assert_eq!(code, Some(0), "{text}");
+    assert!(text.contains("warning [gservers]"), "{text}");
+    assert!(!fs::read_to_string(&toml).unwrap().contains("gservers"));
+
+    // A new address needs the password from the environment.
+    let mut args = base.to_vec();
+    args.extend(["--allow-gserver", "127.0.0.1"]);
+    let (code, text) = setup(w.path(), &args, "");
+    assert_eq!(code, Some(1), "{text}");
+    assert!(text.contains("--hq-password-env"), "{text}");
+
+    let mut child = bin();
+    child
+        .arg("setup")
+        .args(&args)
+        .args([
+            "--allow-gserver",
+            "::1",
+            "--hq-password-env",
+            "SEIHAI_TEST_HQ",
+        ])
+        .arg("--world")
+        .arg(w.path())
+        .env("SEIHAI_TEST_HQ", "env-hq-pw");
+    let out = child.output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(out.status.success(), "{text}");
+    assert!(!text.contains("env-hq-pw"), "{text}");
+    assert!(
+        text.contains("note [gservers]: Only 127.0.0.1, ::1 may register"),
+        "{text}"
+    );
+    let t = fs::read_to_string(&toml).unwrap();
+    assert!(
+        t.contains("gservers = [{ ip = \"127.0.0.1\", hq_password = \"env-hq-pw\" }, { ip = \"::1\", hq_password = \"env-hq-pw\" }]"),
+        "{t}"
+    );
+
+    // An address already listed keeps its password without the variable.
+    let (code, text) = setup(w.path(), &args, "");
+    assert_eq!(code, Some(0), "{text}");
+    assert!(fs::read_to_string(&toml)
+        .unwrap()
+        .contains("gservers = [{ ip = \"127.0.0.1\", hq_password = \"env-hq-pw\" }]"),);
+
+    // Not an address: refused before anything is written.
+    let mut bad = base.to_vec();
+    bad.extend(["--allow-gserver", "my-gserver"]);
+    let (code, text) = setup(w.path(), &bad, "");
+    assert_eq!(code, Some(1), "{text}");
+    assert!(text.contains("not an IP address"), "{text}");
+
+    // --any-gserver opens it again.
+    let mut open = base.to_vec();
+    open.push("--any-gserver");
+    let (code, text) = setup(w.path(), &open, "");
+    assert_eq!(code, Some(0), "{text}");
+    assert!(fs::read_to_string(&toml).unwrap().contains("gservers = []"));
+    assert!(text.contains("warning [gservers]"), "{text}");
 }
