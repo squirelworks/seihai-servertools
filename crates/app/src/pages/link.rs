@@ -16,6 +16,7 @@ pub struct Where {
     pub password: String,
     pub dir: String,
     pub path: String,
+    pub picker: super::picker::Picker,
 }
 
 impl Where {
@@ -80,6 +81,7 @@ impl Where {
                         .hint_text("path to the world")
                         .desired_width(360.0),
                 );
+                self.picker.button(ui, true, &mut self.folder);
             });
         }
         ui.horizontal(|ui| {

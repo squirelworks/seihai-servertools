@@ -9,6 +9,7 @@ use setup_core::folder::{check_world_config, ConfigFinding};
 #[derive(Default)]
 pub struct Page {
     world: String,
+    picker: super::picker::Picker,
     report: Option<Report>,
     config: Vec<ConfigFinding>,
 }
@@ -22,6 +23,7 @@ impl Page {
         ui.horizontal(|ui| {
             ui.label("World folder:");
             ui.text_edit_singleline(&mut self.world);
+            self.picker.button(ui, true, &mut self.world);
             if ui.button("Check").clicked() {
                 let world = std::path::Path::new(&self.world);
                 self.report = Some(check_world(world));

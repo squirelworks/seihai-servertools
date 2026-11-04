@@ -95,6 +95,7 @@ pub struct Page {
     hosting: bool,
     host: super::host::Host,
     addrs: super::addrs::Addresses,
+    picker: super::picker::Picker,
     hq_password: String,
 }
 
@@ -114,6 +115,7 @@ impl Default for Page {
             hq_password: String::new(),
             host: super::host::Host::default(),
             addrs: super::addrs::Addresses::default(),
+            picker: super::picker::Picker::default(),
         }
     }
 }
@@ -183,6 +185,9 @@ impl Page {
                 egui::TextEdit::singleline(&mut self.world)
                     .hint_text("folder with gs2emu and servers/"),
             );
+            if self.picker.button(ui, true, &mut self.world) {
+                self.open();
+            }
             ui.label("Server:");
             ui.add(egui::TextEdit::singleline(&mut self.server).desired_width(100.0));
             if ui.button("Open").clicked() {
