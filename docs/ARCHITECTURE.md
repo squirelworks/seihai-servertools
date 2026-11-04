@@ -96,7 +96,11 @@ The command line prints it (`lab plan`) or starts it (`lab start`):
 
 When the Rust `seihai-gserver` can run a world, `LabOptions` gets a gserver
 kind (fork or Rust) and `plan` builds its arguments; nothing else changes.
-The window's Lab page will run the same `Plan` on a worker thread.
+The window's Lab page runs the same `Plan` on a worker thread
+(`setup_core::lab_run::LabRun`): the same start order, a `Status` the page
+reads each frame (phase, each process and how it ended, a log), the tail of
+each console, and Stop. Dropping the run (closing the window) stops the
+servers.
 
 ## lat-core
 

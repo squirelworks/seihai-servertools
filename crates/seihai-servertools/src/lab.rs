@@ -1,12 +1,11 @@
 //! `seihai-servertools lab start|plan`: the one-step lab start.
 
-use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use setup_core::lab::{plan, LabOptions, ListserverChoice};
 use setup_core::run::{start, tail, Group};
@@ -37,15 +36,7 @@ fn parse(args: &[&str]) -> Result<LabOptions, String> {
 
 /// Wait until something accepts on `127.0.0.1:port`, up to `limit`.
 fn wait_for_port(port: u16, limit: Duration) -> bool {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let deadline = Instant::now() + limit;
-    while Instant::now() < deadline {
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
-            return true;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-    false
+    setup_core::lab_run::wait_for_port(port, limit, &AtomicBool::new(false))
 }
 
 fn report_stopped(group: &mut Group) -> bool {
