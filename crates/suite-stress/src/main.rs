@@ -46,6 +46,7 @@ OPTIONS:
   --no-npcserver       leave the NPC-server out
   --no-listserver      leave the listserver out
   --verbose            start the gserver with --verbose
+  --anticheat on|off   anticheat in the gserver's server.txt (default: its own default)
 
 EXTERNAL CLIENTS (another client program next to the bots, one process each):
   --external PROG      the program, e.g. graal-delphi's Graal205. It is started with
@@ -78,6 +79,7 @@ struct Opts {
     npc: bool,
     list: bool,
     verbose: bool,
+    anticheat: Option<String>,
     external: Option<PathBuf>,
     ext_clients: Option<usize>,
     ext_args: Vec<String>,
@@ -117,6 +119,7 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
         npc: true,
         list: true,
         verbose: false,
+        anticheat: None,
         external: None,
         ext_clients: None,
         ext_args: Vec::new(),
@@ -163,6 +166,7 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
             "--no-npcserver" => o.npc = false,
             "--no-listserver" => o.list = false,
             "--verbose" => o.verbose = true,
+            "--anticheat" => o.anticheat = Some(val()?),
             "--external" => o.external = Some(val()?.into()),
             "--external-clients" => o.ext_clients = Some(num(val()?)? as usize),
             "--external-arg" => o.ext_args.push(val()?),
@@ -235,6 +239,7 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
     cfg.max_players = o.max_players;
     cfg.list_max_connections = o.list_max;
     cfg.verbose = o.verbose;
+    cfg.anticheat = o.anticheat.clone();
     cfg.ring_levels = o.levels;
     cfg.gmap_size = o.gmap;
     if o.levels == 0 && o.gmap < 2 {
