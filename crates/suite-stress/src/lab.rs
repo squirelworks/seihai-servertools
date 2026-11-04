@@ -258,15 +258,12 @@ impl Lab {
     /// Stop everything, the gserver's NPC-server included.
     pub fn down(&mut self) {
         for p in self.procs.iter_mut().rev() {
-            match &mut p.child {
-                Some(c) => {
-                    let _ = c.kill();
-                    let _ = c.wait();
-                }
-                None => {
-                    #[cfg(unix)]
-                    let _ = Command::new("kill").arg(p.pid.to_string()).status();
-                }
+            if let Some(c) = &mut p.child {
+                let _ = c.kill();
+                let _ = c.wait();
+            } else if cfg!(unix) {
+                // Started by the gserver (the NPC-server): not our child.
+                let _ = Command::new("kill").arg(p.pid.to_string()).status();
             }
         }
     }
