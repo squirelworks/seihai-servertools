@@ -136,9 +136,10 @@ fn read_until(
 /// 4 tiles a second at a 100 ms walk.
 const STEP_ANGLE: f32 = 0.1;
 
-/// Tiles a walk step on the gmap covers: 16 tiles a second at a 100 ms
-/// walk, under the gserver's 20, so a seam comes about every 4 s.
-const GMAP_STEP: f32 = 1.6;
+/// Tiles a walk step on the gmap covers: 10 tiles a second at a 100 ms
+/// walk, a real 2.x walk (half a tile a 50 ms tick), so a seam comes about
+/// every 6.4 s.
+const GMAP_STEP: f32 = 1.0;
 
 /// The list step. Returns the time and the player count shown for
 /// `server_name`.
@@ -279,7 +280,9 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
         if let Some((_, at)) = &pending {
             wake = wake.min(*at + Duration::from_secs(10));
         }
-        if warps || gmap_loop.is_some() {
+        // A due warp waits for the walk to reach the link, so the walk
+        // tick is what wakes it; a gmap crossing is part of the walk.
+        if warps && next_warp > now {
             wake = wake.min(next_warp);
         }
         if let Some((_, at)) = &warping {
