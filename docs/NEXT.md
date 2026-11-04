@@ -133,16 +133,17 @@ Held until Seihai M4 or M5 asks for it:
 - [x] Level editor: show a diff against the downloaded bytes, and refuse
       the upload when the server's copy changed in between. The gani
       editor does the same. Lab run: `docs/lab/2026-11-04-lat-refuse-upload.md`.
-- [ ] NPC editor: level NPCs with a GS1 syntax check; NC objects after
-      `seihai-rc` stage 5.
+- [ ] NPC editor: level NPCs with a GS1 syntax check (the check is
+      `lat_core::npc::check_script`); NC objects after `seihai-rc` stage 5.
 - [x] Gani editor with preview: open, change one sprite frame, encode,
       paint one frame.
 
 ## Checker track
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
-- [ ] GS1 syntax errors in level NPCs (and the images and sounds those
-      scripts name, such as `showimg` and `play`).
+- [x] GS1 syntax errors in level NPCs (and the images and sounds those
+      scripts name, such as `showimg` and `play`): `lat_core::npc::check_script`,
+      warnings in `check`. Lab run: `docs/lab/2026-11-04-npc-script-check.md`.
 - [x] `serveroptions.txt` checks from `setup_core::checks`:
       `setup_core::folder::check_world_config` runs them on every server
       folder (accounts of public folders too) and on

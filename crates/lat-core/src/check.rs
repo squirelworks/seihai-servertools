@@ -9,15 +9,21 @@
 //! - ganis that do not parse;
 //! - images and sounds a level NPC or a gani names, when `seihai-core`'s
 //!   asset resolver cannot find them in this folder (a warning: the world
-//!   still loads).
+//!   still loads), including the fixed names a level NPC's script gives
+//!   `setimg`, `setgif`, `setimgpart`, `setgifpart`, `showimg`, `play`,
+//!   `playlooped` and `play2`;
+//! - level NPC scripts: GS1 parse problems (warnings: the client skips that
+//!   part and runs the rest; at most three per NPC, then a count). Names the
+//!   parser does not know as commands are not reported: its vocabulary is
+//!   the client's, so server-side commands such as `addweapon` would show
+//!   up. See [`crate::npc::check_script`].
 //!
 //! The server settings (`serveroptions.txt`, `seihai-listserver.toml`) are
 //! checked by `setup_core::folder::check_world_config`, which
 //! `seihai-servertools check` runs next to this.
 //!
-//! **Planned** (`docs/NEXT.md`): GS1 syntax errors in level NPCs (and the
-//! images and sounds those scripts name). `seihai-servertools check --json`
-//! prints this report and the settings findings as one JSON object.
+//! `seihai-servertools check --json` prints this report and the settings
+//! findings as one JSON object.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -149,6 +155,7 @@ pub fn check_world(root: &Path) -> Report {
                             "NPC image",
                             &assets,
                         );
+                        check_npc_script(&mut report, &mut seen, &file, npc, &assets);
                     }
                 }
             }
@@ -190,6 +197,54 @@ pub fn check_world(root: &Path) -> Report {
         }
     }
     report
+}
+
+/// At most this many script problems are listed for one NPC; the rest are
+/// counted. A script written for the newer language trips the GS1 parser on
+/// most lines, and one NPC should not bury the report.
+const MAX_SCRIPT_PROBLEMS: usize = 3;
+
+fn check_npc_script(
+    report: &mut Report,
+    seen: &mut BTreeSet<String>,
+    file: &str,
+    npc: &seihai_core::assets::Npc,
+    assets: &AssetResolver,
+) {
+    if npc.script.trim().is_empty() {
+        return;
+    }
+    let check = crate::npc::check_script(&npc.script);
+    let at = format!("NPC at {},{}", npc.x, npc.y);
+    let mut lines: Vec<String> = check
+        .problems
+        .iter()
+        .map(|p| format!("{at}: GS1 script {p}; that part of the script is skipped"))
+        .collect();
+    let more = lines.len().saturating_sub(MAX_SCRIPT_PROBLEMS);
+    lines.truncate(MAX_SCRIPT_PROBLEMS);
+    if more > 0 {
+        let word = if more == 1 { "problem" } else { "problems" };
+        lines.push(format!("{at}: {more} more GS1 script {word}"));
+    }
+    for text in lines {
+        report.findings.push(Finding {
+            severity: Severity::Warn,
+            file: file.to_string(),
+            text,
+        });
+    }
+    for named in &check.files {
+        let role = format!("{} in an NPC script", named.command);
+        match named.kind {
+            crate::npc::FileKind::Image => {
+                note_image(report, seen, file, &named.name, &role, assets)
+            }
+            crate::npc::FileKind::Sound => {
+                note_sound(report, seen, file, &named.name, &role, assets)
+            }
+        }
+    }
 }
 
 /// A gani `SPRITE` sheet that means one of the player's own pictures, not a
@@ -238,6 +293,7 @@ fn note_sound(
     seen: &mut BTreeSet<String>,
     file: &str,
     name: &str,
+    role: &str,
     assets: &AssetResolver,
 ) {
     let name = name.trim();
@@ -252,7 +308,7 @@ fn note_sound(
         report.findings.push(Finding {
             severity: Severity::Warn,
             file: file.to_string(),
-            text: format!("sound {name} (gani PLAYSOUND) is not in the world"),
+            text: format!("sound {name} ({role}) is not in the world"),
         });
     }
 }
@@ -292,7 +348,14 @@ fn check_gani(report: &mut Report, file: &str, gani: &crate::gani::Gani, assets:
     }
     for frame in &gani.frames {
         for sound in &frame.sounds {
-            note_sound(report, &mut seen, file, &sound.file, assets);
+            note_sound(
+                report,
+                &mut seen,
+                file,
+                &sound.file,
+                "gani PLAYSOUND",
+                assets,
+            );
         }
     }
 }
