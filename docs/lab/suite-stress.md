@@ -74,6 +74,28 @@ default is 256). A 1000-bot login burst costs about 0.15 CPU-seconds per
 login on the gserver (PBKDF2, 100 000 rounds), so ramp slowly
 (`--ramp 20`) or expect login times of several seconds.
 
+## Other client programs next to the bots
+
+`--external PROG --external-clients N` starts N copies of another client
+program among the bots (spread evenly over the ramp), one process each,
+for example graal-delphi's rebuilt 2.05r2 (`build/graal-2.05r2-GNW03081/Graal205`
+from its `scripts/build.sh`). Each is started with
+
+```
+PROG --server 127.0.0.1:<gserver> --account <run>x<i> --password-env SEIHAI_LAB_PASSWORD \
+     --headless --seconds <stay> --walk random|idle --walk-ms <walk-ms> --seed <i+1> \
+     [--link-every <secs>] [--external-arg ...]
+```
+
+and must print one JSON line with `"kind":"summary"` on stdout when it
+ends (fields: `version`, `end` clean/nologin/dropped/error, `error`,
+`login_ms`, `warps`, `warps_done`, `warp_ms_p50`/`_max`, `tick_ms_p99`/`_max`,
+`frames_in`, `msgs_out`, `rss_peak_kib`, `nodelay`). The report gets an
+"External clients" section, `external.tsv` one row per client, and
+`external/<account>.log` each client's stderr. `--external-arg --nodelay`
+passes a flag through; `--external-link-secs` sets `--link-every` (default
+`--warp-secs`). A client still running 30 s after its stay is killed.
+
 ## Real clients next to the bots
 
 Run the rig inside a network namespace whose only interface is `lo` (see

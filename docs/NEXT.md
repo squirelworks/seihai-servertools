@@ -27,6 +27,10 @@ session that built the setup did not do them:
       bot behaviour for each (warp, cross a gmap edge, fetch a real file).
 - [ ] RC against the gserver once it serves RC logins (stage 4).
 - [ ] Real 2.x clients under Wine next to the bots (`--base-port 14800`).
+- [x] Other client programs next to the bots (`--external`); first used
+      with graal-delphi's headless 2.05r2.
+- [ ] Bump seihai-core once its client sets `TCP_NODELAY`; until then the
+      file-probe p95 has a ~40 ms tail from the bots themselves.
 - [ ] The 1000-player mixed-version run, once the suite parts are further
       along (Squirrel, 2026-11-04: a later side project).
 

@@ -34,6 +34,8 @@ pub struct Run<'a> {
     pub exited: &'a [(&'static str, String)],
     /// (log name, trouble lines, first few).
     pub logs: &'a [(String, usize, Vec<String>)],
+    /// The external clients' section, already written (empty for none).
+    pub external: &'a str,
 }
 
 fn ms(d: Duration) -> f64 {
@@ -298,6 +300,7 @@ pub fn markdown(run: &Run) -> String {
         );
     }
 
+    s.push_str(run.external);
     s.push_str("\n## Server processes\n\n");
     let mut names: Vec<&str> = Vec::new();
     for t in run.ticks {
@@ -441,6 +444,7 @@ mod tests {
             rc: &[],
             exited: &[],
             logs: &[],
+            external: "",
         });
         assert!(md.contains("| 2.05 | 1 |"));
         assert!(md.contains("| 1.21 | 1 |"));

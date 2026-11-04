@@ -157,3 +157,22 @@ bots the server puts on it cross seams instead of taking links.
   27,558 → 1,818 a second and gserver CPU 115 % → 43 %; 300 bots in one
   level, RSS growth +7.2 MiB/min → flat and the slowest login 13.7 s → 5.2 s,
   but still near a full core.
+
+## #25 with per-worker zlib, the file p95, and a second client program
+
+- **#25 at `15637a3`** (zlib state per worker thread): 300 bots in one
+  level, all 300 in, gserver RSS peak 26.9 MiB (113 MiB before this commit,
+  20.7 on #23) and 60.9 CPU-s (78.8 on #23).
+- **The file p95 tail was the bots.** `seihai-core`'s client socket has no
+  `TCP_NODELAY`, so a `WANTFILE` sent right after a walk prop waits for the
+  server's delayed ACK (about 40 ms). The same tail showed with the servers
+  and the bots pinned to separate cores and with 10 bots, on main and #23
+  too. A scratch rig with `set_nodelay(true)` in `connect_any`: 92 bots
+  p95 39.6 → 3.8 ms, 10 bots 30.6 → 2.7 ms. Until seihai-core sets it,
+  file p95 from this rig measures the bots, not the gserver.
+- **graal-delphi's rebuilt 2.05r2 as external clients** (graal-delphi#5,
+  `--external`): 92 bots of all 46 profiles plus 20 `Graal205 --headless`
+  walking at random and taking a link every 3 s, 60 s, on #25. All 92 bots
+  and all 20 external clients in and ended clean, external login p50 151 ms,
+  134 of 135 links taken (the last one tried as the stay ended), client tick
+  p99 under 3.6 ms, 4.7 MiB each. gserver 53 % of a core, 12.1 MiB.

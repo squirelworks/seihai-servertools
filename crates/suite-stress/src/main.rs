@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use suite_stress::bot::{self, Plan, Shared};
+use suite_stress::external::{self, ExtPlan, ExtShared};
 use suite_stress::lab::{scan_log, Bins, Lab, LabConfig};
 use suite_stress::report::{self, Tick};
 use suite_stress::{rc, sample, DEFAULT_VERSIONS, LAB_PASSWORD};
@@ -45,6 +46,15 @@ OPTIONS:
   --no-npcserver       leave the NPC-server out
   --no-listserver      leave the listserver out
   --verbose            start the gserver with --verbose
+
+EXTERNAL CLIENTS (another client program next to the bots, one process each):
+  --external PROG      the program, e.g. graal-delphi's Graal205. It is started with
+                       --server --account --password-env --headless --seconds --walk
+                       --walk-ms --seed [--link-every] and must print one JSON line
+                       with \"kind\":\"summary\" on stdout when it ends
+  --external-clients N how many (default 1 when --external is given)
+  --external-arg ARG   one more argument for each of them (repeatable), e.g. --nodelay
+  --external-link-secs S   --link-every for them (default: --warp-secs; 0 = none)
 ";
 
 struct Opts {
@@ -68,6 +78,10 @@ struct Opts {
     npc: bool,
     list: bool,
     verbose: bool,
+    external: Option<PathBuf>,
+    ext_clients: Option<usize>,
+    ext_args: Vec<String>,
+    ext_link: Option<Duration>,
 }
 
 fn parse_versions(s: &str) -> Result<Vec<ClientVersion>, String> {
@@ -103,6 +117,10 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
         npc: true,
         list: true,
         verbose: false,
+        external: None,
+        ext_clients: None,
+        ext_args: Vec::new(),
+        ext_link: None,
     };
     if compat {
         o.versions = ClientVersion::all_versions().to_vec();
@@ -145,11 +163,18 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
             "--no-npcserver" => o.npc = false,
             "--no-listserver" => o.list = false,
             "--verbose" => o.verbose = true,
+            "--external" => o.external = Some(val()?.into()),
+            "--external-clients" => o.ext_clients = Some(num(val()?)? as usize),
+            "--external-arg" => o.ext_args.push(val()?),
+            "--external-link-secs" => o.ext_link = Some(Duration::from_secs_f64(num(val()?)?)),
             _ => return Err(format!("unknown option {a}\n\n{USAGE}")),
         }
     }
     if compat && !bots_given {
         o.bots = o.versions.len();
+    }
+    if o.ext_clients.is_some_and(|n| n > 0) && o.external.is_none() {
+        return Err("--external-clients needs --external PROG".into());
     }
     if o.versions.is_empty() {
         return Err("no versions".into());
@@ -268,11 +293,50 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
     let mut exited = Vec::new();
     let mut next_tick = Instant::now();
     let mut started = 0usize;
+    let n_ext = if o.external.is_some() {
+        o.ext_clients.unwrap_or(1)
+    } else {
+        0
+    };
+    let ext_shared = Arc::new(ExtShared::default());
+    let mut ext_handles = Vec::new();
+    let ext_dir = out.join("external");
+    if n_ext > 0 {
+        std::fs::create_dir_all(&ext_dir).map_err(|e| format!("{}: {e}", ext_dir.display()))?;
+    }
     let gap = Duration::from_secs_f64(1.0 / o.ramp);
     let mut next_bot = Instant::now();
     loop {
         let now = Instant::now();
-        while started < o.bots && now >= next_bot && !shared.stop.load(Ordering::Relaxed) {
+        while started + ext_handles.len() < o.bots + n_ext
+            && now >= next_bot
+            && !shared.stop.load(Ordering::Relaxed)
+        {
+            // Spread the external clients evenly among the bots.
+            let e = ext_handles.len();
+            if e < n_ext && (started >= o.bots || e * o.bots <= started * n_ext) {
+                let account = format!("{run_tag}x{e}");
+                let plan = ExtPlan {
+                    index: e,
+                    program: o.external.clone().expect("n_ext > 0"),
+                    extra: o.ext_args.clone(),
+                    log: ext_dir.join(format!("{account}.log")),
+                    account,
+                    password: LAB_PASSWORD.into(),
+                    gserver: cfg.gserver_addr(),
+                    stay: o.stay,
+                    walk_every: o.walk,
+                    link_every: o.ext_link.unwrap_or(o.warp),
+                };
+                let (s, es) = (shared.clone(), ext_shared.clone());
+                let h = std::thread::Builder::new()
+                    .name(format!("ext{e}"))
+                    .spawn(move || external::run(plan, &es, &s.stop))
+                    .map_err(|err| format!("external thread {e}: {err}"))?;
+                ext_handles.push(h);
+                next_bot += gap;
+                continue;
+            }
             let i = started;
             let v = o.versions[i % o.versions.len()];
             // Spread the list fetches evenly over the bots.
@@ -338,19 +402,41 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
             }
             let t = ticks.last().unwrap();
             eprintln!(
-                "[{:6.1}s] started {started}/{} online {} ok {} failed {} dropped {}",
-                t.t, o.bots, t.online, t.logins_ok, t.logins_failed, t.dropped
+                "[{:6.1}s] started {started}/{} online {} ok {} failed {} dropped {}{}",
+                t.t,
+                o.bots,
+                t.online,
+                t.logins_ok,
+                t.logins_failed,
+                t.dropped,
+                if n_ext > 0 {
+                    format!(
+                        " external {}/{n_ext} running {}",
+                        ext_handles.len(),
+                        ext_shared.running.load(Ordering::Relaxed)
+                    )
+                } else {
+                    String::new()
+                }
             );
             next_tick += Duration::from_secs(1);
         }
-        let all_started = started >= o.bots || shared.stop.load(Ordering::Relaxed);
-        if all_started && handles.iter().all(|h| h.is_finished()) {
+        let all_started = (started >= o.bots && ext_handles.len() >= n_ext)
+            || shared.stop.load(Ordering::Relaxed);
+        if all_started
+            && handles.iter().all(|h| h.is_finished())
+            && ext_handles.iter().all(|h| h.is_finished())
+        {
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
     }
     shared.stop.store(true, Ordering::Relaxed);
     let outcomes: Vec<_> = handles.into_iter().filter_map(|h| h.join().ok()).collect();
+    let ext_outcomes: Vec<_> = ext_handles
+        .into_iter()
+        .filter_map(|h| h.join().ok())
+        .collect();
     if let Some(t) = rc_thread {
         let _ = t.join();
     }
@@ -412,6 +498,21 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
         ),
         ("max_players".into(), o.max_players.to_string()),
     ];
+    let mut settings = settings;
+    if let Some(p) = &o.external {
+        settings.push((
+            "external clients".into(),
+            format!(
+                "{n_ext} x `{}`{}",
+                p.display(),
+                if o.ext_args.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", o.ext_args.join(" "))
+                }
+            ),
+        ));
+    }
     let md = report::markdown(&report::Run {
         title: if compat {
             "Suite compatibility pass".into()
@@ -424,6 +525,7 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
         rc: &rc_probes,
         exited: &exited,
         logs: &logs,
+        external: &external::markdown(&ext_outcomes, o.external.as_deref()),
     });
     let w = |name: &str, body: String| {
         std::fs::write(out.join(name), body).map_err(|e| format!("{name}: {e}"))
@@ -431,6 +533,9 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
     w("report.md", md.clone())?;
     w("timeline.tsv", report::timeline_tsv(&ticks))?;
     w("bots.tsv", report::bots_tsv(&outcomes))?;
+    if !ext_outcomes.is_empty() {
+        w("external.tsv", external::tsv(&ext_outcomes))?;
+    }
     println!("{md}");
     eprintln!("results in {}", out.display());
     Ok(())
