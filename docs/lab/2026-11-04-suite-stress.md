@@ -137,3 +137,23 @@ The rig now warps (an 8-level ring of full boards). Against the #18 branch
   server → client went from 52 to 10,589 frames/s for 92 walkers, and gserver
   CPU from 24 % to 74 %. squirelworks/seihai-gserver#20 (batch on the 2.8
   tick).
+
+## Stage 2.5 gmaps, and the follow-up PRs (squirelworks/seihai-gserver#19–#23)
+
+The rig now also writes a 3×3 gmap whose cell (0, 0) is the start level, and
+bots the server puts on it cross seams instead of taking links.
+
+- **#22 (gmaps, with #18):** compat put 25 builds on the gmap (2.1 to
+  6.03r7 Linux; the 21 older builds get the start level as a plain level),
+  all 46 logged in. 92 bots, 90 s: 1450 crossings, 0 lost (p50 3.4 ms, max
+  48 ms), 1218 warps, 0 lost, 0 file answers lost. The gen-2 warp fix
+  (`ae58da6`) holds: 1.32 and 1.39 now lose 0 of 1194 answers each.
+- **#19 + #21 (RC refusal, password-check cap):** `seihai-rc` now shows
+  "This server does not take RC logins yet." 300 logins at 30 a second
+  with walking off: login times unchanged (CPU-bound), but players already
+  in see file round trips p99 30 ms instead of 845 ms, and the blocking pool
+  stays at 12 threads instead of 64.
+- **#23 (props batched on the 50 ms tick):** 92 bots in one level, frames
+  27,558 → 1,818 a second and gserver CPU 115 % → 43 %; 300 bots in one
+  level, RSS growth +7.2 MiB/min → flat and the slowest login 13.7 s → 5.2 s,
+  but still near a full core.

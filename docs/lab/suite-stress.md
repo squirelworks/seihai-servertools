@@ -28,7 +28,10 @@ What one run does:
    - only sends messages its build can send (`Connection::can_send`).
 
    `--levels 0` writes no levels and turns warps off, for a gserver before
-   stage 2.2.
+   stage 2.2. With `--gmap N` (default 3) the start level is cell (0, 0)
+   of an N×N gmap: a bot the server puts on the gmap (`PLO_PLAYERWARP2` at
+   login) walks round its edge cells instead, crossing a seam every
+   `--warp-secs`, and times crossing → the new cell's level name.
 4. Every `--rc-every` seconds runs the real `seihai-rc`: `servers` against
    the listserver and `players list` against the gserver.
 5. Once a second samples each server process from `/proc` (RSS, CPU time,

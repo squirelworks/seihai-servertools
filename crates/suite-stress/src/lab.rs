@@ -54,6 +54,9 @@ pub struct LabConfig {
     /// Levels in the warp ring written to `levels/` (see [`ring_names`]).
     /// 0 writes no levels at all, as for a stage-1 gserver.
     pub ring_levels: usize,
+    /// Side of the square gmap written to `levels/stress.gmap`, its cell
+    /// (0, 0) being the start level (see [`gmap_text`]). 0 or 1: no gmap.
+    pub gmap_size: usize,
 }
 
 impl LabConfig {
@@ -72,6 +75,7 @@ impl LabConfig {
             server_name: "Seihai Stress".into(),
             verbose: false,
             ring_levels: 8,
+            gmap_size: 3,
         }
     }
 
@@ -127,6 +131,55 @@ pub fn ring_level(i: usize, n: usize) -> String {
     s.push_str(&format!("LINK {} 30 0 4 1 30 60\n", names[(i + 1) % n]));
     s.push_str(&format!("SIGN 20 21\nRing level {i} of {n}.\nSIGNEND\n"));
     s
+}
+
+/// The level name of gmap cell `(x, y)`: the start level at (0, 0).
+pub fn cell_name(x: usize, y: usize) -> String {
+    if (x, y) == (0, 0) {
+        START_LEVEL.to_string()
+    } else {
+        format!("stress_g{x}_{y}.nw")
+    }
+}
+
+/// The `.gmap` text for an `n` by `n` grid of [`cell_name`]s.
+pub fn gmap_text(n: usize) -> String {
+    let mut s = format!("GRMAP001\nWIDTH {n}\nHEIGHT {n}\nLEVELNAMES\n");
+    for y in 0..n {
+        for x in 0..n {
+            s.push_str(&format!("\"{}\",", cell_name(x, y)));
+        }
+        s.push('\n');
+    }
+    s.push_str("LEVELNAMESEND\n");
+    s
+}
+
+/// A gmap cell's level: a full board, no links (the seams are the way out).
+pub fn cell_level(x: usize, y: usize) -> String {
+    let full = ring_level(x * 7 + y * 13 + 3, 2);
+    let mut s: String = full
+        .lines()
+        .filter(|l| l.starts_with("GLEVNW01") || l.starts_with("BOARD"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    s.push_str(&format!("SIGN 20 21\nGmap cell {x},{y}.\nSIGNEND\n"));
+    s
+}
+
+/// The cells around the edge of an `n` by `n` grid, in walking order: each
+/// is next to the one before, and the last is next to the first.
+pub fn gmap_loop(n: usize) -> Vec<(i32, i32)> {
+    if n < 2 {
+        return Vec::new();
+    }
+    let n = n as i32;
+    let mut v = Vec::new();
+    v.extend((0..n).map(|x| (x, 0)));
+    v.extend((1..n).map(|y| (n - 1, y)));
+    v.extend((0..n - 1).rev().map(|x| (x, n - 1)));
+    v.extend((1..n - 1).rev().map(|y| (0, y)));
+    v
 }
 
 /// The gserver's `config/server.txt` for this lab.
@@ -255,6 +308,23 @@ impl Lab {
                 .map_err(|e| e.to_string())?;
             }
         }
+        if cfg.gmap_size >= 2 {
+            fs::create_dir_all(world.join("levels")).map_err(|e| e.to_string())?;
+            fs::write(world.join("levels/stress.gmap"), gmap_text(cfg.gmap_size))
+                .map_err(|e| e.to_string())?;
+            for y in 0..cfg.gmap_size {
+                for x in 0..cfg.gmap_size {
+                    if (x, y) != (0, 0) {
+                        fs::write(world.join("levels").join(cell_name(x, y)), cell_level(x, y))
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+            if cfg.ring_levels == 0 {
+                fs::write(world.join("levels").join(START_LEVEL), cell_level(0, 0))
+                    .map_err(|e| e.to_string())?;
+            }
+        }
         let mut cmd = Command::new(&bins.gserver);
         cmd.arg("--world").arg(&world);
         if cfg.verbose {
@@ -369,6 +439,25 @@ mod tests {
             assert!(text.contains(&format!("LINK {} ", names[(i + 1) % 3])));
         }
         assert_ne!(ring_level(0, 3), ring_level(1, 3));
+    }
+
+    #[test]
+    fn gmap_grid_and_loop() {
+        let g = seihai_core::gmap::Gmap::parse(&gmap_text(3)).unwrap();
+        let _ = g;
+        assert!(
+            gmap_text(3).contains("\"onlinestartlocal.nw\",\"stress_g1_0.nw\",\"stress_g2_0.nw\",")
+        );
+        let l = gmap_loop(3);
+        assert_eq!(l.len(), 8);
+        assert_eq!(l[0], (0, 0));
+        for i in 0..l.len() {
+            let (a, b) = (l[i], l[(i + 1) % l.len()]);
+            assert_eq!((a.0 - b.0).abs() + (a.1 - b.1).abs(), 1, "{a:?} {b:?}");
+        }
+        assert!(gmap_loop(1).is_empty());
+        let lv = seihai_core::assets::Level::parse(&cell_level(1, 2)).unwrap();
+        assert_eq!(lv.tile_ids().len(), 64 * 64);
     }
 
     #[test]
