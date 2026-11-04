@@ -14,6 +14,7 @@ offline mode, as the original client's editor did, and stays there.
 | Block | Where | State |
 |---|---|---|
 | File link: list, download, upload | `lat_core::remote::RemoteFiles`; `LocalFolder` and `RcFiles` | working |
+| Review before upload: line diff, refuse if the server copy changed | `lat_core::diff`, `lat_core::remote::write_file_if_unchanged`; level and gani pages | working (no local backup of the original yet) |
 | RC login and file link (list, get, put) | `seihai-rc`, pinned commit | in use |
 | NC login (database NPCs, classes, weapons) | `seihai-rc` | not used here yet |
 | Level, gmap, gani, GS1 parsers | `seihai-core` (pinned commit) | in use |

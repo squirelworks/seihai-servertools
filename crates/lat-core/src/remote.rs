@@ -250,6 +250,46 @@ pub fn write_file(source: &FileSource, path: &str, data: &[u8]) -> io::Result<()
     source.open()?.put(path, data)
 }
 
+/// What [`put_if_unchanged`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Upload {
+    /// The server still had the downloaded bytes, and `data` replaced them.
+    Written,
+    /// The server's copy is no longer the downloaded bytes. Nothing was
+    /// written. This is what the server has now.
+    Changed(Vec<u8>),
+}
+
+/// Upload `data` only if `path` still holds `downloaded`, the bytes the
+/// editor opened.
+///
+/// The file is downloaded again just before the upload and compared. The
+/// file link has no compare-and-swap, so a write that lands between that
+/// download and the upload is not seen; the window is one round trip.
+pub fn put_if_unchanged(
+    files: &mut dyn RemoteFiles,
+    path: &str,
+    downloaded: &[u8],
+    data: &[u8],
+) -> io::Result<Upload> {
+    let now = files.get(path)?;
+    if now != downloaded {
+        return Ok(Upload::Changed(now));
+    }
+    files.put(path, data)?;
+    Ok(Upload::Written)
+}
+
+/// [`put_if_unchanged`] on `source`, with one login for both calls.
+pub fn write_file_if_unchanged(
+    source: &FileSource,
+    path: &str,
+    downloaded: &[u8],
+    data: &[u8],
+) -> io::Result<Upload> {
+    put_if_unchanged(source.open()?.as_mut(), path, downloaded, data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,5 +316,30 @@ mod tests {
         assert_eq!(list.len(), 1, "no temporary file left: {list:?}");
         assert_eq!(list[0].name, "a.nw");
         assert!(f.list("").unwrap()[0].is_dir);
+    }
+
+    #[test]
+    fn upload_is_refused_when_the_copy_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut f = LocalFolder::new(dir.path());
+        f.put("levels/a.nw", b"one\n").unwrap();
+        let opened = f.get("levels/a.nw").unwrap();
+
+        f.put("levels/a.nw", b"someone else\n").unwrap();
+        let got = put_if_unchanged(&mut f, "levels/a.nw", &opened, b"mine\n").unwrap();
+        assert_eq!(got, Upload::Changed(b"someone else\n".to_vec()));
+        assert_eq!(f.get("levels/a.nw").unwrap(), b"someone else\n");
+
+        let opened = f.get("levels/a.nw").unwrap();
+        let got = put_if_unchanged(&mut f, "levels/a.nw", &opened, b"mine\n").unwrap();
+        assert_eq!(got, Upload::Written);
+        assert_eq!(f.get("levels/a.nw").unwrap(), b"mine\n");
+    }
+
+    #[test]
+    fn upload_of_a_removed_file_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut f = LocalFolder::new(dir.path());
+        assert!(put_if_unchanged(&mut f, "levels/gone.nw", b"x", b"y").is_err());
     }
 }

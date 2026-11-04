@@ -12,9 +12,10 @@ use std::net::{TcpListener, TcpStream};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use lat_core::diff;
 use lat_core::gani::GaniDoc;
 use lat_core::level::LevelDoc;
-use lat_core::remote::{Entry, LocalFolder, RcFiles, RemoteFiles};
+use lat_core::remote::{put_if_unchanged, Entry, LocalFolder, RcFiles, RemoteFiles, Upload};
 use seihai_core::protocol::{read_gint3, split_messages, zlib_decompress};
 use seihai_rc::files::{self, parse_file_body};
 use seihai_rc::link::Codec;
@@ -235,6 +236,45 @@ fn list_get_edit_put_and_get_again_on_loopback() {
     assert_eq!(
         GaniDoc::open(&again).unwrap().sprite_frame(0),
         Some((1, 0, 1, 1))
+    );
+
+    drop(remote);
+    handle.join().expect("fake server");
+}
+
+#[test]
+fn upload_is_refused_when_the_server_copy_changed_on_loopback() {
+    let mut seed = BTreeMap::new();
+    seed.insert("levels/room.nw".to_string(), LEVEL.to_vec());
+    let (addr, handle) = fake_server(seed);
+    let mut remote = RcFiles::connect(&addr, "labrc", "labpw").expect("login");
+
+    // Two editors open the same level.
+    let opened = remote.get("levels/room.nw").unwrap();
+    let mut mine = LevelDoc::open(&opened).unwrap();
+    mine.set_tile(0, 0, 1).unwrap();
+    let mut theirs = LevelDoc::open(&opened).unwrap();
+    theirs.set_tile(1, 0, 1).unwrap();
+
+    // The other one uploads first.
+    let their_bytes = theirs.encode();
+    assert_eq!(
+        put_if_unchanged(&mut remote, "levels/room.nw", &opened, &their_bytes).unwrap(),
+        Upload::Written
+    );
+
+    // Mine is refused, and the server keeps their copy.
+    let mine_bytes = mine.encode();
+    let got = put_if_unchanged(&mut remote, "levels/room.nw", &opened, &mine_bytes).unwrap();
+    let Upload::Changed(now) = got else {
+        panic!("my upload should be refused: {got:?}");
+    };
+    assert_eq!(now, their_bytes);
+    assert_eq!(remote.get("levels/room.nw").unwrap(), their_bytes);
+    let review = diff::render(&diff::lines(&opened, &now), 1);
+    assert!(
+        review.contains("+ BOARD 1 0 1 0 AB"),
+        "the review shows their change: {review}"
     );
 
     drop(remote);
