@@ -6,11 +6,13 @@
 //! codecs, one version profile each, and keeps them walking, chatting and
 //! asking for files. [`rc`] runs `seihai-rc` against the suite now and then.
 //! [`sample`] reads each server process's memory, CPU, threads and open
-//! files once a second, and [`report`] writes what came out.
+//! files once a second, and [`report`] writes what came out. [`external`]
+//! runs another client program (one process per client) next to the bots.
 //!
 //! Everything binds and connects to `127.0.0.1` only.
 
 pub mod bot;
+pub mod external;
 pub mod lab;
 pub mod rc;
 pub mod report;
