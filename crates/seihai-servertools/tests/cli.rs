@@ -464,3 +464,37 @@ fn host_listserver_capacity_and_silent_list_options() {
     assert_eq!(code, Some(1), "{text}");
     assert!(text.contains("at least 1"), "{text}");
 }
+
+#[test]
+fn hq_password_is_written_from_the_environment() {
+    let w = lab_world();
+    let admin = w.path().join("servers/default/config/adminconfig.txt");
+    fs::write(
+        &admin,
+        "# ServerHQ password for the server.\nhq_password = \nhq_level = 1\n",
+    )
+    .unwrap();
+
+    let (code, text) = setup(w.path(), &["hq-password"], "");
+    assert_eq!(code, Some(1), "{text}");
+    assert!(text.contains("--hq-password-env"), "{text}");
+
+    let out = bin()
+        .args([
+            "setup",
+            "hq-password",
+            "--hq-password-env",
+            "SEIHAI_TEST_HQ",
+            "--world",
+        ])
+        .arg(w.path())
+        .env("SEIHAI_TEST_HQ", "gs-hq-pw")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("Saved the HQ password"), "{text}");
+    assert!(!text.contains("gs-hq-pw"), "{text}");
+    let a = fs::read_to_string(&admin).unwrap();
+    assert!(a.contains("hq_password = gs-hq-pw\nhq_level = 1\n"), "{a}");
+}

@@ -142,6 +142,47 @@ impl ServerFolder {
         Ok(r)
     }
 
+    /// The gserver's `config/adminconfig.txt`, which holds `hq_password`:
+    /// what it sends the listserver (`SERVERHQPASS`) before its server is
+    /// listed.
+    pub fn admin_path(&self) -> PathBuf {
+        self.dir.join("config").join("adminconfig.txt")
+    }
+
+    fn admin_options(&self) -> Result<OptionsTxt, String> {
+        let path = self.admin_path();
+        match OptionsTxt::load(&path) {
+            Ok(o) => Ok(o),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(OptionsTxt::parse("")),
+            Err(e) => Err(format!("cannot read {}: {e}", path.display())),
+        }
+    }
+
+    /// True when `adminconfig.txt` has a non-empty `hq_password`.
+    pub fn hq_password_is_set(&self) -> bool {
+        self.admin_options()
+            .ok()
+            .and_then(|o| o.get("hq_password").map(|v| !v.trim().is_empty()))
+            .unwrap_or(false)
+    }
+
+    /// Write `hq_password` in `adminconfig.txt` with a dated backup, so it
+    /// matches this gserver's row in a listserver's `gservers` allow-list.
+    /// The other lines stay as they are. Returns `Ok(None)` when it already
+    /// had that password (nothing is written) or the file is new.
+    pub fn set_hq_password(&self, password: &str) -> Result<Option<PathBuf>, String> {
+        if password.contains(['\n', '\r']) {
+            return Err("the HQ password must be one line".into());
+        }
+        let mut admin = self.admin_options()?;
+        if !admin.set("hq_password", password, &Stamp::now().date()) {
+            return Ok(None);
+        }
+        let path = self.admin_path();
+        backup::save(&path, admin.render().as_bytes(), Stamp::now())
+            .map_err(|e| format!("cannot save {}: {e}", path.display()))
+    }
+
     /// Where the gserver's console goes when setup starts it.
     pub fn console_path(&self) -> PathBuf {
         self.dir.join("logs").join("console.txt")
@@ -442,6 +483,47 @@ mod tests {
         assert!(!p.may_save());
         assert!(f.save(&p).is_err());
         assert_eq!(fs::read_to_string(&f.options_path).unwrap(), LAB);
+    }
+
+    #[test]
+    fn hq_password_goes_to_adminconfig_with_a_backup() {
+        let w = tempfile::tempdir().unwrap();
+        let cfg = w.path().join("servers/default/config");
+        std::fs::create_dir_all(&cfg).unwrap();
+        std::fs::write(
+            cfg.join("serveroptions.txt"),
+            "serverinterface = 127.0.0.1\n",
+        )
+        .unwrap();
+        let f = ServerFolder::open(w.path(), "default").unwrap();
+        assert!(!f.hq_password_is_set());
+
+        // No adminconfig.txt yet: it is created, with no backup.
+        assert_eq!(f.set_hq_password("first-pw").unwrap(), None);
+        let text = std::fs::read_to_string(f.admin_path()).unwrap();
+        assert!(text.contains("hq_password = first-pw"), "{text}");
+        assert!(f.hq_password_is_set());
+
+        let sample = "# ServerHQ password for the server.\nhq_password = \n\n# Current level.\nhq_level = 1\n";
+        std::fs::write(f.admin_path(), sample).unwrap();
+        assert!(!f.hq_password_is_set(), "empty is not set");
+        let backup = f.set_hq_password("lab-hq").unwrap().expect("a backup");
+        assert_eq!(std::fs::read_to_string(&backup).unwrap(), sample);
+        let text = std::fs::read_to_string(f.admin_path()).unwrap();
+        assert!(
+            text.starts_with(
+                "# ServerHQ password for the server.\n# Changed by Seihai server setup, "
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("\nhq_password = lab-hq\n\n# Current level.\nhq_level = 1\n"),
+            "{text}"
+        );
+
+        // Same password: nothing written.
+        assert_eq!(f.set_hq_password("lab-hq").unwrap(), None);
+        assert!(f.set_hq_password("a\nb").is_err());
     }
 
     #[test]

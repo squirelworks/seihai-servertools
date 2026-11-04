@@ -98,7 +98,11 @@ lists the ports to forward. "Who may register" writes the listserver's
 sending its HQ password (`hq_password` in that gserver's
 `config/adminconfig.txt`). Give the password in an environment variable
 (`--allow-gserver 127.0.0.1 --hq-password-env HQ_PW`) or at the prompt; it is
-never printed. Still open the gserver port only to those addresses.
+never printed. Still open the gserver port only to those addresses. Each
+gserver gets the same password with
+`HQ_PW=... seihai-servertools setup hq-password --hq-password-env HQ_PW`
+(or `setup public --hq-password-env HQ_PW`, or the HQ password field in the
+window), which writes `hq_password` in its `config/adminconfig.txt`.
 It also sets `silent_list_after_ms` (default 500, so the real 1.41 rev 1,
 which waits without sending anything, gets the list; `--silent-list-ms`) and
 can raise `max_connections` for a big world (`--max-connections`, listserver

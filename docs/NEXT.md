@@ -89,8 +89,10 @@ window wizard, the `setup` command line, and Host a listserver.
       (`docs/lab/2026-11-04-suite-stress.md`, findings 2 and 3). `lab plan`
       and the review note a listserver left at 0. The gserver side's player
       cap is the gserver's own setting.
-- [ ] Join a listserver: write the gserver's own `hq_password` (in
-      `config/adminconfig.txt`) so it matches the listserver row.
+- [x] Join a listserver: write the gserver's own `hq_password` (in
+      `config/adminconfig.txt`, dated backup) so it matches the listserver
+      row: `setup hq-password`, `setup public --hq-password-env`, and the
+      HQ password field on the Server setup page.
 
 ## Lab track
 

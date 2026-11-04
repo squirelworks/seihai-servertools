@@ -31,6 +31,9 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
                [--interface AUTO|ADDR] [--server-ip AUTO|ADDR] [--upnp] [--yes]
   setup lab    [--world DIR] [SERVER] [--yes]      Back to lab
   setup undo   [--world DIR] [SERVER]              restore the last backup
+  setup hq-password [--world DIR] [SERVER] --hq-password-env VAR
+               write hq_password in config/adminconfig.txt (dated backup);
+               `setup public` takes --hq-password-env too
   setup start  [--world DIR] [SERVER] [--gserver PATH] [--for SECS]
                start the server and show the three lights; Ctrl+C stops it
   setup test-connection HOST[:PORT]               one TCP connect to that address
@@ -431,10 +434,43 @@ fn public(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     io.say("");
     io.say("6. Review");
     let code = review_and_save(io, &mut f, &preview)?;
+    if code == ExitCode::SUCCESS && a.hq_password_env.is_some() {
+        hq_password_from_env(io, a, &f)?;
+    }
     if code == ExitCode::SUCCESS {
         io.say("Next: `seihai-servertools setup start` starts it and shows whether it registers.");
     }
     Ok(code)
+}
+
+/// Write `hq_password` in the folder's `config/adminconfig.txt` from the
+/// variable named by `--hq-password-env`. The password is never printed.
+fn hq_password_from_env(io: &mut Io, a: &Args, f: &ServerFolder) -> Result<(), String> {
+    let var = a
+        .hq_password_env
+        .as_deref()
+        .ok_or("give --hq-password-env VAR (the password is never on the command line)")?;
+    let pw = std::env::var(var)
+        .map_err(|_| format!("--hq-password-env {var}: that variable is not set"))?;
+    match f.set_hq_password(&pw)? {
+        Some(b) => io.say(&format!(
+            "Saved the HQ password in {} (backup {}).",
+            f.admin_path().display(),
+            b.display()
+        )),
+        None => io.say(&format!(
+            "HQ password in {}: up to date.",
+            f.admin_path().display()
+        )),
+    }
+    io.say("It must match this gserver's row under Who may register on the listserver.");
+    Ok(())
+}
+
+fn hq_password(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
+    let f = open_folder(a)?;
+    hq_password_from_env(io, a, &f)?;
+    Ok(ExitCode::SUCCESS)
 }
 
 fn lab(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
@@ -969,6 +1005,7 @@ fn run_with(args: &[&str], input: &mut dyn BufRead, out: &mut dyn Write) -> Exit
         "public" | "--public" => public(&mut io, &a),
         "lab" | "--lab" => lab(&mut io, &a),
         "undo" => undo(&mut io, &a),
+        "hq-password" => hq_password(&mut io, &a),
         "start" => start_and_check(&mut io, &a),
         "--host-listserver" | "host-listserver" => host_listserver(&mut io, &a),
         "listserver-lab" => listserver_lab(&mut io, &a),
