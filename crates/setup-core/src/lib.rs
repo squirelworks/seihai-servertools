@@ -5,6 +5,7 @@
 //!
 //! | Module | What | State |
 //! |---|---|---|
+//! | [`browse`] | The folder picker's listing: subfolders, and which look like world folders | working |
 //! | [`folder`] | One server folder: open, preview a change, check, save with backup, undo | working |
 //! | [`lab`] | Find the binaries of a lab world and plan the one-step start | working |
 //! | [`lab_run`] | Run a lab plan on a worker thread for the window, with status and stop | working |
@@ -18,6 +19,7 @@
 //! The plan for each module is in `docs/ARCHITECTURE.md` and the order of
 //! the work in `docs/NEXT.md`. Rules: `AGENTS.md`.
 
+pub mod browse;
 pub mod checks;
 pub mod config;
 pub mod folder;

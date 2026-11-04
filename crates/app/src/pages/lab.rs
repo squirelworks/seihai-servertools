@@ -16,6 +16,7 @@ const TAIL_LINES: usize = 12;
 #[derive(Default)]
 pub struct Page {
     world: String,
+    picker: super::picker::Picker,
     result: Option<String>,
     run: Option<LabRun>,
 }
@@ -41,6 +42,7 @@ impl Page {
         ui.horizontal(|ui| {
             ui.label("World folder:");
             ui.add_enabled(!busy, egui::TextEdit::singleline(&mut self.world));
+            self.picker.button(ui, !busy, &mut self.world);
             if ui
                 .add_enabled(!busy, egui::Button::new("Show plan"))
                 .clicked()

@@ -79,9 +79,11 @@ window wizard, the `setup` command line, and Host a listserver.
       and Host a listserver, the same list before the command line's Listen
       on questions, and state-only tests of `Form::answers` and
       `Host::answers`. Lab run: `docs/lab/2026-11-04-listen-on-list.md`.
-- [ ] Window polish, part 2: a folder picker for the world folder (a native
-      dialog crate; check its licence and that the headless build stays
-      free of it).
+- [x] Window polish, part 2: a Browse... folder picker next to every world
+      folder field (Lab world, Server setup, World check, the editors'
+      folder). An in-window picker over `setup_core::browse`, not a native
+      dialog: no extra crate, same on every system, world folders marked.
+      Lab run: `docs/lab/2026-11-04-folder-picker.md`.
 - [x] **Step 6** Host a listserver: `config::listserver_toml::ListserverToml`
       (on `toml_edit`: comments, order and unknown keys kept),
       `folder::ListserverConfig`, `setup host-listserver | listserver-lab |
