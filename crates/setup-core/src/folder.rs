@@ -148,6 +148,88 @@ impl ServerFolder {
     }
 }
 
+/// One finding from [`check_world_config`], with the file it is about,
+/// relative to the world and `/`-separated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigFinding {
+    pub file: String,
+    pub finding: Finding,
+}
+
+/// The setup checks for a whole world, for `seihai-servertools check`:
+/// every `servers/<name>/config/serveroptions.txt` against the profile it
+/// is in now (the same rules as `setup status`), the `accounts/` of each
+/// public folder, and `seihai-listserver.toml` when there is one. Folders are visited in
+/// name order. A file that cannot be read is an error finding.
+pub fn check_world_config(world: &Path) -> Vec<ConfigFinding> {
+    let mut out = Vec::new();
+    let mut names: Vec<String> = std::fs::read_dir(world.join("servers"))
+        .map(|rd| {
+            rd.filter_map(Result::ok)
+                .filter(|e| e.path().join("config").join("serveroptions.txt").is_file())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    for name in names {
+        let options = format!("servers/{name}/config/serveroptions.txt");
+        match ServerFolder::open(world, &name) {
+            Ok(f) => {
+                for finding in check_gserver(&f.options, f.profile()) {
+                    out.push(ConfigFinding {
+                        file: options.clone(),
+                        finding,
+                    });
+                }
+                // Lab accounts are expected on a lab folder; they matter
+                // once it is public.
+                let accounts = if f.profile() == Profile::Public {
+                    check_server_folder(&f.dir)
+                } else {
+                    Vec::new()
+                };
+                for finding in accounts {
+                    out.push(ConfigFinding {
+                        file: format!("servers/{name}/accounts"),
+                        finding,
+                    });
+                }
+            }
+            Err(text) => out.push(ConfigFinding {
+                file: options,
+                finding: Finding {
+                    severity: Severity::Block,
+                    key: None,
+                    text,
+                },
+            }),
+        }
+    }
+    if world.join("seihai-listserver.toml").is_file() {
+        let file = "seihai-listserver.toml".to_string();
+        match ListserverConfig::open(world) {
+            Ok(c) => {
+                for finding in c.findings(&c.toml) {
+                    out.push(ConfigFinding {
+                        file: file.clone(),
+                        finding,
+                    });
+                }
+            }
+            Err(text) => out.push(ConfigFinding {
+                file,
+                finding: Finding {
+                    severity: Severity::Block,
+                    key: None,
+                    text,
+                },
+            }),
+        }
+    }
+    out
+}
+
 /// The listserver's settings file, as the Host a listserver wizard sees it.
 #[derive(Debug, Clone)]
 pub struct ListserverConfig {
@@ -360,6 +442,66 @@ mod tests {
         assert!(!p.may_save());
         assert!(f.save(&p).is_err());
         assert_eq!(fs::read_to_string(&f.options_path).unwrap(), LAB);
+    }
+
+    #[test]
+    fn world_config_checks_every_server_and_the_listserver() {
+        let w = tempfile::tempdir().unwrap();
+        assert!(
+            check_world_config(w.path()).is_empty(),
+            "no servers, no findings"
+        );
+        for (name, text) in [
+            ("default", "serverinterface = 127.0.0.1\nlocalhost = true\n"),
+            ("public", "serverinterface = AUTO\nlocalhost = true\n"),
+        ] {
+            let cfg = w.path().join("servers").join(name).join("config");
+            std::fs::create_dir_all(&cfg).unwrap();
+            std::fs::write(cfg.join("serveroptions.txt"), text).unwrap();
+        }
+        for name in ["default", "public"] {
+            let acc = w.path().join("servers").join(name).join("accounts");
+            std::fs::create_dir_all(&acc).unwrap();
+            std::fs::write(acc.join("YOURACCOUNT.txt"), "GRACC001\nPASSWORD super\n").unwrap();
+        }
+        // Not a server folder: no serveroptions.txt.
+        std::fs::create_dir_all(w.path().join("servers/notes")).unwrap();
+        std::fs::write(
+            w.path().join("seihai-listserver.toml"),
+            "bind = \"0.0.0.0\"\naccounts = \"\"\n",
+        )
+        .unwrap();
+        let f = check_world_config(w.path());
+        let blocks: Vec<(&str, Option<&str>)> = f
+            .iter()
+            .filter(|c| c.finding.severity == Severity::Block)
+            .map(|c| (c.file.as_str(), c.finding.key.as_deref()))
+            .collect();
+        for want in [
+            ("servers/public/config/serveroptions.txt", Some("localhost")),
+            ("servers/public/accounts", None),
+            ("seihai-listserver.toml", Some("accounts")),
+        ] {
+            assert!(blocks.contains(&want), "{want:?} in {f:?}");
+        }
+        assert!(
+            !f.iter().any(|c| c.file.starts_with("servers/default")),
+            "{f:?}"
+        );
+        assert!(!f.iter().any(|c| c.file.contains("notes")));
+
+        std::fs::write(w.path().join("seihai-listserver.toml"), "bind = [").unwrap();
+        let f = check_world_config(w.path());
+        let bad = f
+            .iter()
+            .find(|c| c.file == "seihai-listserver.toml")
+            .unwrap();
+        assert_eq!(bad.finding.severity, Severity::Block);
+        assert!(
+            bad.finding.text.contains("not valid TOML"),
+            "{}",
+            bad.finding.text
+        );
     }
 
     #[test]

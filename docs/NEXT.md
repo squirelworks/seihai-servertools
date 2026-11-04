@@ -134,7 +134,10 @@ Held until Seihai M4 or M5 asks for it:
 - [x] Missing images and sounds named by levels, NPCs and ganis.
 - [ ] GS1 syntax errors in level NPCs (and the images and sounds those
       scripts name, such as `showimg` and `play`).
-- [ ] `serveroptions.txt` checks from `setup_core::checks` (after setup step 2).
+- [x] `serveroptions.txt` checks from `setup_core::checks`:
+      `setup_core::folder::check_world_config` runs them on every server
+      folder (accounts of public folders too) and on
+      `seihai-listserver.toml`, in `check` and on the Check page.
 - [ ] `check --json`.
 - (Graal3D `.x` texture check: see "Checker track (Graal3D)" under Lab
   above; do not fold it into the 2D checker.)

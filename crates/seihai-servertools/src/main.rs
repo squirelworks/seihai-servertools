@@ -29,8 +29,11 @@ log file, and stops them all on Ctrl+C. --world defaults to the current folder.
 
 check: reads every level, gmap and gani under WORLD and reports parse errors,
 links or gmap cells that point at missing levels, and images or sounds a
-level NPC or a gani names that are not in the folder. Exit code 1 on errors
-(a missing image or sound is a warning).";
+level NPC or a gani names that are not in the folder. It also runs the setup
+checks on every servers/<name>/config/serveroptions.txt (and the accounts/ of
+public folders) and on seihai-listserver.toml: a setting `setup` would refuse
+to save is an error. Exit code 1 on errors (a missing image or sound is a
+warning).";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -62,6 +65,8 @@ fn check(world: &Path) -> ExitCode {
         return ExitCode::from(2);
     }
     let report = lat_core::check::check_world(world);
+    let mut errors = report.errors();
+    let mut warnings = report.findings.len() - report.errors();
     for f in &report.findings {
         let level = match f.severity {
             lat_core::check::Severity::Error => "error",
@@ -69,15 +74,33 @@ fn check(world: &Path) -> ExitCode {
         };
         println!("{level}: {}: {}", f.file, f.text);
     }
+    // The setup checks: a setting `setup` would refuse to save is an error.
+    let config = setup_core::folder::check_world_config(world);
+    for c in &config {
+        let level = match c.finding.severity {
+            setup_core::checks::Severity::Block => {
+                errors += 1;
+                "error"
+            }
+            setup_core::checks::Severity::Warn => {
+                warnings += 1;
+                "warning"
+            }
+            setup_core::checks::Severity::Info => "note",
+        };
+        let key = c
+            .finding
+            .key
+            .as_deref()
+            .map(|k| format!(" [{k}]"))
+            .unwrap_or_default();
+        println!("{level}: {}{key}: {}", c.file, c.finding.text);
+    }
     println!(
-        "checked {} levels, {} gmaps, {} ganis: {} errors, {} warnings",
-        report.levels,
-        report.gmaps,
-        report.ganis,
-        report.errors(),
-        report.findings.len() - report.errors()
+        "checked {} levels, {} gmaps, {} ganis and the server settings: {errors} errors, {warnings} warnings",
+        report.levels, report.gmaps, report.ganis,
     );
-    if report.errors() > 0 {
+    if errors > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
