@@ -4,6 +4,7 @@ members = [
     "crates/lat-core",
     "crates/app",
     "crates/seihai-servertools",
+    "crates/suite-stress",
 ]
 resolver = "2"
 

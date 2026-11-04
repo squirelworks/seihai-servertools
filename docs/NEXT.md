@@ -17,6 +17,19 @@ session that built the setup did not do them:
       stand-in script (`docs/lab/2026-10-31-lab-start.md`,
       `docs/lab/2026-10-31-host-listserver.md`).
 
+## Suite stress (`crates/suite-stress`, `docs/lab/suite-stress.md`)
+
+- [x] The rig: listserver + gserver + NPC-server + RC on loopback, bots for
+      every version profile, a report per run. First runs:
+      `docs/lab/2026-11-04-suite-stress.md`.
+- [ ] Rerun `compat` and a 92-bot `run` as each gserver stage lands (2.2
+      levels, 2.3 other players, 2.4 warps, 2.5 gmaps, 2.7 files), and add a
+      bot behaviour for each (warp, cross a gmap edge, fetch a real file).
+- [ ] RC against the gserver once it serves RC logins (stage 4).
+- [ ] Real 2.x clients under Wine next to the bots (`--base-port 14800`).
+- [ ] The 1000-player mixed-version run, once the suite parts are further
+      along (Squirrel, 2026-11-04: a later side project).
+
 ## Done
 
 - [x] Scaffold: workspace, licences, `AGENTS.md`, docs, CI, release workflow.

@@ -16,7 +16,9 @@ client: [seihai](https://github.com/squirelworks/seihai).
 
 **Status: scaffold.** Working today: the one-step lab start, the setup
 wizard, a world checker, and the first LAT level and gani editors (open,
-change, preview, upload through the RC file link or a local folder). The
+change, preview, upload through the RC file link or a local folder), and
+a stress rig for the whole server suite (`seihai-suite-stress`,
+[docs/lab/suite-stress.md](docs/lab/suite-stress.md)). The
 plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the ordered to-do list in
 [docs/NEXT.md](docs/NEXT.md), operator security notes in

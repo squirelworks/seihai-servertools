@@ -20,6 +20,11 @@ seihai-draw                 squirelworks/seihai, same commit: tile and gani
                             offline editor, not a library
 seihai-rc                   squirelworks/seihai-rc, pinned commit: RC session
                             and the file link (list, get, put)
+
+crates/suite-stress         seihai-suite-stress: its own binary, not part of the
+                            window. Starts the server suite on loopback, drives
+                            bot clients through seihai-core, writes a report
+                            (docs/lab/suite-stress.md)
 ```
 
 Rules for the layers:

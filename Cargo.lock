@@ -3167,6 +3167,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "suite-stress"
+version = "0.0.1"
+dependencies = [
+ "ctrlc",
+ "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=72bb8d29a977e7185bb7499bd36b732751ea0c6e)",
+ "tempfile",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
