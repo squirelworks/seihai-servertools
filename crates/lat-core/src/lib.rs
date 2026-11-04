@@ -8,6 +8,7 @@
 //! | Module | What | State |
 //! |---|---|---|
 //! | [`remote`] | The file link: list, download, upload. A local folder, or [`remote::RcFiles`] over `seihai-rc` | working |
+//! | [`diff`] | The line diff the editors show before an upload, and when the server's copy changed | working |
 //! | [`level`] | Open a level, change a tile, write `GLEVNW01` text, paint with `seihai-draw` | editing |
 //! | [`gani`] | Open a gani, change a sprite frame, write it back, paint one frame | editing |
 //! | [`preview`] | The RGBA buffers those editors hand the window | working |
@@ -19,6 +20,7 @@
 //! gani parser, and do not copy the drawing (`docs/ARCHITECTURE.md`).
 
 pub mod check;
+pub mod diff;
 pub mod gani;
 pub mod level;
 pub mod npc;

@@ -2950,6 +2950,7 @@ dependencies = [
  "egui",
  "lat-core",
  "setup-core",
+ "tempfile",
 ]
 
 [[package]]

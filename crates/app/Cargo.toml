@@ -16,3 +16,6 @@ setup-core.workspace = true
 lat-core.workspace = true
 eframe.workspace = true
 egui.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

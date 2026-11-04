@@ -130,8 +130,9 @@ Held until Seihai M4 or M5 asks for it:
       `put_file` (seihai-rc `294f2c1`, no tag yet). Fake file server on
       `127.0.0.1` in `crates/lat-core/tests/rc_edit.rs`. A lab run against
       the fork with a LAT account is still open.
-- [ ] Level editor: show a diff against the downloaded bytes, and refuse
-      the upload when the server's copy changed in between.
+- [x] Level editor: show a diff against the downloaded bytes, and refuse
+      the upload when the server's copy changed in between. The gani
+      editor does the same. Lab run: `docs/lab/2026-11-04-lat-refuse-upload.md`.
 - [ ] NPC editor: level NPCs with a GS1 syntax check; NC objects after
       `seihai-rc` stage 5.
 - [x] Gani editor with preview: open, change one sprite frame, encode,

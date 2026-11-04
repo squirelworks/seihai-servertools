@@ -13,14 +13,15 @@ use lat_core::preview::{pattern_image, FrameView, GaniPics, Sheet};
 use lat_core::remote::{self, FileSource};
 
 use super::link::Where;
+use super::review::{Review, Saved};
 use crate::preview;
 
 const PATTERN: u32 = 64;
 
 enum Msg {
     List(Result<Vec<String>, String>),
-    Open(Result<Vec<u8>, String>),
-    Save(Result<(), String>),
+    Open(String, Result<Vec<u8>, String>),
+    Save(Saved),
 }
 
 pub struct Page {
@@ -32,6 +33,7 @@ pub struct Page {
     h: String,
     frame: usize,
     dir: u8,
+    review: Review,
     doc: Option<GaniDoc>,
     preview_buf: Option<lat_core::preview::Rgba>,
     names: Vec<String>,
@@ -51,6 +53,7 @@ impl Default for Page {
             h: "1".into(),
             frame: 0,
             dir: 2,
+            review: Review::default(),
             doc: None,
             preview_buf: None,
             names: Vec::new(),
@@ -132,22 +135,30 @@ impl Page {
                     self.message = "Type the file to open.".into();
                 } else {
                     self.spawn(ui.ctx(), move |source| {
-                        Msg::Open(remote::read_file(&source, &path).map_err(|e| e.to_string()))
+                        let got = remote::read_file(&source, &path).map_err(|e| e.to_string());
+                        Msg::Open(path, got)
                     });
                 }
             }
             if ui
-                .add_enabled(!busy && self.doc.is_some(), egui::Button::new("Upload"))
+                .add_enabled(self.doc.is_some(), egui::Button::new("Show changes"))
                 .clicked()
             {
-                let path = self.place.path.clone();
-                let bytes = self.doc.as_ref().map(|doc| doc.encode());
-                if let Some(bytes) = bytes {
-                    self.spawn(ui.ctx(), move |source| {
-                        Msg::Save(
-                            remote::write_file(&source, &path, &bytes).map_err(|e| e.to_string()),
-                        )
-                    });
+                if let Some(doc) = &self.doc {
+                    self.message = self.review.show_mine(&doc.encode());
+                }
+            }
+            if ui
+                .add_enabled(!busy && self.doc.is_some(), egui::Button::new("Upload"))
+                .on_hover_text("Refused if the server's copy changed since you opened it.")
+                .clicked()
+            {
+                let job = self
+                    .doc
+                    .as_ref()
+                    .and_then(|doc| self.review.upload_job(doc.encode()));
+                if let Some(job) = job {
+                    self.spawn(ui.ctx(), move |source| Msg::Save(job(source)));
                 }
             }
         });
@@ -183,6 +194,7 @@ impl Page {
         if !self.message.is_empty() {
             ui.label(&self.message);
         }
+        self.review.show(ui);
         ui.separator();
         ui.horizontal(|ui| {
             ui.label("Sprite:");
@@ -268,8 +280,9 @@ impl Page {
                 self.names = names;
             }
             Msg::List(Err(e)) => self.message = e,
-            Msg::Open(Ok(bytes)) => match GaniDoc::open(&bytes) {
+            Msg::Open(path, Ok(bytes)) => match GaniDoc::open(&bytes) {
                 Ok(doc) => {
+                    self.review.opened(&path, &bytes);
                     if let Some((x, y, w, h)) = doc.sprite_frame(0) {
                         self.sprite = "0".into();
                         self.x = x.to_string();
@@ -280,7 +293,7 @@ impl Page {
                     self.frame = 0;
                     self.message = format!(
                         "Opened {} ({} bytes, {} frames). Set a sprite frame, then upload.",
-                        self.place.path,
+                        path,
                         bytes.len(),
                         doc.frame_count()
                     );
@@ -293,9 +306,8 @@ impl Page {
                     self.message = e;
                 }
             },
-            Msg::Open(Err(e)) => self.message = e,
-            Msg::Save(Ok(())) => self.message = format!("Uploaded {}.", self.place.path),
-            Msg::Save(Err(e)) => self.message = e,
+            Msg::Open(_, Err(e)) => self.message = e,
+            Msg::Save(saved) => self.message = self.review.take(saved),
         }
     }
 }

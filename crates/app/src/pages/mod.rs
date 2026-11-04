@@ -6,6 +6,7 @@ pub mod host;
 pub mod lab;
 pub mod levels;
 mod link;
+mod review;
 pub mod setup;
 
 use eframe::egui;
