@@ -53,7 +53,7 @@ and has no tag, so it is pinned to that commit too. Do not follow a branch.
 | What | Where today | Used here through |
 |---|---|---|
 | Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` commit `72bb8d2` |
-| GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (when the NPC editor needs them) |
+| GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (the world check uses the GS1 parser; the NPC editor will too) |
 | Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` commit `72bb8d2` |
 | Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
 | RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `294f2c1` |

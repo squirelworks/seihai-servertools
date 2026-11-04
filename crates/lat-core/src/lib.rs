@@ -12,8 +12,8 @@
 //! | [`level`] | Open a level, change a tile, write `GLEVNW01` text, paint with `seihai-draw` | editing |
 //! | [`gani`] | Open a gani, change a sprite frame, write it back, paint one frame | editing |
 //! | [`preview`] | The RGBA buffers those editors hand the window | working |
-//! | [`npc`] | NPC scripts in levels and on the NPC-server | planned |
-//! | [`check`] | The world and config checker | parse, links, images and sounds |
+//! | [`npc`] | NPC scripts: the GS1 check of level NPCs (used by [`check`]); the editor and NPC-server objects are planned | check working |
+//! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts |
 //!
 //! Parsers come from `seihai-core` and painting from `seihai-draw`, both
 //! pinned in the workspace `Cargo.toml`. Do not write a second level or

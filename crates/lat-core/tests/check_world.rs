@@ -145,3 +145,66 @@ ANIEND
         "{texts:#?}"
     );
 }
+
+#[test]
+fn checks_level_npc_scripts() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("levels")).unwrap();
+    fs::create_dir_all(w.join("sounds")).unwrap();
+    fs::write(w.join("levels/door.png"), b"").unwrap();
+    fs::write(w.join("sounds/chest.wav"), b"").unwrap();
+    fs::write(
+        w.join("levels/start.nw"),
+        "\
+GLEVNW01
+NPC - 1 1
+if (playerenters) {
+  setimg door.png;
+  showimg 1,lamp.png,30,30;
+}
+if (playertouchsme) { play chest.wav; play creak.wav; }
+setimg #s(this.pic);
+NPCEND
+NPC - 2 2
+//#CLIENTSIDE
+if (created) {
+  frobnicate now;
+  setimg door.png
+NPCEND
+NPC - 3 3
+if (a) { x = ; } if (b) { y = ; } if (c) { z = ; } if (d) { w = ; }
+NPCEND
+",
+    )
+    .unwrap();
+
+    let r = check_world(w);
+    assert_eq!(r.errors(), 0, "script problems are warnings");
+    let texts: Vec<String> = r
+        .findings
+        .iter()
+        .map(|f| format!("{:?} {}", f.severity, f.text))
+        .collect();
+    assert_eq!(
+        texts[..2],
+        [
+            "Warn image lamp.png (showimg in an NPC script) is not in the world",
+            "Warn sound creak.wav (play in an NPC script) is not in the world",
+        ],
+        "{texts:#?}"
+    );
+    let npc2: Vec<&String> = texts.iter().filter(|t| t.contains("NPC at 2,2")).collect();
+    assert!(
+        npc2.iter()
+            .any(|t| t.contains("GS1 script line") && t.contains("skipped")),
+        "{texts:#?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t.contains("frobnicate")),
+        "unknown names are not reported: {texts:#?}"
+    );
+    let npc3: Vec<&String> = texts.iter().filter(|t| t.contains("NPC at 3,3")).collect();
+    assert_eq!(npc3.len(), 4, "three listed, then a count: {texts:#?}");
+    assert!(npc3[3].ends_with("1 more GS1 script problem"), "{texts:#?}");
+}
