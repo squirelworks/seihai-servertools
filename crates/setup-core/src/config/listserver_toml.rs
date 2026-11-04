@@ -6,7 +6,9 @@
 //! The keys and their defaults are documented in
 //! `seihai-listserver.sample.toml` in `squirelworks/seihai-listserver`.
 
-use toml_edit::{value, Array, DocumentMut, Item};
+use std::fmt;
+
+use toml_edit::{value, Array, DocumentMut, InlineTable, Item, Value};
 
 /// The keys the host wizard manages, in the order it writes them.
 pub const MANAGED_KEYS: &[&str] = &[
@@ -15,9 +17,90 @@ pub const MANAGED_KEYS: &[&str] = &[
     "client_ports",
     "accounts",
     "gserver_ip",
+    "gservers",
     "site_url",
     "upgrade_url",
 ];
+
+/// One row of the listserver's `gservers` allow-list: an address that may
+/// register, and the HQ password (`SERVERHQPASS`) its gserver must send
+/// before it is listed. The gserver side keeps the same password as
+/// `hq_password` in its `config/adminconfig.txt`.
+///
+/// The listserver reads the password as plain text, so it is stored that
+/// way; [`fmt::Debug`] and the review diff never show it.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AllowedGserver {
+    /// Address the gserver's link comes from, such as `127.0.0.1`.
+    pub ip: String,
+    pub hq_password: String,
+}
+
+impl fmt::Debug for AllowedGserver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AllowedGserver")
+            .field("ip", &self.ip)
+            .field(
+                "hq_password",
+                &if self.hq_password.is_empty() {
+                    "(empty)"
+                } else {
+                    "(set)"
+                },
+            )
+            .finish()
+    }
+}
+
+/// The allow-list as the review shows it: addresses only, never passwords.
+pub fn shown_gservers(list: &[AllowedGserver]) -> String {
+    if list.is_empty() {
+        return "[] (any gserver may register)".into();
+    }
+    list.iter()
+        .map(|g| {
+            if g.hq_password.is_empty() {
+                format!("{} (no HQ password)", g.ip)
+            } else {
+                format!("{} (HQ password set)", g.ip)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Read `gservers` from a parsed file: an inline array of tables or
+/// `[[gservers]]` tables. Rows without an `ip` are skipped.
+fn read_gservers(doc: &DocumentMut) -> Vec<AllowedGserver> {
+    let row = |ip: Option<&str>, pw: Option<&str>| {
+        ip.map(|ip| AllowedGserver {
+            ip: ip.to_string(),
+            hq_password: pw.unwrap_or("").to_string(),
+        })
+    };
+    match doc.get("gservers") {
+        Some(Item::Value(Value::Array(a))) => a
+            .iter()
+            .filter_map(|v| v.as_inline_table())
+            .filter_map(|t| {
+                row(
+                    t.get("ip").and_then(Value::as_str),
+                    t.get("hq_password").and_then(Value::as_str),
+                )
+            })
+            .collect(),
+        Some(Item::ArrayOfTables(a)) => a
+            .iter()
+            .filter_map(|t| {
+                row(
+                    t.get("ip").and_then(Item::as_str),
+                    t.get("hq_password").and_then(Item::as_str),
+                )
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
 
 /// Default client ports.
 pub const DEFAULT_CLIENT_PORTS: [u16; 3] = [14921, 14922, 14923];
@@ -37,6 +120,9 @@ pub struct ListserverLab {
     pub accounts: String,
     /// `gserver_ip`: `peer` (the default) or `sent`.
     pub gserver_ip: String,
+    /// `gservers`: who may register. Empty: any gserver that reaches the
+    /// gserver port.
+    pub gservers: Vec<AllowedGserver>,
 }
 
 impl Default for ListserverLab {
@@ -46,6 +132,7 @@ impl Default for ListserverLab {
             gserver_port: DEFAULT_GSERVER_PORT,
             accounts: String::new(),
             gserver_ip: "peer".into(),
+            gservers: Vec::new(),
         }
     }
 }
@@ -53,8 +140,13 @@ impl Default for ListserverLab {
 impl ListserverLab {
     /// Read `bind` and `gserver_port` from TOML text. Only top-level
     /// `key = value` lines are looked at; tables and comments are skipped.
+    /// `gservers` needs the whole file, so it stays empty when the file is
+    /// not valid TOML.
     pub fn scan(text: &str) -> Self {
         let mut out = ListserverLab::default();
+        if let Ok(doc) = text.parse::<DocumentMut>() {
+            out.gservers = read_gservers(&doc);
+        }
         for line in text.lines() {
             let line = line.trim();
             if line.starts_with('[') {
@@ -112,6 +204,43 @@ impl ListserverToml {
             toml_edit::Value::String(s) => s.value().clone(),
             other => other.to_string().trim().to_string(),
         })
+    }
+
+    /// The `gservers` allow-list (passwords included).
+    pub fn gservers(&self) -> Vec<AllowedGserver> {
+        read_gservers(&self.doc)
+    }
+
+    /// A managed key as the review shows it: `gservers` without passwords.
+    fn shown(&self, key: &str) -> Option<String> {
+        if key == "gservers" {
+            return self
+                .doc
+                .contains_key(key)
+                .then(|| shown_gservers(&self.gservers()));
+        }
+        self.get(key)
+    }
+
+    /// Set the `gservers` allow-list, written as one inline array. Returns
+    /// false when it already held exactly these rows.
+    pub fn set_gservers(&mut self, list: &[AllowedGserver], date: &str) -> bool {
+        if self.doc.contains_key("gservers") && self.gservers() == list {
+            return false;
+        }
+        let mut a = Array::new();
+        for g in list {
+            let mut t = InlineTable::new();
+            t.insert("ip", g.ip.as_str().into());
+            t.insert("hq_password", g.hq_password.as_str().into());
+            a.push(t);
+        }
+        // `[[gservers]]` tables would clash with a plain key of that name.
+        if matches!(self.doc.get("gservers"), Some(Item::ArrayOfTables(_))) {
+            self.doc.remove("gservers");
+        }
+        // Never shown; `set_item` only compares it with `get`.
+        self.set_item("gservers", value(a), "\0", date)
     }
 
     /// The settings as the listserver will read them.
@@ -175,8 +304,8 @@ impl ListserverToml {
         MANAGED_KEYS
             .iter()
             .filter_map(|k| {
-                let a = self.get(k);
-                let b = after.get(k);
+                let a = self.shown(k);
+                let b = after.shown(k);
                 (a != b).then(|| (k.to_string(), a, b))
             })
             .collect()
@@ -194,6 +323,9 @@ pub struct HostAnswers {
     pub accounts: String,
     /// `peer` or `sent`.
     pub gserver_ip: String,
+    /// Who may register. Empty: any gserver. Written when not empty, or
+    /// when the file already has the key (so emptying it opens the list).
+    pub gservers: Vec<AllowedGserver>,
     pub site_url: String,
     pub upgrade_url: String,
 }
@@ -206,6 +338,7 @@ impl Default for HostAnswers {
             client_ports: DEFAULT_CLIENT_PORTS.to_vec(),
             accounts: "accounts.txt".into(),
             gserver_ip: "sent".into(),
+            gservers: Vec::new(),
             site_url: String::new(),
             upgrade_url: String::new(),
         }
@@ -231,6 +364,9 @@ pub fn apply_host(t: &mut ListserverToml, a: &HostAnswers, date: &str) -> Vec<&'
     );
     note("accounts", t.set_str("accounts", &a.accounts, date));
     note("gserver_ip", t.set_str("gserver_ip", &a.gserver_ip, date));
+    if !a.gservers.is_empty() || t.doc.contains_key("gservers") {
+        note("gservers", t.set_gservers(&a.gservers, date));
+    }
     for (k, v) in [("site_url", &a.site_url), ("upgrade_url", &a.upgrade_url)] {
         if !(v.is_empty() && t.get(k).is_none()) {
             note(k, t.set_str(k, v, date));
@@ -322,6 +458,81 @@ mod tests {
         let mut t = ListserverToml::parse(SAMPLE).unwrap();
         assert!(!t.set_ports("client_ports", &DEFAULT_CLIENT_PORTS, "2026-10-31"));
         assert_eq!(t.render(), SAMPLE);
+    }
+
+    fn allow(ip: &str, pw: &str) -> AllowedGserver {
+        AllowedGserver {
+            ip: ip.into(),
+            hq_password: pw.into(),
+        }
+    }
+
+    #[test]
+    fn allow_list_is_written_read_back_and_never_shown() {
+        let mut t = ListserverToml::parse(SAMPLE).unwrap();
+        let before = t.clone();
+        let answers = HostAnswers {
+            gservers: vec![allow("127.0.0.1", "s3cret"), allow("::1", "")],
+            ..HostAnswers::default()
+        };
+        let changed = apply_host(&mut t, &answers, "2026-11-04");
+        assert!(changed.contains(&"gservers"), "{changed:?}");
+        let text = t.render();
+        assert!(
+            text.contains("# Changed by Seihai server setup, 2026-11-04\ngservers = [{ ip = \"127.0.0.1\", hq_password = \"s3cret\" }, { ip = \"::1\", hq_password = \"\" }]\n"),
+            "{text}"
+        );
+        let again = ListserverToml::parse(&text).unwrap();
+        assert_eq!(again.gservers(), answers.gservers);
+        assert_eq!(again.settings().gservers, answers.gservers);
+
+        let diff = before.diff(&again);
+        let row = diff.iter().find(|(k, _, _)| k == "gservers").unwrap();
+        assert_eq!(row.1, None);
+        assert_eq!(
+            row.2.as_deref(),
+            Some("127.0.0.1 (HQ password set), ::1 (no HQ password)")
+        );
+        assert!(!format!("{diff:?}{:?}", again.settings()).contains("s3cret"));
+
+        // Same rows again: no change. An empty list then opens it up.
+        let mut t = again;
+        assert!(!t.set_gservers(&answers.gservers, "2026-11-05"));
+        let open = HostAnswers::default();
+        assert!(apply_host(&mut t, &open, "2026-11-05").contains(&"gservers"));
+        assert!(t.render().contains("gservers = []"), "{}", t.render());
+        assert_eq!(
+            ListserverToml::parse(&t.render())
+                .unwrap()
+                .shown("gservers")
+                .as_deref(),
+            Some("[] (any gserver may register)")
+        );
+    }
+
+    #[test]
+    fn no_allow_list_is_not_written_when_none_is_asked_for() {
+        let mut t = ListserverToml::parse(SAMPLE).unwrap();
+        apply_host(&mut t, &HostAnswers::default(), "2026-11-04");
+        assert!(!t.render().contains("gservers"), "{}", t.render());
+    }
+
+    #[test]
+    fn reads_and_replaces_array_of_tables() {
+        let text = "bind = \"0.0.0.0\"\n\n[[gservers]]\nip = \"10.0.0.2\"\nhq_password = \"pw\"\n";
+        let mut t = ListserverToml::parse(text).unwrap();
+        assert_eq!(t.gservers(), [allow("10.0.0.2", "pw")]);
+        assert_eq!(
+            ListserverLab::scan(text).gservers,
+            [allow("10.0.0.2", "pw")]
+        );
+        assert!(t.set_gservers(&[allow("127.0.0.1", "pw")], "2026-11-04"));
+        let out = t.render();
+        assert!(!out.contains("[[gservers]]"), "{out}");
+        assert_eq!(
+            ListserverToml::parse(&out).unwrap().gservers(),
+            [allow("127.0.0.1", "pw")]
+        );
     }
 
     #[test]

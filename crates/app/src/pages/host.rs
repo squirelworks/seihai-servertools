@@ -5,7 +5,7 @@
 use std::process::Command;
 
 use eframe::egui::{self, RichText};
-use setup_core::config::listserver_toml::HostAnswers;
+use setup_core::config::listserver_toml::{AllowedGserver, HostAnswers};
 use setup_core::folder::{ListserverConfig, ListserverPreview};
 use setup_core::lab::exe_name;
 
@@ -18,6 +18,8 @@ pub struct Host {
     client_ports: String,
     accounts: String,
     gserver_ip: String,
+    /// Who may register: (address, HQ password) rows. Empty: any gserver.
+    gservers: Vec<(String, String)>,
     site_url: String,
     upgrade_url: String,
     preview: Option<ListserverPreview>,
@@ -41,6 +43,7 @@ impl Default for Host {
                 .join(","),
             accounts: d.accounts,
             gserver_ip: d.gserver_ip,
+            gservers: vec![("127.0.0.1".into(), String::new())],
             site_url: String::new(),
             upgrade_url: String::new(),
             preview: None,
@@ -64,6 +67,13 @@ impl Host {
                 self.gserver_port = s.gserver_port.to_string();
                 if let Some(p) = c.toml.get("client_ports") {
                     self.client_ports = p.trim_matches(['[', ']']).replace(' ', "");
+                }
+                if !s.gservers.is_empty() || c.toml.get("gservers").is_some() {
+                    self.gservers = s
+                        .gservers
+                        .iter()
+                        .map(|g| (g.ip.clone(), g.hq_password.clone()))
+                        .collect();
                 }
                 self.site_url = c.toml.get("site_url").unwrap_or_default();
                 self.upgrade_url = c.toml.get("upgrade_url").unwrap_or_default();
@@ -99,9 +109,34 @@ impl Host {
             client_ports,
             accounts: self.accounts.trim().to_string(),
             gserver_ip: self.gserver_ip.clone(),
+            gservers: self.allow_list()?,
             site_url: self.site_url.trim().to_string(),
             upgrade_url: self.upgrade_url.trim().to_string(),
         })
+    }
+
+    /// The Who may register rows as the listserver's allow-list. Blank rows
+    /// are skipped; an address that does not parse is an error here, so the
+    /// review never offers a file the listserver would refuse.
+    fn allow_list(&self) -> Result<Vec<AllowedGserver>, String> {
+        let mut out: Vec<AllowedGserver> = Vec::new();
+        for (ip, pw) in &self.gservers {
+            let ip = ip.trim();
+            if ip.is_empty() {
+                continue;
+            }
+            if ip.parse::<std::net::IpAddr>().is_err() {
+                return Err(format!("Who may register: {ip:?} is not an IP address"));
+            }
+            if out.iter().any(|g| g.ip == ip) {
+                return Err(format!("Who may register: {ip} is listed twice"));
+            }
+            out.push(AllowedGserver {
+                ip: ip.to_string(),
+                hq_password: pw.clone(),
+            });
+        }
+        Ok(out)
     }
 
     /// Run `seihai-listserver add-account`, the password in the child's
@@ -190,9 +225,36 @@ impl Host {
         );
         ui.heading("3. Who may register");
         ui.label(format!(
-            "seihai-listserver has no allow-list of gservers yet. Keep port {} closed to the outside, or open it only to your own gservers.",
+            "Only these gserver addresses may register, each after sending its HQ password (hq_password in that gserver's config/adminconfig.txt). Gservers on this machine connect from 127.0.0.1. No rows: any gserver that reaches port {} may register. Still open that port only to these addresses.",
             self.gserver_port
         ));
+        let mut remove = None;
+        egui::Grid::new("host-gservers").show(ui, |ui| {
+            for (i, (ip, pw)) in self.gservers.iter_mut().enumerate() {
+                ui.label("Address:");
+                ui.add(
+                    egui::TextEdit::singleline(ip)
+                        .hint_text("127.0.0.1")
+                        .desired_width(140.0),
+                );
+                ui.label("HQ password:");
+                ui.add(
+                    egui::TextEdit::singleline(pw)
+                        .password(true)
+                        .desired_width(140.0),
+                );
+                if ui.button("Remove").clicked() {
+                    remove = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+        if let Some(i) = remove {
+            self.gservers.remove(i);
+        }
+        if ui.button("Add a gserver").clicked() {
+            self.gservers.push((String::new(), String::new()));
+        }
         ui.heading("4. Addresses handed to clients");
         ui.horizontal(|ui| {
             ui.radio_value(

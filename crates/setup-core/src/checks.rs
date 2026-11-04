@@ -457,6 +457,29 @@ fn password_field(text: &str) -> Option<String> {
 /// Check listserver settings before saving them.
 pub fn check_listserver(settings: &ListserverLab) -> Vec<Finding> {
     let mut out = Vec::new();
+    // The listserver refuses to start with a bad row, lab or not.
+    for g in &settings.gservers {
+        if g.ip.trim().parse::<std::net::IpAddr>().is_err() {
+            out.push(finding(
+                Severity::Block,
+                "gservers",
+                format!(
+                    "Who may register: {:?} is not an IP address (the listserver will not start).",
+                    g.ip
+                ),
+            ));
+        }
+        if g.hq_password.contains(['\n', '\r']) {
+            out.push(finding(
+                Severity::Block,
+                "gservers",
+                format!(
+                    "Who may register: the HQ password for {} must be one line.",
+                    g.ip
+                ),
+            ));
+        }
+    }
     if settings.is_loopback() {
         return out;
     }
@@ -467,14 +490,45 @@ pub fn check_listserver(settings: &ListserverLab) -> Vec<Finding> {
             "A listserver other machines can reach needs an accounts file; open mode lets every account and password in.",
         ));
     }
-    out.push(finding(
-        Severity::Warn,
-        "gserver_port",
-        format!(
-            "Any program that reaches port {} can register a server and check passwords: open it only to your own gservers (the listserver has no allow-list yet).",
-            settings.gserver_port
-        ),
-    ));
+    if settings.gservers.is_empty() {
+        out.push(finding(
+            Severity::Warn,
+            "gservers",
+            format!(
+                "Any program that reaches port {} can register a server and check passwords: list your own gservers under Who may register, and open the port only to them.",
+                settings.gserver_port
+            ),
+        ));
+    } else {
+        for g in settings
+            .gservers
+            .iter()
+            .filter(|g| g.hq_password.is_empty())
+        {
+            out.push(finding(
+                Severity::Warn,
+                "gservers",
+                format!(
+                    "Who may register: {} has no HQ password, so any program on that address can register a server.",
+                    g.ip
+                ),
+            ));
+        }
+        out.push(finding(
+            Severity::Info,
+            "gservers",
+            format!(
+                "Only {} may register, each after sending its HQ password (hq_password in that gserver's config/adminconfig.txt). Still open port {} only to them.",
+                settings
+                    .gservers
+                    .iter()
+                    .map(|g| g.ip.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                settings.gserver_port
+            ),
+        ));
+    }
     if settings.gserver_ip == "peer" {
         out.push(finding(
             Severity::Info,
@@ -493,6 +547,7 @@ pub fn may_save(findings: &[Finding]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::listserver_toml::AllowedGserver;
 
     fn opts(text: &str) -> OptionsTxt {
         OptionsTxt::parse(text)
@@ -745,6 +800,55 @@ alice $argon2id$v=19$m=1,t=1,p=1$c2FsdA$aGFzaA
         };
         let f = check_listserver(&closed);
         assert!(may_save(&f));
-        assert_eq!(keys(&f, Severity::Warn), ["gserver_port"]);
+        assert_eq!(keys(&f, Severity::Warn), ["gservers"]);
+        assert!(f[0].text.contains("Who may register"), "{}", f[0].text);
+    }
+
+    fn allow(ip: &str, pw: &str) -> AllowedGserver {
+        AllowedGserver {
+            ip: ip.into(),
+            hq_password: pw.into(),
+        }
+    }
+
+    #[test]
+    fn allow_list_drops_the_warning_and_checks_its_rows() {
+        let public = ListserverLab {
+            bind: "0.0.0.0".into(),
+            accounts: "accounts.txt".into(),
+            gserver_ip: "sent".into(),
+            gservers: vec![allow("127.0.0.1", "s3cret"), allow("::1", "s3cret")],
+            ..ListserverLab::default()
+        };
+        let f = check_listserver(&public);
+        assert!(keys(&f, Severity::Warn).is_empty(), "{f:?}");
+        let info = f
+            .iter()
+            .find(|x| x.key.as_deref() == Some("gservers"))
+            .unwrap();
+        assert!(
+            info.text.contains("Only 127.0.0.1, ::1 may register"),
+            "{}",
+            info.text
+        );
+        assert!(!info.text.contains("s3cret"));
+
+        let empty_pw = ListserverLab {
+            gservers: vec![allow("127.0.0.1", "")],
+            ..public.clone()
+        };
+        assert_eq!(
+            keys(&check_listserver(&empty_pw), Severity::Warn),
+            ["gservers"]
+        );
+
+        // A bad row would stop the listserver, so it blocks even on a lab bind.
+        let bad = ListserverLab {
+            gservers: vec![allow("my-gserver", "x"), allow("127.0.0.1", "a\nb")],
+            ..ListserverLab::default()
+        };
+        let f = check_listserver(&bad);
+        assert_eq!(keys(&f, Severity::Block), ["gservers", "gservers"]);
+        assert!(!may_save(&f));
     }
 }

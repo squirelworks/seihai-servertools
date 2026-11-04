@@ -13,10 +13,9 @@ Squirrel's answers (2026-10-31) to the open questions at the end:
   prompts, for servers with no screen.
 - **Host a listserver:** in the first version, written against
   `seihai-listserver`'s existing config (`bind`, ports, `accounts`,
-  `gserver_ip`, `site_url`, `upgrade_url`). The listserver has no "who may
-  register" allow-list yet: until it does, the wizard says so and tells the
-  owner to keep the gserver port closed to the outside (the listserver's own
-  README, "Hosting for other machines").
+  `gserver_ip`, `site_url`, `upgrade_url`), plus its `gservers` allow-list
+  for "who may register" (squirelworks/seihai-listserver#6; its README,
+  "Hosting for other machines").
 
 ## Goal
 
@@ -83,7 +82,7 @@ Listserver (Rust `seihai-listserver` config, `seihai-listserver.toml`):
 | accounts | open mode | accounts file required, hashed passwords |
 | address handed out for a gserver | `127.0.0.1` | the gserver's real address (see below) |
 | site / upgrade URLs | empty | owner's text or empty |
-| who may register | anyone on loopback | allow-list of gserver names + passwords |
+| who may register | anyone on loopback | allow-list of gserver addresses + HQ passwords |
 
 ## Wizard: Join a listserver
 
@@ -131,8 +130,14 @@ ports, not just the gservers.
    Offer to create the first account; passwords are hashed.
 2. **Network**: bind to every interface or a chosen one. Show all four ports
    (gserver 14900, clients 14921 to 14923) and let the owner change them.
-3. **Who may register**: allow-list of gserver names and their passwords
-   (`SERVERHQPASS`). Default: only gservers on this machine.
+3. **Who may register**: the listserver's `gservers` allow-list, one row per
+   gserver address with the HQ password it must send (`SERVERHQPASS`, the
+   gserver's `hq_password` in `config/adminconfig.txt`). Default: only
+   gservers on this machine (`127.0.0.1`). No rows: any gserver may register,
+   and the review warns. A row that is not an IP address, or a password with
+   a line break, blocks the save (the listserver would not start). Passwords
+   are stored as plain text, because the listserver reads them that way, and
+   the review shows only "HQ password set".
 4. **Addresses handed to clients**: the gserver's real address as the listserver
    sees it, or the address the gserver sends (`serverip`) when it is not `AUTO`.
    Never `127.0.0.1` for a gserver that connected from another machine.

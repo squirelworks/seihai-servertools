@@ -67,9 +67,12 @@ window wizard, the `setup` command line, and Host a listserver.
       Server setup page, and the first account through
       `seihai-listserver add-account` (password only in the child's
       environment). Lab run: `docs/lab/2026-10-31-host-listserver.md`.
-- [ ] When `seihai-listserver` gets its gserver allow-list and HQ password
-      (its `docs/NEXT.md`), add the "Who may register" step's fields and
-      drop the warning.
+- [x] "Who may register": the `gservers` allow-list from
+      squirelworks/seihai-listserver#6 (`ListserverToml::set_gservers`,
+      `--allow-gserver`, `--hq-password-env`, `--any-gserver`, the rows on
+      the window page). The warning stays only while the list is empty.
+- [ ] Join a listserver: write the gserver's own `hq_password` (in
+      `config/adminconfig.txt`) so it matches the listserver row.
 
 ## Lab track
 

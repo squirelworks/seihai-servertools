@@ -33,9 +33,11 @@ Threat picture: [threat-overview.md](threat-overview.md).
       save.
 - [ ] **[you]** **[listserver]** Firewall: players need the client ports.
       The gserver registration port (lab default 14900) stays reachable
-      only from your own gservers until an allow-list exists. The wizard
-      warns that anyone who can reach it can register and check
-      passwords.
+      only from your own gservers, even with the allow-list.
+- [ ] **[setup]** **[listserver]** "Who may register" lists your
+      gservers' addresses, each with an HQ password that matches
+      `hq_password` in that gserver's `config/adminconfig.txt`. The
+      wizard warns while the list is empty.
 - [ ] **[you]** Leave UPnP off unless you know which port it will open.
       The wizard blocks UPnP when the listen address is still loopback.
       Prefer a manual forward of the TCP ports you chose.

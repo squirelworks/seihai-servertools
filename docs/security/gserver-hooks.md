@@ -74,9 +74,9 @@ silently turn it on from `seihai-servertools`.
 | Failed passwords from many addresses | Lockout on the listserver or gserver |
 
 Listserver-shaped rows (registration, password lockout, the allow-list)
-belong in `seihai-listserver`. Until the allow-list exists, keep
-registration port 14900 reachable only from your own gservers. The
-setup wizard already warns about that.
+belong in `seihai-listserver`. Its `gservers` allow-list is set by the
+setup wizard's "Who may register" step; keep registration port 14900
+reachable only from your own gservers as well.
 
 ## What stays in seihai-servertools
 
