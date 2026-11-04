@@ -1,12 +1,12 @@
-//! NPC scripts: the GS1 check the world checker runs on level NPCs, and
-//! what the NPC editor will build on (`docs/NEXT.md`, LAT track).
+//! NPC scripts: the GS1 check the world checker and the NPC editor page run
+//! on level NPCs (`docs/NEXT.md`, LAT track).
 //!
 //! Two kinds of NPC:
 //!
 //! - **Level NPCs**: the `NPC ... NPCEND` blocks in a level. [`check_script`]
 //!   parses the script with `seihai-core`'s GS1 parser and lists what it
 //!   found: parse problems, names that are not GS1 commands, and the images
-//!   and sounds the script names. The editor itself is still planned.
+//!   and sounds the script names. The edit is `LevelDoc::set_npc_script`.
 //! - **Database NPCs, classes and weapons** on the NPC-server: these need an
 //!   NC login (RC type 3). That is `seihai-rc` stage 5; the editor uses its
 //!   library, pinned by tag, once it exists.

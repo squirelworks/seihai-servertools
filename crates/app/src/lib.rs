@@ -51,6 +51,7 @@ pub struct App {
     setup: pages::setup::Page,
     levels: pages::levels::Page,
     ganis: pages::ganis::Page,
+    npcs: pages::npcs::Page,
     check: pages::check::Page,
 }
 
@@ -62,6 +63,7 @@ impl Default for App {
             setup: pages::setup::Page::default(),
             levels: pages::levels::Page::default(),
             ganis: pages::ganis::Page::default(),
+            npcs: pages::npcs::Page::default(),
             check: pages::check::Page::default(),
         }
     }
@@ -84,10 +86,7 @@ impl eframe::App for App {
                 Tab::Check => self.check.show(ui),
                 Tab::Setup => self.setup.show(ui),
                 Tab::Levels => self.levels.show(ui),
-                Tab::Npcs => pages::planned(
-                    ui,
-                    "Level NPC scripts, and database NPCs, classes and weapons through an NC login. Plan: docs/design/lat-tools.md.",
-                ),
+                Tab::Npcs => self.npcs.show(ui),
                 Tab::Ganis => self.ganis.show(ui),
             }
         });
@@ -132,6 +131,7 @@ impl App {
             app.setup.open_world(&w);
             app.levels.set_folder(&w);
             app.ganis.set_folder(&w);
+            app.npcs.set_folder(&w);
         }
         app
     }

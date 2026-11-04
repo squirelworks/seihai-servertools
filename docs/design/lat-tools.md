@@ -39,8 +39,12 @@ offline mode, as the original client's editor did, and stays there.
 
 ## NPC editor
 
-- Level NPCs: the whole `NPC ... NPCEND` script through the level document,
-  GS1 syntax check with `seihai-core`'s parser before upload.
+- Level NPCs (**working**, `gui --page npcs`): pick an NPC, edit its whole
+  `NPC ... NPCEND` script, Check (`lat_core::npc::check_script`), Apply to
+  the level (`LevelDoc::set_npc_script`, which refuses a line that is just
+  `NPCEND`), then Show changes and Upload with the same refusal as the level
+  page when the server's copy changed. The check is shown, not enforced:
+  a script with parse problems can still be uploaded.
 - NPC-server objects (database NPCs, classes, weapons): through the NC login,
   once `seihai-rc` has it. List, edit, add, delete.
 

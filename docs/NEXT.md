@@ -137,8 +137,10 @@ Held until Seihai M4 or M5 asks for it:
 - [x] Level editor: show a diff against the downloaded bytes, and refuse
       the upload when the server's copy changed in between. The gani
       editor does the same. Lab run: `docs/lab/2026-11-04-lat-refuse-upload.md`.
-- [ ] NPC editor: level NPCs with a GS1 syntax check (the check is
-      `lat_core::npc::check_script`); NC objects after `seihai-rc` stage 5.
+- [x] NPC editor, level NPCs: pick an NPC, edit, Check, Apply, Show changes,
+      Upload (`gui --page npcs`). Lab run: `docs/lab/2026-11-04-npc-editor.md`.
+- [ ] NPC editor, NPC-server objects (database NPCs, classes, weapons)
+      after `seihai-rc` stage 5.
 - [x] Gani editor with preview: open, change one sprite frame, encode,
       paint one frame.
 

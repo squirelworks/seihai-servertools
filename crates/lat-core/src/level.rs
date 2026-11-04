@@ -11,7 +11,7 @@
 //! This is the live-server editor. The client's offline editor stays in
 //! the Seihai repo.
 
-use seihai_core::assets::{tile_code, BoardRun};
+use seihai_core::assets::{tile_code, BoardRun, Npc};
 
 use crate::preview::{paint_level, BoardView, Rgba, Sheet};
 
@@ -43,7 +43,7 @@ impl LevelDoc {
         &self.level
     }
 
-    /// True after [`Self::set_tile`] until the next [`Self::open`].
+    /// True after a change ([`Self::set_tile`], [`Self::set_npc_script`]).
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
@@ -61,6 +61,35 @@ impl LevelDoc {
     pub fn set_tile(&mut self, x: i32, y: i32, id: u16) -> Result<(), String> {
         set_tile(&mut self.level, x, y, id)?;
         self.dirty = true;
+        Ok(())
+    }
+
+    /// The level's NPCs, in file order.
+    pub fn npcs(&self) -> &[Npc] {
+        &self.level.npcs
+    }
+
+    /// Replace the script of NPC `index` (file order).
+    ///
+    /// A line that is just `NPCEND` would end the NPC early in the file, so
+    /// a script with one is refused and the level is left as it was.
+    /// Line ends are written as `\n`.
+    pub fn set_npc_script(&mut self, index: usize, script: &str) -> Result<(), String> {
+        let count = self.level.npcs.len();
+        let Some(npc) = self.level.npcs.get_mut(index) else {
+            return Err(format!("there is no NPC {index} (the level has {count})"));
+        };
+        let script = script.replace("\r\n", "\n");
+        if let Some(n) = script.lines().position(|l| l.trim() == "NPCEND") {
+            return Err(format!(
+                "script line {} is NPCEND, which would end the NPC there",
+                n + 1
+            ));
+        }
+        if npc.script != script {
+            npc.script = script;
+            self.dirty = true;
+        }
         Ok(())
     }
 
@@ -240,6 +269,46 @@ verse
 BADDYEND
 CHEST 7 8 greenrupee 0
 ";
+
+    #[test]
+    fn an_npc_script_edit_round_trips_and_keeps_the_rest() {
+        let mut doc = LevelDoc::open(LEVEL.as_bytes()).unwrap();
+        assert_eq!(doc.npcs().len(), 1);
+        assert!(!doc.is_dirty());
+        let script = "if (playertouchsme) {\r\n  setimg door.png;\r\n  play open.wav;\r\n}";
+        doc.set_npc_script(0, script).unwrap();
+        assert!(doc.is_dirty());
+        let again = LevelDoc::open(&doc.encode()).unwrap();
+        assert_eq!(
+            again.npcs()[0].script.trim_end(),
+            "if (playertouchsme) {\n  setimg door.png;\n  play open.wav;\n}"
+        );
+        assert_eq!(again.npcs()[0].image, "bush.png");
+        assert_eq!(again.level().links.len(), 1);
+        assert_eq!(again.level().signs.len(), 1);
+        assert_eq!(again.tile(0, 0), doc.tile(0, 0));
+    }
+
+    #[test]
+    fn npc_script_edits_that_would_break_the_file_are_refused() {
+        let mut doc = LevelDoc::open(LEVEL.as_bytes()).unwrap();
+        let before = doc.encode();
+        let err = doc
+            .set_npc_script(0, "message hi;\n NPCEND \nplay x.wav;")
+            .unwrap_err();
+        assert!(err.contains("line 2"), "{err}");
+        assert!(doc.set_npc_script(3, "").is_err());
+        assert_eq!(doc.encode(), before);
+        assert!(!doc.is_dirty());
+    }
+
+    #[test]
+    fn the_same_script_is_not_a_change() {
+        let mut doc = LevelDoc::open(LEVEL.as_bytes()).unwrap();
+        let same = doc.npcs()[0].script.clone();
+        doc.set_npc_script(0, &same).unwrap();
+        assert!(!doc.is_dirty());
+    }
 
     #[test]
     fn changing_one_tile_round_trips_through_the_parser() {
