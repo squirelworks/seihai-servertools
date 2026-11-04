@@ -16,7 +16,8 @@
 //! `seihai-servertools check` runs next to this.
 //!
 //! **Planned** (`docs/NEXT.md`): GS1 syntax errors in level NPCs (and the
-//! images and sounds those scripts name), a `--json` report for CI.
+//! images and sounds those scripts name). `seihai-servertools check --json`
+//! prints this report and the settings findings as one JSON object.
 
 use std::collections::BTreeSet;
 use std::fs;

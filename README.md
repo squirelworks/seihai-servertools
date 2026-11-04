@@ -114,6 +114,8 @@ checks on each `servers/<name>/config/serveroptions.txt` (and the `accounts/`
 of public folders) and on `seihai-listserver.toml`, so a setting `setup` would
 refuse to save, such as `localhost = true` off loopback, is an error. The exit code is 1 when
 there are errors (a missing image or sound is a warning), so it can run in CI.
+`check --json WORLD` prints the same findings as one JSON object (`format` 1,
+the counts, and each finding's `level`, `source`, `file`, `key` and `text`).
 
 ## Build
 
