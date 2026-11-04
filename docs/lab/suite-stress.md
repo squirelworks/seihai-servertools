@@ -29,7 +29,8 @@ What one run does:
    - walks honestly, for a gserver with anti-cheat (stage 2.9): round a
      radius-4 circle at 4 tiles a second whose top point stands on a link
      to the next ring level, taking it from there once `--warp-secs` is due;
-     on a gmap from cell centre to cell centre at 16 tiles a second,
+     on a gmap from cell centre to cell centre at 10 tiles a second (a real
+     2.x walk),
      crossing each seam as one ordinary step. `--anticheat on|off` writes
      `anticheat =` into the world's `server.txt`; hits land in
      `lab/world/logs/anticheat.log`.
@@ -38,7 +39,7 @@ What one run does:
    stage 2.2. With `--gmap N` (default 3) the start level is cell (0, 0)
    of an N×N gmap: a bot the server puts on the gmap (`PLO_PLAYERWARP2` at
    login) walks round its edge cells instead, crossing a seam about every
-   4 s, and times crossing → the new cell's level name.
+   6 s, and times crossing → the new cell's level name.
 4. Every `--rc-every` seconds runs the real `seihai-rc`: `servers` against
    the listserver and `players list` against the gserver.
 5. Once a second samples each server process from `/proc` (RSS, CPU time,

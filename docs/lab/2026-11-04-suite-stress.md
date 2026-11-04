@@ -194,5 +194,28 @@ hits, reported to the gserver thread as most likely false:
 - the rebuilt 2.05r2 steps 1 tile at a time and gets long runs of 1.0-tile
   hits.
 
-Latency with and without anticheat is not settled: the container moved to
-a noisier host mid-afternoon (#25's file p50 3 → 42 ms on the same run).
+**Correction:** the slowdown blamed on a noisier host was the rig. The
+honest-walk bots (servertools #31) busy-looped while a warp was due and
+they had not reached the link yet, and gmap bots always: their wake time
+stayed in the past. That made every run since #31 slow (#25's file p50
+3 → 42 ms at 92 bots) and capped 300-bot runs at about 100 logins, the
+other 200 timing out with the gserver itself at a third of a core. Fixed
+in the next PR; the numbers below are with the fix.
+
+**gserver #31 at 517b42e** (anti-cheat fixes for the three false causes
+above), with the fix:
+
+| run | logged in | file ms p50 / p95 | warp ms p50 | crossing ms p50 | lost | anticheat lines |
+|---|---|---|---|---|---|---|
+| compat, all 46 | 46 | 2.8 / 28 | 13 | - | 0 | 0 |
+| #25, 92 bots | 92 | 2.3 / 5.8 | 7.0 | 6.5 | 0 | - |
+| #31, 92 bots + 20 Graal205 | 92 + 20 | 2.4 / 6.5 | 8.0 | 7.2 | 0 (382 of 382 links) | 0 |
+| #25, 300 bots | 271 | 37.6 / 195 | 1608 | 255 | 193 warps, 410 crossings | - |
+| #31, 300 bots | 298 | 35.7 / 220 | 1559 | 866 | 198 warps, 355 crossings | 10,610 |
+
+At 300 bots spread over levels and the gmap this 4-core box is saturated
+(rig plus suite), on #25 and #31 alike: warps and crossings time out. The
+anti-cheat lines at 300 come in one 8 s burst while it is saturated: speed
+on 1.6-tile gmap steps (the bots then walked 16 tiles/s, now 10) and warps
+to the level the bot already is in (a bot whose warp timed out at 10 s
+asks again before its reader has caught up). At 92 there are none.
