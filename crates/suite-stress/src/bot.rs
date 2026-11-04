@@ -132,6 +132,14 @@ fn read_until(
     Ok(())
 }
 
+/// How far round the circle one walk step goes: 0.4 tiles at radius 4,
+/// 4 tiles a second at a 100 ms walk.
+const STEP_ANGLE: f32 = 0.1;
+
+/// Tiles a walk step on the gmap covers: 16 tiles a second at a 100 ms
+/// walk, under the gserver's 20, so a seam comes about every 4 s.
+const GMAP_STEP: f32 = 1.6;
+
 /// The list step. Returns the time and the player count shown for
 /// `server_name`.
 fn fetch_list(plan: &Plan, addr: &str) -> Result<(Duration, Option<u16>), String> {
@@ -239,11 +247,21 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
     let mut cell_at = 0usize;
     let warps = conn.can_send(PLI_LEVELWARP) && !plan.warp_ring.is_empty() && !out.on_gmap;
     let mut next_warp = Instant::now() + plan.warp_every + jitter;
-    let mut ring_at = plan.index;
     let mut warping: Option<(String, Instant)> = None;
     let mut probe_n = 0u32;
     let mut step = 0u32;
-    let (x0, y0) = (30.0f32, 30.5f32);
+    // Walk honestly, for a gserver that checks speed, teleports and warps:
+    // round a circle in the level whose top point stands on the ring link,
+    // and on the gmap from cell centre to cell centre at a steady pace,
+    // crossing each seam as one step like any other.
+    let (x0, y0, r) = (
+        crate::lab::BOT_CENTER.0,
+        crate::lab::BOT_CENTER.1,
+        crate::lab::BOT_RADIUS,
+    );
+    let mut angle = 0.0f32;
+    let mut gpos = (x0, y0);
+    let mut gcell = gmap_loop.as_ref().map_or((0, 0), |c| c[0]);
     let end_at = Instant::now() + plan.stay;
     let send = |conn: &mut Connection, m: Vec<u8>, out: &mut Outcome| -> Result<(), String> {
         conn.send_messages(&[m]).map_err(|e| format!("send: {e}"))?;
@@ -296,6 +314,8 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
                             out.crossings.push(at.elapsed());
                         } else {
                             out.warps.push(at.elapsed());
+                            // The link's arrival is the circle's bottom.
+                            angle = std::f32::consts::FRAC_PI_2;
                         }
                         warping = None;
                     }
@@ -324,12 +344,54 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
             }
         }
         let r = (|| -> Result<(), String> {
-            if walks && now >= next_walk {
+            if walks && now >= next_walk && gmap_loop.is_none() {
                 step = step.wrapping_add(1);
-                let a = step as f32 * 0.2;
-                let (x, y) = (x0 + 4.0 * a.cos(), y0 + 4.0 * a.sin());
+                angle = (angle + STEP_ANGLE) % std::f32::consts::TAU;
+                let (x, y) = (x0 + r * angle.cos(), y0 + r * angle.sin());
                 send(conn, walk_message_for(v, x, y, (step % 4) as u8), &mut out)?;
                 next_walk = now + plan.walk_every;
+            }
+            if let Some(cells) = &gmap_loop {
+                if now >= next_walk {
+                    step = step.wrapping_add(1);
+                    let next = cells[(cell_at + 1) % cells.len()];
+                    let target = (next.0 as f32 * 64.0 + 32.0, next.1 as f32 * 64.0 + 32.0);
+                    let (dx, dy) = (target.0 - gpos.0, target.1 - gpos.1);
+                    let d = dx.hypot(dy);
+                    if d <= GMAP_STEP {
+                        gpos = target;
+                        cell_at = (cell_at + 1) % cells.len();
+                    } else {
+                        gpos = (gpos.0 + dx / d * GMAP_STEP, gpos.1 + dy / d * GMAP_STEP);
+                    }
+                    let cell = (
+                        (gpos.0 / 64.0).floor() as i32,
+                        (gpos.1 / 64.0).floor() as i32,
+                    );
+                    let (lx, ly) = (gpos.0 - cell.0 as f32 * 64.0, gpos.1 - cell.1 as f32 * 64.0);
+                    if cell != gcell {
+                        let c = Crossing {
+                            from: gcell,
+                            to: cell,
+                            local_x: lx,
+                            local_y: ly,
+                        };
+                        st.set_gmap_cell(cell);
+                        send(conn, crossing_props_message(&rules, &c), &mut out)?;
+                        if warping.is_none() {
+                            let name = crate::lab::cell_name(cell.0 as usize, cell.1 as usize);
+                            warping = Some((name, Instant::now()));
+                        }
+                        gcell = cell;
+                    } else {
+                        send(
+                            conn,
+                            walk_message_for(v, lx, ly, (step % 4) as u8),
+                            &mut out,
+                        )?;
+                    }
+                    next_walk = now + plan.walk_every;
+                }
             }
             if walks && now >= next_chat {
                 let text = format!("stress {} says {}", plan.index, step);
@@ -347,36 +409,21 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
             } else if now >= next_probe {
                 next_probe = now + plan.probe_every;
             }
-            if warps && warping.is_none() && now >= next_warp {
-                ring_at = (ring_at + 1) % plan.warp_ring.len();
-                let to = plan.warp_ring[ring_at].clone();
-                send(conn, levelwarp_message(30.0, 30.0, &to), &mut out)?;
+            // Take the link once due and standing on it (the circle's top).
+            let on_link = (angle - 3.0 * std::f32::consts::FRAC_PI_2).abs() < STEP_ANGLE;
+            if warps && warping.is_none() && now >= next_warp && on_link {
+                // The link in the level the bot is in leads to the next one.
+                let here = st.current_level_name();
+                let at = plan
+                    .warp_ring
+                    .iter()
+                    .position(|n| Some(n.as_str()) == here.as_deref())
+                    .unwrap_or(0);
+                let to = plan.warp_ring[(at + 1) % plan.warp_ring.len()].clone();
+                let (ax, ay) = crate::lab::RING_ARRIVAL;
+                send(conn, levelwarp_message(ax, ay, &to), &mut out)?;
                 warping = Some((to, Instant::now()));
                 next_warp = now + plan.warp_every;
-            }
-            if let (Some(cells), None, Some((_, _))) = (&gmap_loop, &warping, &plan.gmap) {
-                if now >= next_warp {
-                    let from = cells[cell_at];
-                    cell_at = (cell_at + 1) % cells.len();
-                    let to = cells[cell_at];
-                    // Arrive just inside the edge crossed.
-                    let local = |d: i32| match d {
-                        1 => 0.0,
-                        -1 => 63.5,
-                        _ => 30.0,
-                    };
-                    let c = Crossing {
-                        from,
-                        to,
-                        local_x: local(to.0 - from.0),
-                        local_y: local(to.1 - from.1),
-                    };
-                    st.set_gmap_cell(to);
-                    send(conn, crossing_props_message(&rules, &c), &mut out)?;
-                    let name = crate::lab::cell_name(to.0 as usize, to.1 as usize);
-                    warping = Some((name, Instant::now()));
-                    next_warp = now + plan.warp_every;
-                }
             }
             Ok(())
         })();

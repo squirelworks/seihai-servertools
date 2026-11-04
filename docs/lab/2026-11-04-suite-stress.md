@@ -176,3 +176,23 @@ bots the server puts on it cross seams instead of taking links.
   and all 20 external clients in and ended clean, external login p50 151 ms,
   134 of 135 links taken (the last one tried as the stay ended), client tick
   p99 under 3.6 ms, 4.7 MiB each. gserver 53 % of a core, 12.1 MiB.
+
+## gserver stage 2.9 anti-cheat (claude/anticheat, 78728a5)
+
+The first runs against it refused every bot warp (bots asked for the next
+level from wherever they stood) and flagged every gmap crossing as a
+teleport (bots jumped to the seam). The bots now walk honestly (see
+`suite-stress.md`). With that, 92 bots of all 46 profiles, 60 s: no warp,
+teleport or rate hits, 0 warps or crossings lost. What is left are speed
+hits, reported to the gserver thread as most likely false:
+
+- the first step after a warp arrival is measured from the link in the old
+  level (`speed 7.5 tiles to 29.5 34`, arrival 30, 34.5);
+- after a logged hit the budget is 0, so honest steps the server reads in a
+  backlog come out as runs of hits; the count grows with load (113 gmap
+  hits at 92 bots, 1543 with 20 more clients);
+- the rebuilt 2.05r2 steps 1 tile at a time and gets long runs of 1.0-tile
+  hits.
+
+Latency with and without anticheat is not settled: the container moved to
+a noisier host mid-afternoon (#25's file p50 3 → 42 ms on the same run).

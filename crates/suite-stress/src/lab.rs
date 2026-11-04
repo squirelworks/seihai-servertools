@@ -51,6 +51,9 @@ pub struct LabConfig {
     pub server_name: String,
     /// `--verbose` on the gserver.
     pub verbose: bool,
+    /// `anticheat = …` in the world's `config/server.txt`; `None` keeps
+    /// the gserver's default.
+    pub anticheat: Option<String>,
     /// Levels in the warp ring written to `levels/` (see [`ring_names`]).
     /// 0 writes no levels at all, as for a stage-1 gserver.
     pub ring_levels: usize,
@@ -74,6 +77,7 @@ impl LabConfig {
             list_max_connections: None,
             server_name: "Seihai Stress".into(),
             verbose: false,
+            anticheat: None,
             ring_levels: 8,
             gmap_size: 3,
         }
@@ -99,6 +103,14 @@ impl LabConfig {
 /// The start level every bot logs in to.
 pub const START_LEVEL: &str = "onlinestartlocal.nw";
 
+/// Where each bot walks its circle in a level, and the circle's radius:
+/// its top point stands on the ring link.
+pub const BOT_CENTER: (f32, f32) = (30.0, 30.5);
+pub const BOT_RADIUS: f32 = 4.0;
+/// Where the ring link puts a player in the next level: the circle's
+/// bottom point.
+pub const RING_ARRIVAL: (f32, f32) = (30.0, 34.5);
+
 /// The warp ring's level names: the start level, then `stress_w1.nw`…
 pub fn ring_names(n: usize) -> Vec<String> {
     (0..n)
@@ -113,8 +125,9 @@ pub fn ring_names(n: usize) -> Vec<String> {
 }
 
 /// A full 64x64 `.nw` level for ring slot `i` of `n`: every row of the
-/// board (so a warp moves a real board, about 8 KB), a link on the top
-/// edge to the next level, and a sign.
+/// board (so a warp moves a real board, about 8 KB), two links to the next
+/// level (one on the top edge, one under the top of the bots' circle, so
+/// a bot takes it from where it walks), and a sign.
 pub fn ring_level(i: usize, n: usize) -> String {
     const B64: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let names = ring_names(n);
@@ -128,7 +141,12 @@ pub fn ring_level(i: usize, n: usize) -> String {
         }
         s.push('\n');
     }
-    s.push_str(&format!("LINK {} 30 0 4 1 30 60\n", names[(i + 1) % n]));
+    let next = &names[(i + 1) % n];
+    s.push_str(&format!("LINK {next} 30 0 4 1 30 60\n"));
+    s.push_str(&format!(
+        "LINK {next} 29 26 2 1 {} {}\n",
+        RING_ARRIVAL.0, RING_ARRIVAL.1
+    ));
     s.push_str(&format!("SIGN 20 21\nRing level {i} of {n}.\nSIGNEND\n"));
     s
 }
@@ -197,6 +215,9 @@ pub fn gserver_config(cfg: &LabConfig, bins: &Bins) -> String {
             p.display()
         )),
         None => s.push_str("npcserver = off\n"),
+    }
+    if let Some(a) = &cfg.anticheat {
+        s.push_str(&format!("anticheat = {a}\n"));
     }
     if bins.listserver.is_some() {
         s.push_str(&format!(
