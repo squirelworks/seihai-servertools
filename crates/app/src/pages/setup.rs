@@ -94,6 +94,7 @@ pub struct Page {
     started: Option<Started>,
     hosting: bool,
     host: super::host::Host,
+    hq_password: String,
 }
 
 impl Default for Page {
@@ -109,6 +110,7 @@ impl Default for Page {
             test_result: String::new(),
             started: None,
             hosting: false,
+            hq_password: String::new(),
             host: super::host::Host::default(),
         }
     }
@@ -264,6 +266,29 @@ impl Page {
                 ui.label(format!("Test connection: {}", self.test_result));
             }
             ui.label("localhost is set to false: logins are then checked by the listserver. Leaving it on would let anyone log in as anyone.");
+            ui.horizontal(|ui| {
+                ui.label("HQ password:");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.hq_password)
+                        .password(true)
+                        .desired_width(140.0),
+                );
+                let ready = self.folder.is_some() && !self.hq_password.is_empty();
+                if ui.add_enabled(ready, egui::Button::new("Save HQ password")).clicked() {
+                    if let Some(f) = &self.folder {
+                        self.message = match f.set_hq_password(&self.hq_password) {
+                            Ok(Some(b)) => format!("Saved the HQ password in {}. Backup: {}", f.admin_path().display(), b.display()),
+                            Ok(None) => format!("HQ password in {}: saved.", f.admin_path().display()),
+                            Err(e) => e,
+                        };
+                    }
+                    self.hq_password.clear();
+                }
+                if let Some(f) = &self.folder {
+                    ui.label(if f.hq_password_is_set() { "(set)" } else { "(not set)" });
+                }
+            });
+            ui.label("Needed when the listserver only lets listed gservers register: type the password from this gserver's row under Who may register. It goes in config/adminconfig.txt.");
 
             ui.heading("5. Router");
             ui.checkbox(&mut self.form.upnp, "Open the port on my router automatically (UPnP)");
