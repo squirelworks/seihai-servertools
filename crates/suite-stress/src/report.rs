@@ -172,6 +172,12 @@ pub fn markdown(run: &Run) -> String {
         .flat_map(|x| x.warps.iter().map(|d| ms(*d)))
         .collect();
     let warps_lost: u32 = o.iter().map(|x| x.warps_lost).sum();
+    let all_cross: Vec<f64> = o
+        .iter()
+        .flat_map(|x| x.crossings.iter().map(|d| ms(*d)))
+        .collect();
+    let cross_lost: u32 = o.iter().map(|x| x.crossings_lost).sum();
+    let on_gmap = o.iter().filter(|x| x.on_gmap).count();
     let list_tries = o.iter().filter(|x| x.list.is_some()).count();
     let list_ok = o.iter().filter(|x| matches!(x.list, Some(Ok(_)))).count();
     let list_ms: Vec<f64> = o
@@ -206,6 +212,15 @@ pub fn markdown(run: &Run) -> String {
     );
     if !all_warp.is_empty() || warps_lost > 0 {
         let _ = writeln!(s, "- Level warp (link sent to the new level's name) ms p50/p95/p99/max: {} ({} done, {warps_lost} lost).", fmt4(summary(&all_warp)), all_warp.len());
+    }
+    if on_gmap > 0 {
+        let mut gmap_versions: Vec<&str> = Vec::new();
+        for x in o.iter().filter(|x| x.on_gmap) {
+            if !gmap_versions.contains(&x.version) {
+                gmap_versions.push(x.version);
+            }
+        }
+        let _ = writeln!(s, "- On the gmap: {on_gmap} bots ({}). Seam crossing (crossing sent to the new cell's level name) ms p50/p95/p99/max: {} ({} done, {cross_lost} lost).", gmap_versions.join(", "), fmt4(summary(&all_cross)), all_cross.len());
     }
     let _ = writeln!(s, "- Client to server: {sent} messages ({:.0}/s). Server to client: {frames} frames ({:.0}/s).", sent as f64 / secs, frames as f64 / secs);
 
@@ -391,6 +406,9 @@ mod tests {
             probes_lost: 0,
             warps: vec![Duration::from_millis(9)],
             warps_lost: 0,
+            on_gmap: false,
+            crossings: vec![],
+            crossings_lost: 0,
             sent_msgs: 10,
             frames_in: 4,
             online_for: Duration::from_secs(1),

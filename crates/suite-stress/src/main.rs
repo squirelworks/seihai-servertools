@@ -36,6 +36,9 @@ OPTIONS:
   --warp-secs S        take a link to the next ring level every S seconds (default 3; 0 = off)
   --levels N           levels in the warp ring written to the world (default 8; 0 = none,
                        for a gserver before stage 2.2)
+  --gmap N             an N by N gmap whose cell (0, 0) is the start level (default 3;
+                       0 = none). Builds the server puts on it cross cells every
+                       --warp-secs instead of taking links
   --rc-every S         run seihai-rc servers and players list every S seconds (default 10; 0 = off)
   --max-players N      gserver max_players (default 2048)
   --list-max-connections N   listserver max_connections (default: its own default)
@@ -58,6 +61,7 @@ struct Opts {
     probe: Duration,
     warp: Duration,
     levels: usize,
+    gmap: usize,
     rc_every: u64,
     max_players: usize,
     list_max: Option<usize>,
@@ -92,6 +96,7 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
         probe: Duration::from_secs(2),
         warp: Duration::from_secs(3),
         levels: 8,
+        gmap: 3,
         rc_every: 10,
         max_players: 2048,
         list_max: None,
@@ -132,6 +137,7 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
             "--chat-secs" => o.chat = Duration::from_secs_f64(num(val()?)?),
             "--probe-secs" => o.probe = Duration::from_secs_f64(num(val()?)?),
             "--warp-secs" => o.warp = Duration::from_secs_f64(num(val()?)?),
+            "--gmap" => o.gmap = num(val()?)? as usize,
             "--levels" => o.levels = num(val()?)? as usize,
             "--rc-every" => o.rc_every = num(val()?)? as u64,
             "--max-players" => o.max_players = num(val()?)? as usize,
@@ -205,7 +211,8 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
     cfg.list_max_connections = o.list_max;
     cfg.verbose = o.verbose;
     cfg.ring_levels = o.levels;
-    if o.levels == 0 {
+    cfg.gmap_size = o.gmap;
+    if o.levels == 0 && o.gmap < 2 {
         o.warp = Duration::ZERO;
     }
     suite_stress::check_loopback(&cfg.gserver_addr())?;
@@ -290,6 +297,12 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
                 } else {
                     suite_stress::lab::ring_names(o.levels)
                 },
+                gmap: (o.gmap >= 2).then(|| {
+                    (
+                        suite_stress::lab::gmap_text(o.gmap),
+                        suite_stress::lab::gmap_loop(o.gmap),
+                    )
+                }),
             };
             let s = shared.clone();
             let h = std::thread::Builder::new()
@@ -380,6 +393,14 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
             format!("{:?} / {:?} / {:?} / {:?}", o.walk, o.chat, o.probe, o.warp),
         ),
         ("ring levels".into(), o.levels.to_string()),
+        (
+            "gmap".into(),
+            if o.gmap >= 2 {
+                format!("{0}x{0}", o.gmap)
+            } else {
+                "none".into()
+            },
+        ),
         ("list fraction".into(), o.list_fraction.to_string()),
         (
             "suite".into(),

@@ -6,6 +6,7 @@
 //! ([`seihai_core::net::Connection::can_send`]); nothing is padded or
 //! invented.
 
+use seihai_core::gmap::{crossing_props_message, Crossing, Gmap, GmapRules};
 use seihai_core::net::{
     levelwarp_message, login_gserver, random_key, walk_message_for, wantfile_message, Connection,
 };
@@ -56,6 +57,10 @@ pub struct Plan {
     /// Level names to warp around, in order; the bot starts at its own
     /// index in the ring.
     pub warp_ring: Vec<String>,
+    /// The lab's `.gmap` text and the cells to walk round, when the start
+    /// level is a gmap cell. A build the server puts on the gmap crosses
+    /// cells every `warp_every` instead of taking links.
+    pub gmap: Option<(String, Vec<(i32, i32)>)>,
 }
 
 /// How a bot's session ended.
@@ -86,6 +91,12 @@ pub struct Outcome {
     pub warps: Vec<Duration>,
     /// Links with no level name back within 10 s.
     pub warps_lost: u32,
+    /// The server put this bot on the gmap at login.
+    pub on_gmap: bool,
+    /// Seam crossing sent → the new cell's level name back.
+    pub crossings: Vec<Duration>,
+    /// Crossings with no level name back within 10 s.
+    pub crossings_lost: u32,
     pub sent_msgs: u64,
     pub frames_in: u64,
     pub online_for: Duration,
@@ -148,6 +159,9 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
         probes_lost: 0,
         warps: Vec::new(),
         warps_lost: 0,
+        on_gmap: false,
+        crossings: Vec::new(),
+        crossings_lost: 0,
         sent_msgs: 0,
         frames_in: 0,
         online_for: Duration::ZERO,
@@ -210,7 +224,20 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
     let mut next_chat = Instant::now() + plan.chat_every + jitter;
     let mut next_probe = Instant::now() + jitter;
     let mut pending: Option<(String, Instant)> = None;
-    let warps = conn.can_send(PLI_LEVELWARP) && !plan.warp_ring.is_empty();
+    // On the gmap: walk round its cells instead of taking links.
+    let gmap_loop = match (&plan.gmap, st.gmap.is_some()) {
+        (Some((text, cells)), true) if !cells.is_empty() && !plan.warp_every.is_zero() => {
+            if let Some(g) = Gmap::parse(text) {
+                st.set_gmap_grid(g);
+            }
+            out.on_gmap = true;
+            Some(cells.clone())
+        }
+        _ => None,
+    };
+    let rules = GmapRules::for_version(v);
+    let mut cell_at = 0usize;
+    let warps = conn.can_send(PLI_LEVELWARP) && !plan.warp_ring.is_empty() && !out.on_gmap;
     let mut next_warp = Instant::now() + plan.warp_every + jitter;
     let mut ring_at = plan.index;
     let mut warping: Option<(String, Instant)> = None;
@@ -234,7 +261,7 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
         if let Some((_, at)) = &pending {
             wake = wake.min(*at + Duration::from_secs(10));
         }
-        if warps {
+        if warps || gmap_loop.is_some() {
             wake = wake.min(next_warp);
         }
         if let Some((_, at)) = &warping {
@@ -257,8 +284,19 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
                 }
                 st.file_requests.clear();
                 if let Some((name, at)) = &warping {
-                    if st.current_level_name().as_deref() == Some(name.as_str()) {
-                        out.warps.push(at.elapsed());
+                    // On a gmap the client moves its own cell at once, so
+                    // wait for the level the server names.
+                    let named = if out.on_gmap {
+                        st.level_name.clone()
+                    } else {
+                        st.current_level_name()
+                    };
+                    if named.as_deref() == Some(name.as_str()) {
+                        if out.on_gmap {
+                            out.crossings.push(at.elapsed());
+                        } else {
+                            out.warps.push(at.elapsed());
+                        }
                         warping = None;
                     }
                 }
@@ -277,7 +315,11 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
         }
         if let Some((_, at)) = &warping {
             if now >= *at + Duration::from_secs(10) {
-                out.warps_lost += 1;
+                if out.on_gmap {
+                    out.crossings_lost += 1;
+                } else {
+                    out.warps_lost += 1;
+                }
                 warping = None;
             }
         }
@@ -311,6 +353,30 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
                 send(conn, levelwarp_message(30.0, 30.0, &to), &mut out)?;
                 warping = Some((to, Instant::now()));
                 next_warp = now + plan.warp_every;
+            }
+            if let (Some(cells), None, Some((_, _))) = (&gmap_loop, &warping, &plan.gmap) {
+                if now >= next_warp {
+                    let from = cells[cell_at];
+                    cell_at = (cell_at + 1) % cells.len();
+                    let to = cells[cell_at];
+                    // Arrive just inside the edge crossed.
+                    let local = |d: i32| match d {
+                        1 => 0.0,
+                        -1 => 63.5,
+                        _ => 30.0,
+                    };
+                    let c = Crossing {
+                        from,
+                        to,
+                        local_x: local(to.0 - from.0),
+                        local_y: local(to.1 - from.1),
+                    };
+                    st.set_gmap_cell(to);
+                    send(conn, crossing_props_message(&rules, &c), &mut out)?;
+                    let name = crate::lab::cell_name(to.0 as usize, to.1 as usize);
+                    warping = Some((name, Instant::now()));
+                    next_warp = now + plan.warp_every;
+                }
             }
             Ok(())
         })();
