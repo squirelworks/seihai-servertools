@@ -11,9 +11,12 @@
 //!   asset resolver cannot find them in this folder (a warning: the world
 //!   still loads).
 //!
+//! The server settings (`serveroptions.txt`, `seihai-listserver.toml`) are
+//! checked by `setup_core::folder::check_world_config`, which
+//! `seihai-servertools check` runs next to this.
+//!
 //! **Planned** (`docs/NEXT.md`): GS1 syntax errors in level NPCs (and the
-//! images and sounds those scripts name), `serveroptions.txt` checks
-//! (`setup_core::checks`), a `--json` report for CI.
+//! images and sounds those scripts name), a `--json` report for CI.
 
 use std::collections::BTreeSet;
 use std::fs;

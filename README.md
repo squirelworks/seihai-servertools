@@ -107,7 +107,10 @@ seihai-servertools check path/to/world
 Reads every level, gmap and gani with the Seihai client's own parsers and
 reports files that do not parse, links to levels that are not in the world,
 gmap cells naming missing levels, and images or sounds that a level NPC or
-a gani names but the world folder does not have. The exit code is 1 when
+a gani names but the world folder does not have. It also runs the setup
+checks on each `servers/<name>/config/serveroptions.txt` (and the `accounts/`
+of public folders) and on `seihai-listserver.toml`, so a setting `setup` would
+refuse to save, such as `localhost = true` off loopback, is an error. The exit code is 1 when
 there are errors (a missing image or sound is a warning), so it can run in CI.
 
 ## Build

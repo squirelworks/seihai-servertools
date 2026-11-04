@@ -54,6 +54,29 @@ fn check_fails_on_a_broken_level() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("error: bad.nw"));
 }
 
+#[test]
+fn check_runs_the_setup_checks_on_server_folders() {
+    let w = lab_world();
+    let out = bin().arg("check").arg(w.path()).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "lab defaults are fine: {text}");
+    assert!(text.contains("and the server settings: 0 errors"), "{text}");
+
+    let cfg = w.path().join("servers/default/config/serveroptions.txt");
+    fs::write(
+        &cfg,
+        LAB.replace("serverinterface = 127.0.0.1", "serverinterface = AUTO"),
+    )
+    .unwrap();
+    let out = bin().arg("check").arg(w.path()).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("error: servers/default/config/serveroptions.txt [localhost]: "),
+        "{text}"
+    );
+}
+
 const LAB: &str = "# lab world\nname = My Server\nserverinterface = 127.0.0.1\nserverip = 127.0.0.1\nlocalip = 127.0.0.1\nserverport = 14802\nlistip = 127.0.0.1\nlistport = 14900\nupnp = false\nstaff = (Manager),YOURACCOUNT\nlocalhost = true\n";
 
 fn lab_world() -> tempfile::TempDir {
