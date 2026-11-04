@@ -37,6 +37,8 @@ egui = "0.29"
 ctrlc = "3"
 # Edits seihai-listserver.toml keeping comments, order and unknown keys.
 toml_edit = "0.22"
+# This machine's addresses for the "Listen on" lists (MIT OR BSD-3-Clause).
+if-addrs = "0.15"
 tempfile = "3"
 
 setup-core = { path = "crates/setup-core" }

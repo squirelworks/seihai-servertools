@@ -28,6 +28,7 @@ pub struct Host {
     new_account: String,
     new_password: String,
     message: String,
+    addrs: super::addrs::Addresses,
 }
 
 impl Default for Host {
@@ -54,6 +55,7 @@ impl Default for Host {
             new_account: String::new(),
             new_password: String::new(),
             message: String::new(),
+            addrs: super::addrs::Addresses::default(),
         }
     }
 }
@@ -227,12 +229,21 @@ impl Host {
         ui.label("Other machines can reach this listserver, so it needs an accounts file. Open mode is refused.");
         row(ui, "Accounts file:", &mut self.accounts, "accounts.txt");
         ui.heading("2. Network");
-        row(
-            ui,
-            "Listen on:",
-            &mut self.bind,
-            "0.0.0.0, :: or one address",
-        );
+        ui.horizontal(|ui| {
+            ui.label("Listen on:");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.bind).hint_text("0.0.0.0, :: or one address"),
+            );
+            self.addrs.pick(
+                ui,
+                "host-listen-on",
+                &mut self.bind,
+                &[
+                    ("0.0.0.0", "every IPv4 interface"),
+                    ("::", "every IPv6 interface"),
+                ],
+            );
+        });
         row(ui, "Gserver port:", &mut self.gserver_port, "14900");
         row(
             ui,
@@ -384,5 +395,49 @@ impl Host {
         if !self.message.is_empty() {
             ui.label(RichText::new(&self.message).strong());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_answers_from_the_form() {
+        let host = Host {
+            bind: " 127.0.0.1 ".into(),
+            client_ports: "14921, 14922".into(),
+            gservers: vec![
+                ("127.0.0.1".into(), "lab-hq".into()),
+                (" ".into(), String::new()),
+            ],
+            max_connections: "64".into(),
+            silent_list_ms: "500".into(),
+            ..Host::default()
+        };
+        let a = host.answers().unwrap();
+        assert_eq!(a.bind, "127.0.0.1");
+        assert_eq!(a.client_ports, [14921, 14922]);
+        assert_eq!(a.gservers.len(), 1, "the blank row is skipped");
+        assert_eq!((a.max_connections, a.silent_list_after_ms), (64, 500));
+    }
+
+    #[test]
+    fn host_answers_refuse_bad_rows() {
+        let bad_port = Host {
+            client_ports: "14921,x".into(),
+            ..Host::default()
+        };
+        assert!(bad_port.answers().is_err());
+        let bad_ip = Host {
+            gservers: vec![("not-an-ip".into(), String::new())],
+            ..Host::default()
+        };
+        assert!(bad_ip.answers().unwrap_err().contains("not an IP address"));
+        let zero = Host {
+            max_connections: "0".into(),
+            ..Host::default()
+        };
+        assert!(zero.answers().is_err());
     }
 }

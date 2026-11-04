@@ -172,6 +172,20 @@ struct Io<'a> {
     yes: bool,
 }
 
+/// List this machine's addresses before a "Listen on" question.
+fn say_addresses(io: &mut Io<'_>) {
+    match setup_core::net::interfaces() {
+        Ok(list) if !list.is_empty() => {
+            io.say("This machine's addresses:");
+            for i in &list {
+                io.say(&format!("  {}", i.label()));
+            }
+        }
+        Ok(_) => {}
+        Err(e) => io.say(&format!("(could not read this machine's addresses: {e})")),
+    }
+}
+
 impl Io<'_> {
     fn say(&mut self, text: &str) {
         let _ = writeln!(self.out, "{text}");
@@ -378,10 +392,13 @@ fn public(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     io.say("3. Network");
     let interface = match &a.interface {
         Some(v) => v.clone(),
-        None => io.ask(
-            "Listen on: AUTO (every interface) or one of this machine's addresses",
-            Some("AUTO"),
-        )?,
+        None => {
+            say_addresses(io);
+            io.ask(
+                "Listen on: AUTO (every interface) or one of this machine's addresses",
+                Some("AUTO"),
+            )?
+        }
     };
     let server_ip = match &a.server_ip {
         Some(v) => v.clone(),
@@ -762,10 +779,13 @@ fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
     io.say("2. Network");
     let bind = match &a.bind {
         Some(v) => v.clone(),
-        None => io.ask(
-            "Listen on: 0.0.0.0 (every IPv4 interface), :: or one address",
-            Some(&d.bind),
-        )?,
+        None => {
+            say_addresses(io);
+            io.ask(
+                "Listen on: 0.0.0.0 (every IPv4 interface), :: or one address",
+                Some(&d.bind),
+            )?
+        }
     };
     let gserver_port = match a.gserver_port {
         Some(p) => p,

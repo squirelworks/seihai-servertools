@@ -13,7 +13,7 @@
 //! | [`profile`] | Key tables, detect, Back to lab, apply the public answers | working |
 //! | [`checks`] | Safety check and the combinations the wizard refuses | working |
 //! | [`lights`] | The three "Start and check" lights, read from a gserver console | working |
-//! | [`net`] | "Test connection" (working); interfaces, opt-in UPnP (planned) | partly |
+//! | [`net`] | "Test connection" and the "Listen on" address list (working); opt-in UPnP (planned) | partly |
 //!
 //! The plan for each module is in `docs/ARCHITECTURE.md` and the order of
 //! the work in `docs/NEXT.md`. Rules: `AGENTS.md`.
