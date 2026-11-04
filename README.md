@@ -99,6 +99,11 @@ sending its HQ password (`hq_password` in that gserver's
 `config/adminconfig.txt`). Give the password in an environment variable
 (`--allow-gserver 127.0.0.1 --hq-password-env HQ_PW`) or at the prompt; it is
 never printed. Still open the gserver port only to those addresses.
+It also sets `silent_list_after_ms` (default 500, so the real 1.41 rev 1,
+which waits without sending anything, gets the list; `--silent-list-ms`) and
+can raise `max_connections` for a big world (`--max-connections`, listserver
+default 256). `lab start` notes when the listserver would leave 1.41 rev 1
+without a list.
 
 ## Check a world
 

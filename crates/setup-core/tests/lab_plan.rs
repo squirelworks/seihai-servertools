@@ -99,6 +99,28 @@ fn listserver_in_the_world_folder_with_its_config() {
 }
 
 #[test]
+fn listserver_without_silent_list_gets_a_note() {
+    let w = world();
+    fs::write(w.path().join(exe_name("seihai-listserver")), b"").unwrap();
+    let mut o = opts(w.path());
+    o.listserver = ListserverChoice::Auto;
+    let has_note = |o: &LabOptions| {
+        plan(o)
+            .unwrap()
+            .notes
+            .iter()
+            .any(|n| n.contains("real 1.41 rev 1 gets no server list"))
+    };
+    assert!(has_note(&o), "no config: the listserver default is 0");
+    fs::write(
+        w.path().join("seihai-listserver.toml"),
+        "silent_list_after_ms = 500\n",
+    )
+    .unwrap();
+    assert!(!has_note(&o));
+}
+
+#[test]
 fn listserver_path_must_exist() {
     let w = world();
     let mut o = opts(w.path());

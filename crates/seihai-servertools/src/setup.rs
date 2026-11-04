@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use setup_core::checks::{check_server_folder, Finding, Severity};
-use setup_core::config::listserver_toml::{AllowedGserver, HostAnswers};
+use setup_core::config::listserver_toml::{AllowedGserver, HostAnswers, SUGGESTED_SILENT_LIST_MS};
 use setup_core::folder::{ListserverConfig, ListserverPreview, Preview, ServerFolder};
 use setup_core::profile::{Profile, PublicAnswers};
 
@@ -38,6 +38,7 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
   setup host-listserver [--world DIR] [--bind ADDR] [--gserver-port N]
                [--client-ports A,B,C] [--accounts FILE] [--gserver-ip peer|sent]
                [--site-url URL] [--upgrade-url URL]
+               [--max-connections N] [--silent-list-ms MS]
                [--allow-gserver ADDR]... [--hq-password-env VAR] [--any-gserver]
                [--first-account NAME --password-env VAR] [--listserver-bin PATH] [--yes]
                host a listserver for other machines (edits seihai-listserver.toml)
@@ -53,7 +54,11 @@ address, lets only those addresses register; each must send the HQ password
 from the environment variable named by --hq-password-env (the same text as
 hq_password in that gserver's config/adminconfig.txt). An address already in
 the file keeps its password when no variable is given. --any-gserver empties
-the list. With --yes and neither option, the list is left as it is.";
+the list.
+
+--silent-list-ms (default 500) lets real 1.41 rev 1, which waits without
+sending anything, get the server list; 0 turns it off. --max-connections
+(default 256) caps the listserver's open links, players and gservers together. With --yes and neither option, the list is left as it is.";
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct Args {
@@ -84,6 +89,8 @@ struct Args {
     allow_gservers: Vec<String>,
     hq_password_env: Option<String>,
     any_gserver: bool,
+    max_connections: Option<u32>,
+    silent_list_ms: Option<u64>,
 }
 
 fn parse(args: &[&str]) -> Result<Args, String> {
@@ -133,6 +140,20 @@ fn parse(args: &[&str]) -> Result<Args, String> {
             "--allow-gserver" => a.allow_gservers.push(value()?),
             "--hq-password-env" => a.hq_password_env = Some(value()?),
             "--any-gserver" => a.any_gserver = true,
+            "--max-connections" => {
+                a.max_connections = Some(
+                    value()?
+                        .parse()
+                        .map_err(|_| "--max-connections needs a whole number")?,
+                )
+            }
+            "--silent-list-ms" => {
+                a.silent_list_ms = Some(
+                    value()?
+                        .parse()
+                        .map_err(|_| "--silent-list-ms needs whole milliseconds")?,
+                )
+            }
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s if a.server.is_none() => a.server = Some(s.to_string()),
             s => return Err(format!("unexpected {s}")),
@@ -737,6 +758,34 @@ fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
                 .map_err(|_| format!("bad port list {v}"))?
         }
     };
+    let max_connections = match a.max_connections {
+        Some(n) => n,
+        None => io
+            .ask(
+                "Most connections open at once (players asking for the list plus gservers; raise it for a big world)",
+                Some(&cur.max_connections.to_string()),
+            )?
+            .parse()
+            .map_err(|_| "not a whole number")?,
+    };
+    if max_connections == 0 {
+        return Err("max_connections must be at least 1".into());
+    }
+    let silent_default = if c.toml.get("silent_list_after_ms").is_some() {
+        cur.silent_list_after_ms
+    } else {
+        SUGGESTED_SILENT_LIST_MS
+    };
+    let silent_list_after_ms = match a.silent_list_ms {
+        Some(n) => n,
+        None => io
+            .ask(
+                "Milliseconds before a client that sends nothing gets the list (real 1.41 rev 1 waits; 0: off)",
+                Some(&silent_default.to_string()),
+            )?
+            .parse()
+            .map_err(|_| "not a whole number of milliseconds")?,
+    };
 
     io.say("");
     io.say("3. Who may register");
@@ -797,6 +846,8 @@ fn host_listserver(io: &mut Io, a: &Args) -> Result<ExitCode, String> {
         accounts,
         gserver_ip,
         gservers,
+        max_connections,
+        silent_list_after_ms,
         site_url,
         upgrade_url,
     };

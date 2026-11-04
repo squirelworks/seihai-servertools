@@ -84,6 +84,11 @@ window wizard, the `setup` command line, and Host a listserver.
       squirelworks/seihai-listserver#6 (`ListserverToml::set_gservers`,
       `--allow-gserver`, `--hq-password-env`, `--any-gserver`, the rows on
       the window page). The warning stays only while the list is empty.
+- [x] Host a listserver sets `silent_list_after_ms` (500 by default; real
+      1.41 rev 1 waits for the list) and `max_connections`
+      (`docs/lab/2026-11-04-suite-stress.md`, findings 2 and 3). `lab plan`
+      and the review note a listserver left at 0. The gserver side's player
+      cap is the gserver's own setting.
 - [ ] Join a listserver: write the gserver's own `hq_password` (in
       `config/adminconfig.txt`) so it matches the listserver row.
 
