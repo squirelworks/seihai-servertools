@@ -12,6 +12,7 @@ name = "setup_core"
 path = "src/lib.rs"
 
 [dependencies]
+if-addrs.workspace = true
 toml_edit.workspace = true
 
 [target.'cfg(unix)'.dependencies]

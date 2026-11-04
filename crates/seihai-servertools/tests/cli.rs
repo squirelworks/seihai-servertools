@@ -167,6 +167,10 @@ fn setup_public_by_prompts_then_lab_then_undo() {
     let (code, text) = setup(w.path(), &["public"], answers);
     assert_eq!(code, Some(0), "{text}");
     assert!(text.contains("localhost: true -> false"), "{text}");
+    assert!(
+        text.contains("This machine's addresses:") && text.contains("127.0.0.1 ("),
+        "the Listen on question lists the addresses: {text}"
+    );
     let o = options(w.path());
     assert!(o.contains("serverinterface = AUTO\n"), "{o}");
     assert!(o.contains("staff = (Manager),owner\n"), "{o}");

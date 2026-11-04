@@ -94,6 +94,7 @@ pub struct Page {
     started: Option<Started>,
     hosting: bool,
     host: super::host::Host,
+    addrs: super::addrs::Addresses,
     hq_password: String,
 }
 
@@ -112,6 +113,7 @@ impl Default for Page {
             hosting: false,
             hq_password: String::new(),
             host: super::host::Host::default(),
+            addrs: super::addrs::Addresses::default(),
         }
     }
 }
@@ -231,7 +233,11 @@ impl Page {
             field(ui, "Web page (optional):", &mut self.form.url, "");
 
             ui.heading("3. Network");
-            field(ui, "Listen on:", &mut self.form.interface, "AUTO or one of this machine's addresses");
+            ui.horizontal(|ui| {
+                ui.label("Listen on:");
+                ui.add(egui::TextEdit::singleline(&mut self.form.interface).hint_text("AUTO or one of this machine's addresses"));
+                self.addrs.pick(ui, "setup-listen-on", &mut self.form.interface, &[("AUTO", "every interface")]);
+            });
             field(ui, "Address players use:", &mut self.form.server_ip, "AUTO or an address");
             ui.label("The server port must be free and reachable from outside.");
 
@@ -405,5 +411,48 @@ impl Page {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn form_answers_trim_and_parse() {
+        let form = Form {
+            account: " owner ".into(),
+            name: "World ".into(),
+            interface: " 127.0.0.1".into(),
+            list_host: " 127.0.0.1 ".into(),
+            list_port: " 14900 ".into(),
+            ..Form::default()
+        };
+        let a = form.answers().unwrap();
+        assert_eq!(a.staff_account, "owner");
+        assert_eq!(a.name, "World");
+        assert_eq!(a.interface, "127.0.0.1");
+        assert_eq!(a.server_ip, "AUTO");
+        assert_eq!((a.list_host.as_str(), a.list_port), ("127.0.0.1", 14900));
+        assert!(!a.upnp);
+    }
+
+    #[test]
+    fn form_refuses_a_port_that_is_not_a_number() {
+        let form = Form {
+            list_port: "14900x".into(),
+            ..Form::default()
+        };
+        let err = form.answers().unwrap_err();
+        assert!(err.contains("not a number"), "{err}");
+    }
+
+    #[test]
+    fn the_listen_on_pick_list_offers_auto_and_loopback() {
+        let page = Page::default();
+        let c = page.addrs.choices(&[("AUTO", "every interface")]);
+        assert_eq!(c[0].0, "AUTO");
+        assert!(c.iter().any(|(v, _)| v == "127.0.0.1"), "{c:?}");
+        assert_eq!(page.form.interface, "AUTO", "the field starts on AUTO");
     }
 }

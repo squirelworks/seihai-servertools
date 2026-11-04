@@ -74,9 +74,14 @@ window wizard, the `setup` command line, and Host a listserver.
       Save only when nothing blocks, Undo, Start and check with the lights.
       All through `setup_core::folder::ServerFolder`, which the command line
       uses too. `seihai-servertools gui --world DIR --page setup` opens it.
-- [ ] Window polish: a list of this machine's interfaces for "Listen on"
-      (`net::interfaces`, planned), a folder picker, and a test that drives
-      the page (egui_kittest or a state-only test of `Form::answers`).
+- [x] Window polish, part 1: "Listen on" pick lists of this machine's
+      addresses (`setup_core::net::interfaces`, `if-addrs`) on Server setup
+      and Host a listserver, the same list before the command line's Listen
+      on questions, and state-only tests of `Form::answers` and
+      `Host::answers`. Lab run: `docs/lab/2026-11-04-listen-on-list.md`.
+- [ ] Window polish, part 2: a folder picker for the world folder (a native
+      dialog crate; check its licence and that the headless build stays
+      free of it).
 - [x] **Step 6** Host a listserver: `config::listserver_toml::ListserverToml`
       (on `toml_edit`: comments, order and unknown keys kept),
       `folder::ListserverConfig`, `setup host-listserver | listserver-lab |
