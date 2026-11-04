@@ -245,6 +245,12 @@ pub fn plan(opts: &LabOptions) -> Result<Plan, LabError> {
                 settings.bind
             ));
         }
+        if settings.silent_list_after_ms == 0 {
+            notes.push(
+                "the listserver's silent_list_after_ms is 0: real 1.41 rev 1 gets no server list (set it to 500 in seihai-listserver.toml, or run `setup host-listserver`)"
+                    .into(),
+            );
+        }
         ListserverPlan {
             settings,
             spec: ProcessSpec {

@@ -20,6 +20,8 @@ pub struct Host {
     gserver_ip: String,
     /// Who may register: (address, HQ password) rows. Empty: any gserver.
     gservers: Vec<(String, String)>,
+    max_connections: String,
+    silent_list_ms: String,
     site_url: String,
     upgrade_url: String,
     preview: Option<ListserverPreview>,
@@ -44,6 +46,8 @@ impl Default for Host {
             accounts: d.accounts,
             gserver_ip: d.gserver_ip,
             gservers: vec![("127.0.0.1".into(), String::new())],
+            max_connections: d.max_connections.to_string(),
+            silent_list_ms: d.silent_list_after_ms.to_string(),
             site_url: String::new(),
             upgrade_url: String::new(),
             preview: None,
@@ -65,6 +69,10 @@ impl Host {
                     self.accounts = s.accounts.clone();
                 }
                 self.gserver_port = s.gserver_port.to_string();
+                self.max_connections = s.max_connections.to_string();
+                if c.toml.get("silent_list_after_ms").is_some() {
+                    self.silent_list_ms = s.silent_list_after_ms.to_string();
+                }
                 if let Some(p) = c.toml.get("client_ports") {
                     self.client_ports = p.trim_matches(['[', ']']).replace(' ', "");
                 }
@@ -110,6 +118,15 @@ impl Host {
             accounts: self.accounts.trim().to_string(),
             gserver_ip: self.gserver_ip.clone(),
             gservers: self.allow_list()?,
+            max_connections: match self.max_connections.trim().parse() {
+                Ok(n) if n > 0 => n,
+                _ => return Err("most connections: a whole number, at least 1".into()),
+            },
+            silent_list_after_ms: self
+                .silent_list_ms
+                .trim()
+                .parse()
+                .map_err(|_| "silent list: whole milliseconds (0: off)".to_string())?,
             site_url: self.site_url.trim().to_string(),
             upgrade_url: self.upgrade_url.trim().to_string(),
         })
@@ -222,6 +239,18 @@ impl Host {
             "Client ports:",
             &mut self.client_ports,
             "14921,14922,14923",
+        );
+        row(
+            ui,
+            "Most connections at once:",
+            &mut self.max_connections,
+            "256 (players asking for the list plus gservers)",
+        );
+        row(
+            ui,
+            "Answer a silent client after (ms):",
+            &mut self.silent_list_ms,
+            "500: real 1.41 rev 1 waits for the list; 0: off",
         );
         ui.heading("3. Who may register");
         ui.label(format!(

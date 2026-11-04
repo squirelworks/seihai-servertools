@@ -529,6 +529,13 @@ pub fn check_listserver(settings: &ListserverLab) -> Vec<Finding> {
             ),
         ));
     }
+    if settings.silent_list_after_ms == 0 {
+        out.push(finding(
+            Severity::Info,
+            "silent_list_after_ms",
+            "silent_list_after_ms = 0: real 1.41 rev 1 waits for the list without sending anything and gets none. 500 answers it; clients that speak first are not affected.",
+        ));
+    }
     if settings.gserver_ip == "peer" {
         out.push(finding(
             Severity::Info,

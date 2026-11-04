@@ -305,12 +305,20 @@ fn setup_host_listserver_then_back_to_lab() {
     assert_eq!(code, Some(1), "{text}");
     assert!(text.contains("BLOCKED [accounts]"), "{text}");
     // Defaults by prompts: accounts, bind, gserver port, client ports,
-    // who may register (127.0.0.1) and its HQ password, gserver_ip, site,
-    // upgrade, save.
+    // max connections, silent list, who may register (127.0.0.1) and its
+    // HQ password, gserver_ip, site, upgrade, save.
     let (code, text) = setup(
         w.path(),
         &["host-listserver"],
-        "\n\n\n\n\nlab-hq-pw\n\n\n\nyes\n",
+        "\n\n\n\n\n\n\nlab-hq-pw\n\n\n\nyes\n",
+    );
+    assert!(
+        text.contains("silent_list_after_ms: (not set) -> 500"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("max_connections:"),
+        "default not written: {text}"
     );
     assert_eq!(code, Some(0), "{text}");
     assert!(text.contains("bind: (not set) -> 0.0.0.0"), "{text}");
@@ -418,4 +426,41 @@ fn host_listserver_who_may_register_by_options() {
     assert_eq!(code, Some(0), "{text}");
     assert!(fs::read_to_string(&toml).unwrap().contains("gservers = []"));
     assert!(text.contains("warning [gservers]"), "{text}");
+}
+
+#[test]
+fn host_listserver_capacity_and_silent_list_options() {
+    let w = lab_world();
+    let toml = w.path().join("seihai-listserver.toml");
+    let base = ["host-listserver", "--yes", "--accounts", "accounts.txt"];
+    let mut args = base.to_vec();
+    args.extend(["--max-connections", "1200", "--silent-list-ms", "750"]);
+    let (code, text) = setup(w.path(), &args, "");
+    assert_eq!(code, Some(0), "{text}");
+    let t = fs::read_to_string(&toml).unwrap();
+    assert!(t.contains("max_connections = 1200\n"), "{t}");
+    assert!(t.contains("silent_list_after_ms = 750\n"), "{t}");
+    assert!(!text.contains("note [silent_list_after_ms]"), "{text}");
+
+    // --yes keeps what the file has.
+    let (code, _) = setup(w.path(), &base, "");
+    assert_eq!(code, Some(0));
+    let t = fs::read_to_string(&toml).unwrap();
+    assert!(
+        t.contains("max_connections = 1200\n") && t.contains("silent_list_after_ms = 750\n"),
+        "{t}"
+    );
+
+    // Off again: the review says what 1.41 rev 1 loses.
+    let mut off = base.to_vec();
+    off.extend(["--silent-list-ms", "0"]);
+    let (code, text) = setup(w.path(), &off, "");
+    assert_eq!(code, Some(0), "{text}");
+    assert!(text.contains("note [silent_list_after_ms]"), "{text}");
+
+    let mut bad = base.to_vec();
+    bad.extend(["--max-connections", "0"]);
+    let (code, text) = setup(w.path(), &bad, "");
+    assert_eq!(code, Some(1), "{text}");
+    assert!(text.contains("at least 1"), "{text}");
 }

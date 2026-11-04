@@ -18,9 +18,20 @@ pub const MANAGED_KEYS: &[&str] = &[
     "accounts",
     "gserver_ip",
     "gservers",
+    "max_connections",
+    "silent_list_after_ms",
     "site_url",
     "upgrade_url",
 ];
+
+/// The listserver's own `max_connections` default.
+pub const DEFAULT_MAX_CONNECTIONS: u32 = 256;
+
+/// What Host a listserver suggests for `silent_list_after_ms`. Real 1.41
+/// rev 1 connects and waits for the list without sending a byte; with the
+/// listserver's default (0, off) it never gets one. A client that speaks
+/// first is never answered early, so this does not change other clients.
+pub const SUGGESTED_SILENT_LIST_MS: u64 = 500;
 
 /// One row of the listserver's `gservers` allow-list: an address that may
 /// register, and the HQ password (`SERVERHQPASS`) its gserver must send
@@ -123,6 +134,11 @@ pub struct ListserverLab {
     /// `gservers`: who may register. Empty: any gserver that reaches the
     /// gserver port.
     pub gservers: Vec<AllowedGserver>,
+    /// `max_connections`, or [`DEFAULT_MAX_CONNECTIONS`] when missing.
+    pub max_connections: u32,
+    /// `silent_list_after_ms`: 0 (the default) leaves real 1.41 rev 1
+    /// without a list.
+    pub silent_list_after_ms: u64,
 }
 
 impl Default for ListserverLab {
@@ -133,6 +149,8 @@ impl Default for ListserverLab {
             accounts: String::new(),
             gserver_ip: "peer".into(),
             gservers: Vec::new(),
+            max_connections: DEFAULT_MAX_CONNECTIONS,
+            silent_list_after_ms: 0,
         }
     }
 }
@@ -163,6 +181,16 @@ impl ListserverLab {
                 "gserver_port" => {
                     if let Ok(port) = value.parse() {
                         out.gserver_port = port;
+                    }
+                }
+                "max_connections" => {
+                    if let Ok(n) = value.parse() {
+                        out.max_connections = n;
+                    }
+                }
+                "silent_list_after_ms" => {
+                    if let Ok(n) = value.parse() {
+                        out.silent_list_after_ms = n;
                     }
                 }
                 _ => {}
@@ -285,6 +313,12 @@ impl ListserverToml {
         self.set_item(key, value(i64::from(port)), &port.to_string(), date)
     }
 
+    /// Set a whole-number key that is not a port.
+    pub fn set_int(&mut self, key: &str, n: u64, date: &str) -> bool {
+        let v = i64::try_from(n).unwrap_or(i64::MAX);
+        self.set_item(key, value(v), &v.to_string(), date)
+    }
+
     /// Set a list of ports.
     pub fn set_ports(&mut self, key: &str, ports: &[u16], date: &str) -> bool {
         let mut a = Array::new();
@@ -326,6 +360,12 @@ pub struct HostAnswers {
     /// Who may register. Empty: any gserver. Written when not empty, or
     /// when the file already has the key (so emptying it opens the list).
     pub gservers: Vec<AllowedGserver>,
+    /// Most links open at once, clients and gservers together. Written when
+    /// it is not the listserver's default or the key is already there.
+    pub max_connections: u32,
+    /// Milliseconds before a client that sent nothing gets the list (real
+    /// 1.41 rev 1). Written when not 0 or the key is already there.
+    pub silent_list_after_ms: u64,
     pub site_url: String,
     pub upgrade_url: String,
 }
@@ -339,6 +379,8 @@ impl Default for HostAnswers {
             accounts: "accounts.txt".into(),
             gserver_ip: "sent".into(),
             gservers: Vec::new(),
+            max_connections: DEFAULT_MAX_CONNECTIONS,
+            silent_list_after_ms: SUGGESTED_SILENT_LIST_MS,
             site_url: String::new(),
             upgrade_url: String::new(),
         }
@@ -366,6 +408,18 @@ pub fn apply_host(t: &mut ListserverToml, a: &HostAnswers, date: &str) -> Vec<&'
     note("gserver_ip", t.set_str("gserver_ip", &a.gserver_ip, date));
     if !a.gservers.is_empty() || t.doc.contains_key("gservers") {
         note("gservers", t.set_gservers(&a.gservers, date));
+    }
+    if a.max_connections != DEFAULT_MAX_CONNECTIONS || t.doc.contains_key("max_connections") {
+        note(
+            "max_connections",
+            t.set_int("max_connections", a.max_connections.into(), date),
+        );
+    }
+    if a.silent_list_after_ms != 0 || t.doc.contains_key("silent_list_after_ms") {
+        note(
+            "silent_list_after_ms",
+            t.set_int("silent_list_after_ms", a.silent_list_after_ms, date),
+        );
     }
     for (k, v) in [("site_url", &a.site_url), ("upgrade_url", &a.upgrade_url)] {
         if !(v.is_empty() && t.get(k).is_none()) {
@@ -416,7 +470,16 @@ mod tests {
     fn host_then_back_to_lab_keeps_comments_and_unknown_keys() {
         let mut t = ListserverToml::parse(SAMPLE).unwrap();
         let changed = apply_host(&mut t, &HostAnswers::default(), "2026-10-31");
-        assert_eq!(changed, ["bind", "gserver_port", "accounts", "gserver_ip"]);
+        assert_eq!(
+            changed,
+            [
+                "bind",
+                "gserver_port",
+                "accounts",
+                "gserver_ip",
+                "silent_list_after_ms"
+            ]
+        );
         let text = t.render();
         assert!(text.contains("# Address to listen on.\n# Changed by Seihai server setup, 2026-10-31\nbind = \"0.0.0.0\"\n"), "{text}");
         assert!(text.contains("list_name = \"Lab listserver\""), "{text}");
@@ -432,7 +495,7 @@ mod tests {
         let text = t.render();
         assert_eq!(
             text.matches("# Changed by Seihai server setup").count(),
-            4,
+            5,
             "{text}"
         );
         assert!(text.contains("2026-11-01\nbind = \"127.0.0.1\""), "{text}");
@@ -450,7 +513,7 @@ mod tests {
         );
         assert_eq!(again.get("gserver_port").as_deref(), Some("14900"));
         let before = ListserverToml::parse("").unwrap();
-        assert_eq!(before.diff(&again).len(), 5);
+        assert_eq!(before.diff(&again).len(), 6);
     }
 
     #[test]
@@ -533,6 +596,45 @@ mod tests {
             ListserverToml::parse(&out).unwrap().gservers(),
             [allow("127.0.0.1", "pw")]
         );
+    }
+
+    #[test]
+    fn silent_list_and_max_connections() {
+        let mut t = ListserverToml::parse(SAMPLE).unwrap();
+        let a = HostAnswers {
+            max_connections: 1200,
+            ..HostAnswers::default()
+        };
+        apply_host(&mut t, &a, "2026-11-04");
+        let text = t.render();
+        assert!(text.contains("max_connections = 1200\n"), "{text}");
+        assert!(text.contains("silent_list_after_ms = 500\n"), "{text}");
+        let s = ListserverLab::scan(&text);
+        assert_eq!((s.max_connections, s.silent_list_after_ms), (1200, 500));
+
+        // Back to the listserver defaults: the keys are there, so they are
+        // written; nothing new is added to a file that never had them.
+        let off = HostAnswers {
+            silent_list_after_ms: 0,
+            ..HostAnswers::default()
+        };
+        let changed = apply_host(&mut t, &off, "2026-11-05");
+        assert_eq!(changed, ["max_connections", "silent_list_after_ms"]);
+        assert_eq!(
+            (
+                t.settings().max_connections,
+                t.settings().silent_list_after_ms
+            ),
+            (DEFAULT_MAX_CONNECTIONS, 0)
+        );
+        let mut fresh = ListserverToml::parse(SAMPLE).unwrap();
+        apply_host(&mut fresh, &off, "2026-11-05");
+        let text = fresh.render();
+        assert!(
+            !text.contains("max_connections") && !text.contains("silent_list"),
+            "{text}"
+        );
+        assert_eq!(ListserverLab::default().max_connections, 256);
     }
 
     #[test]
