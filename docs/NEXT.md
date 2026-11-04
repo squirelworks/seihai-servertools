@@ -29,8 +29,10 @@ session that built the setup did not do them:
 - [ ] Real 2.x clients under Wine next to the bots (`--base-port 14800`).
 - [x] Other client programs next to the bots (`--external`); first used
       with graal-delphi's headless 2.05r2.
-- [ ] Bump seihai-core once its client sets `TCP_NODELAY`; until then the
-      file-probe p95 has a ~40 ms tail from the bots themselves.
+- [x] Bump seihai-core once its client sets `TCP_NODELAY` (seihai #360):
+      pinned to seihai main `5195744` by rev in #29; switch to the `v0.0.6`
+      tag once it is published. A stress rerun should lose the ~40 ms
+      file-probe tail the bots added.
 - [ ] The 1000-player mixed-version run, once the suite parts are further
       along (Squirrel, 2026-11-04: a later side project).
 
