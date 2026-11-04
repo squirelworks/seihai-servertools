@@ -118,3 +118,22 @@ instead of the server's text. See "Findings".
   runs will load them as they land.
 - NPC-server scripts on players (milestone 3).
 - RC against the gserver (stage 4).
+
+## Later the same day: gserver stage 2.4 (squirelworks/seihai-gserver#18)
+
+The rig now warps (an 8-level ring of full boards). Against the #18 branch
+(`2c87935`, on main `9c5853a` with stages 2.2 and 2.3):
+
+- `compat` with a warp every second: all 46 profiles logged in and warped
+  (183 warps, none lost).
+- `run --versions all --bots 92 --stay 90`: 92 in, 0 dropped, 2668 warps,
+  none lost, link → name p50 4.2 ms, max 46 ms.
+- **Gen 2 loses frames during warps.** 20 bots of one build, a warp every
+  second and a file request every 0.5 s: 1.32 lost 11 of 985 file answers and
+  1.39 lost 8 of 1042, while 2.05 lost none, and 1.32 lost none with warps
+  off or on the pre-stage-2 gserver. Most likely a reply goes out between the
+  gen-2 raw-data header frame and the board frame. Reported on #18.
+- **Other players cost one frame per update per receiver** since stage 2.3:
+  server → client went from 52 to 10,589 frames/s for 92 walkers, and gserver
+  CPU from 24 % to 74 %. squirelworks/seihai-gserver#20 (batch on the 2.8
+  tick).

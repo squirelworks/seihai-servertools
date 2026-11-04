@@ -88,7 +88,7 @@ pub fn timeline_tsv(ticks: &[Tick]) -> String {
 /// One row per bot, tab-separated.
 pub fn bots_tsv(outcomes: &[Outcome]) -> String {
     let mut s = String::from(
-        "bot\tversion\tlist_ms\tlist_players\tlogin_ms\tlogin_error\tprobe_p50_ms\tprobes\tprobes_lost\tsent\tframes\tonline_s\tend\n",
+        "bot\tversion\tlist_ms\tlist_players\tlogin_ms\tlogin_error\tprobe_p50_ms\tprobes\tprobes_lost\twarp_p50_ms\twarps\twarps_lost\tsent\tframes\tonline_s\tend\n",
     );
     for (i, o) in outcomes.iter().enumerate() {
         let (list_ms, list_players) = match &o.list {
@@ -105,6 +105,8 @@ pub fn bots_tsv(outcomes: &[Outcome]) -> String {
         };
         let p: Vec<f64> = o.probes.iter().map(|d| ms(*d)).collect();
         let p50 = crate::stats::percentile(&p, 50.0).map_or("-".into(), |v| format!("{v:.1}"));
+        let w: Vec<f64> = o.warps.iter().map(|d| ms(*d)).collect();
+        let w50 = crate::stats::percentile(&w, 50.0).map_or("-".into(), |v| format!("{v:.1}"));
         let end = match &o.end {
             End::Clean => "clean".to_string(),
             End::NoLogin => "no login".to_string(),
@@ -112,10 +114,12 @@ pub fn bots_tsv(outcomes: &[Outcome]) -> String {
         };
         let _ = writeln!(
             s,
-            "{i}\t{}\t{list_ms}\t{list_players}\t{login_ms}\t{login_err}\t{p50}\t{}\t{}\t{}\t{}\t{:.1}\t{end}",
+            "{i}\t{}\t{list_ms}\t{list_players}\t{login_ms}\t{login_err}\t{p50}\t{}\t{}\t{w50}\t{}\t{}\t{}\t{}\t{:.1}\t{end}",
             o.version,
             o.probes.len(),
             o.probes_lost,
+            o.warps.len(),
+            o.warps_lost,
             o.sent_msgs,
             o.frames_in,
             o.online_for.as_secs_f64()
@@ -135,6 +139,8 @@ struct PerVersion {
     login_ms: Vec<f64>,
     probe_ms: Vec<f64>,
     probes_lost: u32,
+    warp_ms: Vec<f64>,
+    warps_lost: u32,
 }
 
 /// The Markdown report.
@@ -161,6 +167,11 @@ pub fn markdown(run: &Run) -> String {
         .flat_map(|x| x.probes.iter().map(|d| ms(*d)))
         .collect();
     let lost: u32 = o.iter().map(|x| x.probes_lost).sum();
+    let all_warp: Vec<f64> = o
+        .iter()
+        .flat_map(|x| x.warps.iter().map(|d| ms(*d)))
+        .collect();
+    let warps_lost: u32 = o.iter().map(|x| x.warps_lost).sum();
     let list_tries = o.iter().filter(|x| x.list.is_some()).count();
     let list_ok = o.iter().filter(|x| matches!(x.list, Some(Ok(_)))).count();
     let list_ms: Vec<f64> = o
@@ -193,6 +204,9 @@ pub fn markdown(run: &Run) -> String {
         fmt4(summary(&all_probe)),
         all_probe.len()
     );
+    if !all_warp.is_empty() || warps_lost > 0 {
+        let _ = writeln!(s, "- Level warp (link sent to the new level's name) ms p50/p95/p99/max: {} ({} done, {warps_lost} lost).", fmt4(summary(&all_warp)), all_warp.len());
+    }
     let _ = writeln!(s, "- Client to server: {sent} messages ({:.0}/s). Server to client: {frames} frames ({:.0}/s).", sent as f64 / secs, frames as f64 / secs);
 
     // List player counts against how many were online then.
@@ -211,7 +225,7 @@ pub fn markdown(run: &Run) -> String {
         );
     }
 
-    s.push_str("\n## By version\n\n| version | bots | list ok | login ok | dropped | login ms p50/p95/p99/max | probe ms p50/p95/p99/max | probes lost | first error |\n|---|---|---|---|---|---|---|---|---|\n");
+    s.push_str("\n## By version\n\n| version | bots | list ok | login ok | dropped | login ms p50/p95/p99/max | probe ms p50/p95/p99/max | probes lost | warp ms p50/p95/p99/max | warps lost | first error |\n|---|---|---|---|---|---|---|---|---|---|---|\n");
     let mut by: BTreeMap<&str, PerVersion> = BTreeMap::new();
     let mut order: Vec<&str> = Vec::new();
     for x in o {
@@ -237,6 +251,8 @@ pub fn markdown(run: &Run) -> String {
         }
         e.probe_ms.extend(x.probes.iter().map(|d| ms(*d)));
         e.probes_lost += x.probes_lost;
+        e.warp_ms.extend(x.warps.iter().map(|d| ms(*d)));
+        e.warps_lost += x.warps_lost;
     }
     for v in order {
         let e = &by[v];
@@ -255,13 +271,15 @@ pub fn markdown(run: &Run) -> String {
         };
         let _ = writeln!(
             s,
-            "| {v} | {} | {list} | {} | {} | {} | {} | {} | {first} |",
+            "| {v} | {} | {list} | {} | {} | {} | {} | {} | {} | {} | {first} |",
             e.bots,
             e.login_ok,
             e.dropped.len(),
             fmt4(summary(&e.login_ms)),
             fmt4(summary(&e.probe_ms)),
-            e.probes_lost
+            e.probes_lost,
+            fmt4(summary(&e.warp_ms)),
+            e.warps_lost
         );
     }
 
@@ -371,6 +389,8 @@ mod tests {
             },
             probes: vec![Duration::from_millis(2)],
             probes_lost: 0,
+            warps: vec![Duration::from_millis(9)],
+            warps_lost: 0,
             sent_msgs: 10,
             frames_in: 4,
             online_for: Duration::from_secs(1),

@@ -33,6 +33,9 @@ OPTIONS:
   --walk-ms MS         walk props every MS (default 100, as real 2.x)
   --chat-secs S        a chat line every S seconds (default 5)
   --probe-secs S       a file request (round-trip probe) every S seconds (default 2)
+  --warp-secs S        take a link to the next ring level every S seconds (default 3; 0 = off)
+  --levels N           levels in the warp ring written to the world (default 8; 0 = none,
+                       for a gserver before stage 2.2)
   --rc-every S         run seihai-rc servers and players list every S seconds (default 10; 0 = off)
   --max-players N      gserver max_players (default 2048)
   --list-max-connections N   listserver max_connections (default: its own default)
@@ -53,6 +56,8 @@ struct Opts {
     walk: Duration,
     chat: Duration,
     probe: Duration,
+    warp: Duration,
+    levels: usize,
     rc_every: u64,
     max_players: usize,
     list_max: Option<usize>,
@@ -85,6 +90,8 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
         walk: Duration::from_millis(100),
         chat: Duration::from_secs(5),
         probe: Duration::from_secs(2),
+        warp: Duration::from_secs(3),
+        levels: 8,
         rc_every: 10,
         max_players: 2048,
         list_max: None,
@@ -124,6 +131,8 @@ fn parse(args: &[String], compat: bool) -> Result<Opts, String> {
             "--walk-ms" => o.walk = Duration::from_millis(num(val()?)? as u64),
             "--chat-secs" => o.chat = Duration::from_secs_f64(num(val()?)?),
             "--probe-secs" => o.probe = Duration::from_secs_f64(num(val()?)?),
+            "--warp-secs" => o.warp = Duration::from_secs_f64(num(val()?)?),
+            "--levels" => o.levels = num(val()?)? as usize,
             "--rc-every" => o.rc_every = num(val()?)? as u64,
             "--max-players" => o.max_players = num(val()?)? as usize,
             "--list-max-connections" => o.list_max = Some(num(val()?)? as usize),
@@ -175,7 +184,7 @@ fn main() {
 }
 
 fn go(args: &[String], compat: bool) -> Result<(), String> {
-    let o = parse(args, compat)?;
+    let mut o = parse(args, compat)?;
     let mut bins = Bins::find(&o.bin_dirs)?;
     if !o.npc {
         bins.npcserver = None;
@@ -195,6 +204,10 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
     cfg.max_players = o.max_players;
     cfg.list_max_connections = o.list_max;
     cfg.verbose = o.verbose;
+    cfg.ring_levels = o.levels;
+    if o.levels == 0 {
+        o.warp = Duration::ZERO;
+    }
     suite_stress::check_loopback(&cfg.gserver_addr())?;
 
     eprintln!("starting the suite in {}", cfg.dir.display());
@@ -271,6 +284,12 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
                 walk_every: o.walk,
                 chat_every: o.chat,
                 probe_every: o.probe,
+                warp_every: o.warp,
+                warp_ring: if o.warp.is_zero() {
+                    Vec::new()
+                } else {
+                    suite_stress::lab::ring_names(o.levels)
+                },
             };
             let s = shared.clone();
             let h = std::thread::Builder::new()
@@ -357,9 +376,10 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
         ("stay".into(), format!("{:?}", o.stay)),
         ("ramp".into(), format!("{} bots/s", o.ramp)),
         (
-            "walk / chat / probe".into(),
-            format!("{:?} / {:?} / {:?}", o.walk, o.chat, o.probe),
+            "walk / chat / probe / warp".into(),
+            format!("{:?} / {:?} / {:?} / {:?}", o.walk, o.chat, o.probe, o.warp),
         ),
+        ("ring levels".into(), o.levels.to_string()),
         ("list fraction".into(), o.list_fraction.to_string()),
         (
             "suite".into(),

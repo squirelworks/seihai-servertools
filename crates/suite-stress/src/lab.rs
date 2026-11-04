@@ -51,6 +51,9 @@ pub struct LabConfig {
     pub server_name: String,
     /// `--verbose` on the gserver.
     pub verbose: bool,
+    /// Levels in the warp ring written to `levels/` (see [`ring_names`]).
+    /// 0 writes no levels at all, as for a stage-1 gserver.
+    pub ring_levels: usize,
 }
 
 impl LabConfig {
@@ -68,6 +71,7 @@ impl LabConfig {
             list_max_connections: None,
             server_name: "Seihai Stress".into(),
             verbose: false,
+            ring_levels: 8,
         }
     }
 
@@ -86,6 +90,43 @@ impl LabConfig {
     pub fn logs(&self) -> PathBuf {
         self.dir.join("logs")
     }
+}
+
+/// The start level every bot logs in to.
+pub const START_LEVEL: &str = "onlinestartlocal.nw";
+
+/// The warp ring's level names: the start level, then `stress_w1.nw`…
+pub fn ring_names(n: usize) -> Vec<String> {
+    (0..n)
+        .map(|i| {
+            if i == 0 {
+                START_LEVEL.to_string()
+            } else {
+                format!("stress_w{i}.nw")
+            }
+        })
+        .collect()
+}
+
+/// A full 64x64 `.nw` level for ring slot `i` of `n`: every row of the
+/// board (so a warp moves a real board, about 8 KB), a link on the top
+/// edge to the next level, and a sign.
+pub fn ring_level(i: usize, n: usize) -> String {
+    const B64: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let names = ring_names(n);
+    let mut s = String::from("GLEVNW01\n");
+    for y in 0..64 {
+        s.push_str(&format!("BOARD 0 {y} 64 0 "));
+        for x in 0..64usize {
+            // Two base64 digits a tile; vary them so boards differ.
+            s.push(B64[(i + y / 8) % 64] as char);
+            s.push(B64[(x + y) % 64] as char);
+        }
+        s.push('\n');
+    }
+    s.push_str(&format!("LINK {} 30 0 4 1 30 60\n", names[(i + 1) % n]));
+    s.push_str(&format!("SIGN 20 21\nRing level {i} of {n}.\nSIGNEND\n"));
+    s
 }
 
 /// The gserver's `config/server.txt` for this lab.
@@ -204,6 +245,16 @@ impl Lab {
         fs::write(world.join("config/server.txt"), gserver_config(&cfg, bins))
             .map_err(|e| e.to_string())?;
         fs::write(world.join("config/allowedversions.txt"), "*\n").map_err(|e| e.to_string())?;
+        if cfg.ring_levels > 0 {
+            fs::create_dir_all(world.join("levels")).map_err(|e| e.to_string())?;
+            for (i, name) in ring_names(cfg.ring_levels).iter().enumerate() {
+                fs::write(
+                    world.join("levels").join(name),
+                    ring_level(i, cfg.ring_levels),
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
         let mut cmd = Command::new(&bins.gserver);
         cmd.arg("--world").arg(&world);
         if cfg.verbose {
@@ -303,6 +354,22 @@ pub fn scan_log(path: &Path, max_examples: usize) -> (usize, Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ring_levels_parse_and_link_round() {
+        let names = ring_names(3);
+        assert_eq!(
+            names,
+            ["onlinestartlocal.nw", "stress_w1.nw", "stress_w2.nw"]
+        );
+        for i in 0..3 {
+            let text = ring_level(i, 3);
+            let lv = seihai_core::assets::Level::parse(&text).unwrap();
+            assert_eq!(lv.tile_ids().len(), 64 * 64);
+            assert!(text.contains(&format!("LINK {} ", names[(i + 1) % 3])));
+        }
+        assert_ne!(ring_level(0, 3), ring_level(1, 3));
+    }
 
     #[test]
     fn configs_stay_on_loopback() {

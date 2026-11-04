@@ -22,7 +22,13 @@ What one run does:
    - walks (walk props every `--walk-ms`, 100 ms like a real 2.x), chats
      every `--chat-secs`, and every `--probe-secs` sends a `WANTFILE` for a
      missing file and times the answer (the round-trip probe);
+   - takes a link to the next level of a warp ring every `--warp-secs`
+     (the lab world gets `--levels` full 64×64 levels, the start level
+     first, each linking to the next) and times link → new level name;
    - only sends messages its build can send (`Connection::can_send`).
+
+   `--levels 0` writes no levels and turns warps off, for a gserver before
+   stage 2.2.
 4. Every `--rc-every` seconds runs the real `seihai-rc`: `servers` against
    the listserver and `players list` against the gserver.
 5. Once a second samples each server process from `/proc` (RSS, CPU time,

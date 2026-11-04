@@ -6,13 +6,16 @@
 //! ([`seihai_core::net::Connection::can_send`]); nothing is padded or
 //! invented.
 
-use seihai_core::net::{login_gserver, random_key, walk_message_for, wantfile_message, Connection};
+use seihai_core::net::{
+    levelwarp_message, login_gserver, random_key, walk_message_for, wantfile_message, Connection,
+};
 use seihai_core::protocol::{ClientVersion, SessionState};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
+const PLI_LEVELWARP: u8 = 0;
 const PLI_PLAYERPROPS: u8 = 2;
 const PLI_WANTFILE: u8 = 23;
 const PLO_FILESENDFAILED: u8 = 30;
@@ -47,6 +50,12 @@ pub struct Plan {
     pub walk_every: Duration,
     pub chat_every: Duration,
     pub probe_every: Duration,
+    /// Take a link to the next level in `warp_ring` this often. Off when
+    /// the ring is empty.
+    pub warp_every: Duration,
+    /// Level names to warp around, in order; the bot starts at its own
+    /// index in the ring.
+    pub warp_ring: Vec<String>,
 }
 
 /// How a bot's session ended.
@@ -73,6 +82,10 @@ pub struct Outcome {
     pub probes: Vec<Duration>,
     /// File requests with no answer within 10 s.
     pub probes_lost: u32,
+    /// Link sent → the new level's name back.
+    pub warps: Vec<Duration>,
+    /// Links with no level name back within 10 s.
+    pub warps_lost: u32,
     pub sent_msgs: u64,
     pub frames_in: u64,
     pub online_for: Duration,
@@ -133,6 +146,8 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
         login: Err("not tried".into()),
         probes: Vec::new(),
         probes_lost: 0,
+        warps: Vec::new(),
+        warps_lost: 0,
         sent_msgs: 0,
         frames_in: 0,
         online_for: Duration::ZERO,
@@ -195,6 +210,10 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
     let mut next_chat = Instant::now() + plan.chat_every + jitter;
     let mut next_probe = Instant::now() + jitter;
     let mut pending: Option<(String, Instant)> = None;
+    let warps = conn.can_send(PLI_LEVELWARP) && !plan.warp_ring.is_empty();
+    let mut next_warp = Instant::now() + plan.warp_every + jitter;
+    let mut ring_at = plan.index;
+    let mut warping: Option<(String, Instant)> = None;
     let mut probe_n = 0u32;
     let mut step = 0u32;
     let (x0, y0) = (30.0f32, 30.5f32);
@@ -215,6 +234,12 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
         if let Some((_, at)) = &pending {
             wake = wake.min(*at + Duration::from_secs(10));
         }
+        if warps {
+            wake = wake.min(next_warp);
+        }
+        if let Some((_, at)) = &warping {
+            wake = wake.min(*at + Duration::from_secs(10));
+        }
         match rx.recv_timeout(wake.saturating_duration_since(now)) {
             Ok(Ok(body)) => {
                 out.frames_in += 1;
@@ -231,6 +256,12 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
                     }
                 }
                 st.file_requests.clear();
+                if let Some((name, at)) = &warping {
+                    if st.current_level_name().as_deref() == Some(name.as_str()) {
+                        out.warps.push(at.elapsed());
+                        warping = None;
+                    }
+                }
                 continue;
             }
             Ok(Err(e)) => break End::Dropped(format!("connection: {e}")),
@@ -242,6 +273,12 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
             if now >= *at + Duration::from_secs(10) {
                 out.probes_lost += 1;
                 pending = None;
+            }
+        }
+        if let Some((_, at)) = &warping {
+            if now >= *at + Duration::from_secs(10) {
+                out.warps_lost += 1;
+                warping = None;
             }
         }
         let r = (|| -> Result<(), String> {
@@ -267,6 +304,13 @@ pub fn run(plan: Plan, shared: &Shared) -> Outcome {
                 next_probe = now + plan.probe_every;
             } else if now >= next_probe {
                 next_probe = now + plan.probe_every;
+            }
+            if warps && warping.is_none() && now >= next_warp {
+                ring_at = (ring_at + 1) % plan.warp_ring.len();
+                let to = plan.warp_ring[ring_at].clone();
+                send(conn, levelwarp_message(30.0, 30.0, &to), &mut out)?;
+                warping = Some((to, Instant::now()));
+                next_warp = now + plan.warp_every;
             }
             Ok(())
         })();
