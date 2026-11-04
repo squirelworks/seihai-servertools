@@ -1861,7 +1861,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 name = "lat-core"
 version = "0.0.1"
 dependencies = [
- "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=72bb8d29a977e7185bb7499bd36b732751ea0c6e)",
+ "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=51957441b9adc55ce75362fa2cb70acb9d05cde2)",
  "seihai-draw",
  "seihai-rc",
  "tempfile",
@@ -2855,7 +2855,7 @@ dependencies = [
 [[package]]
 name = "seihai-core"
 version = "0.0.3"
-source = "git+https://github.com/squirelworks/seihai?rev=72bb8d29a977e7185bb7499bd36b732751ea0c6e#72bb8d29a977e7185bb7499bd36b732751ea0c6e"
+source = "git+https://github.com/squirelworks/seihai?rev=51957441b9adc55ce75362fa2cb70acb9d05cde2#51957441b9adc55ce75362fa2cb70acb9d05cde2"
 dependencies = [
  "base64",
  "bzip2",
@@ -2871,9 +2871,9 @@ dependencies = [
 [[package]]
 name = "seihai-draw"
 version = "0.0.3"
-source = "git+https://github.com/squirelworks/seihai?rev=72bb8d29a977e7185bb7499bd36b732751ea0c6e#72bb8d29a977e7185bb7499bd36b732751ea0c6e"
+source = "git+https://github.com/squirelworks/seihai?rev=51957441b9adc55ce75362fa2cb70acb9d05cde2#51957441b9adc55ce75362fa2cb70acb9d05cde2"
 dependencies = [
- "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=72bb8d29a977e7185bb7499bd36b732751ea0c6e)",
+ "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=51957441b9adc55ce75362fa2cb70acb9d05cde2)",
 ]
 
 [[package]]
@@ -3172,7 +3172,7 @@ name = "suite-stress"
 version = "0.0.1"
 dependencies = [
  "ctrlc",
- "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=72bb8d29a977e7185bb7499bd36b732751ea0c6e)",
+ "seihai-core 0.0.3 (git+https://github.com/squirelworks/seihai?rev=51957441b9adc55ce75362fa2cb70acb9d05cde2)",
  "tempfile",
 ]
 
