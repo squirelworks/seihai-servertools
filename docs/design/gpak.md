@@ -8,20 +8,23 @@ every entry encrypted; the client reads it only after the server has sent
 that package's key.
 
 `lat_core::gpak` builds and reads both; `seihai-servertools gpak` is the
-command line. seihai-gserver serves the result.
+command line. `seihai-gserver-v2` serves the result (its `gpaks` server
+option and `config/gpakkeys.txt`).
 
-## Build one for a seihai-gserver world
+## Build one for a gserver folder
 
 ```
-seihai-servertools gpak pack art/ art.gpake --world path/to/world
+seihai-servertools gpak pack art/ art.gpake --server path/to/servers/default
 ```
 
-writes `world/files/gpaks/art.gpake` and adds `art.gpake <KEY>` to
-`world/config/gpakkeys.txt` (a random key unless `--key HEX16` is given).
-The gserver sends the key before the package. Keep `gpakkeys.txt` out of
-`files/`: everything under `files/` can be downloaded.
+writes `servers/default/world/gpaks/art.gpake` and adds `art.gpake <KEY>`
+to `servers/default/config/gpakkeys.txt` (a random key unless `--key
+HEX16` is given). Then set `gpaks = art.gpake` in `serveroptions.txt` to
+send it at login; the gserver sends the key first. Keep `gpakkeys.txt` out
+of `world/`: everything there can be downloaded.
 
-`gpak unpack art.gpake out/ --world path/to/world` gets the files back.
+`gpak unpack art.gpake out/ --server path/to/servers/default` gets the
+files back.
 
 ## Which name to use
 
@@ -33,6 +36,15 @@ The gserver sends the key before the package. Keep `gpakkeys.txt` out of
 | before 4.x | no packages | no packages | no packages |
 
 So use `.gpake` when 4.20 players matter. 5.x was not run yet.
+
+## Lab runs
+
+2026-11-06, `seihai-gserver-v2` with the `gpaks` option, Wine, loopback
+only. Real 4.20r8: a `.gpake` built with `gpak pack` was sent at login, key
+first, and its image drawn; with a wrong key in `gpakkeys.txt` it was not
+drawn; with no key the gserver refused to send it; a plain `.gpak` was not
+sent to it. Real 6.03r7 received the key and then the package and saved it
+to `levels/gpaks/`.
 
 ## Format (from the real-client lab runs, 2026-11-06)
 

@@ -503,10 +503,10 @@ fn hq_password_is_written_from_the_environment() {
     assert!(a.contains("hq_password = gs-hq-pw\nhq_level = 1\n"), "{a}");
 }
 
-/// `gpak pack --world` puts a `.gpake` under `files/gpaks/` and its key in
-/// `config/gpakkeys.txt`; `gpak unpack --world` gets the files back.
+/// `gpak pack --server` puts a `.gpake` under `world/gpaks/` and its key in
+/// `config/gpakkeys.txt`; `gpak unpack --server` gets the files back.
 #[test]
-fn gpak_pack_and_unpack_through_a_world() {
+fn gpak_pack_and_unpack_through_a_server_folder() {
     let src = tempfile::tempdir().unwrap();
     fs::create_dir_all(src.path().join("tiles")).unwrap();
     fs::write(src.path().join("tiles/Tile.png"), vec![7u8; 100]).unwrap();
@@ -515,7 +515,7 @@ fn gpak_pack_and_unpack_through_a_world() {
     let out = bin()
         .args(["gpak", "pack"])
         .arg(src.path())
-        .args(["art.gpake", "--world"])
+        .args(["art.gpake", "--server"])
         .arg(world.path())
         .output()
         .unwrap();
@@ -524,7 +524,7 @@ fn gpak_pack_and_unpack_through_a_world() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let pkg = world.path().join("files/gpaks/art.gpake");
+    let pkg = world.path().join("world/gpaks/art.gpake");
     assert!(pkg.is_file());
     let keys = fs::read_to_string(world.path().join("config/gpakkeys.txt")).unwrap();
     assert!(keys.lines().any(|l| l.starts_with("art.gpake ")), "{keys}");
@@ -533,7 +533,7 @@ fn gpak_pack_and_unpack_through_a_world() {
         .args(["gpak", "unpack"])
         .arg(&pkg)
         .arg(back.path())
-        .arg("--world")
+        .arg("--server")
         .arg(world.path())
         .output()
         .unwrap();

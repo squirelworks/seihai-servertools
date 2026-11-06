@@ -20,8 +20,8 @@ Usage:
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
-  seihai-servertools gpak pack FOLDER OUT [--world DIR] [--key HEX16] [--keys FILE]
-  seihai-servertools gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --world DIR]
+  seihai-servertools gpak pack FOLDER OUT [--server DIR] [--key HEX16] [--keys FILE]
+  seihai-servertools gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --server DIR]
                                     resource packages (.gpak, .gpake) for 4.20 and 6.x
                                     clients (`gpak --help`)
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|check]

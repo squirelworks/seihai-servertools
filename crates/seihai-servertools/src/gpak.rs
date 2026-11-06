@@ -6,14 +6,15 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub const USAGE: &str = "\
-gpak pack FOLDER OUT [--world DIR] [--key HEX16] [--keys FILE]
+gpak pack FOLDER OUT [--server DIR] [--key HEX16] [--keys FILE]
     Packs every file under FOLDER. OUT ends in .gpake (encrypted), .gpak
     (plain) or .zip (plain, for 4.20, which loads .zip but not .gpak).
-    --world DIR: a seihai-gserver world; OUT is written to DIR/files/gpaks/
-    and a .gpake's key to DIR/config/gpakkeys.txt, where the gserver finds
-    both. Without --world, a .gpake's key goes to --keys FILE if given and
+    --server DIR: a gserver folder (servers/<name>); OUT is written to
+    DIR/world/gpaks/ and a .gpake's key to DIR/config/gpakkeys.txt, where
+    the gserver finds both. Name OUT in the gserver's gpaks option
+    to send it at login. Without --server, a .gpake's key goes to --keys FILE if given and
     is printed. Without --key a .gpake gets a random key.
-gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --world DIR]
+gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --server DIR]
     Writes the files in PACKAGE to DIR, decrypting a .gpake.";
 
 fn fail(msg: impl std::fmt::Display) -> ExitCode {
@@ -28,7 +29,7 @@ fn usage() -> ExitCode {
 
 struct Opts {
     plain: Vec<String>,
-    world: Option<PathBuf>,
+    server: Option<PathBuf>,
     key: Option<Key>,
     keys: Option<PathBuf>,
 }
@@ -36,7 +37,7 @@ struct Opts {
 fn parse(args: &[&str]) -> Result<Opts, String> {
     let mut o = Opts {
         plain: Vec::new(),
-        world: None,
+        server: None,
         key: None,
         keys: None,
     };
@@ -44,7 +45,7 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
     while let Some(&a) = it.next() {
         let mut value = || it.next().copied().ok_or(format!("{a} needs a value"));
         match a {
-            "--world" => o.world = Some(value()?.into()),
+            "--server" => o.server = Some(value()?.into()),
             "--keys" => o.keys = Some(value()?.into()),
             "--key" => {
                 let v = value()?;
@@ -88,12 +89,12 @@ fn pack(folder: &Path, out: &str, o: &Opts) -> ExitCode {
     if !encrypted && (o.key.is_some() || o.keys.is_some()) {
         return fail("only a .gpake takes a key");
     }
-    let (path, keys) = match &o.world {
+    let (path, keys) = match &o.server {
         Some(w) => {
             if Path::new(out).components().count() != 1 {
-                return fail("with --world, OUT is a file name, not a path");
+                return fail("with --server, OUT is a file name, not a path");
             }
-            (gpak::world_package_path(w, out), Some(gpak::keys_path(w)))
+            (gpak::server_package_path(w, out), Some(gpak::keys_path(w)))
         }
         None => (PathBuf::from(out), o.keys.clone()),
     };
@@ -145,7 +146,7 @@ fn unpack(package: &Path, dir: &Path, o: &Opts) -> ExitCode {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let key = if gpak::is_encrypted(&name) {
-        let keys = o.keys.clone().or(o.world.as_deref().map(gpak::keys_path));
+        let keys = o.keys.clone().or(o.server.as_deref().map(gpak::keys_path));
         let k = o.key.or_else(|| {
             let text = std::fs::read_to_string(keys?).ok()?;
             gpak::key_in(&text, &name)
@@ -154,7 +155,7 @@ fn unpack(package: &Path, dir: &Path, o: &Opts) -> ExitCode {
             Some(k) => Some(k),
             None => {
                 return fail(format!(
-                    "{name} is encrypted: give --key, --keys or --world"
+                    "{name} is encrypted: give --key, --keys or --server"
                 ))
             }
         }

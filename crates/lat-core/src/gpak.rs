@@ -29,8 +29,8 @@
 //! without ever loading it. 4.04r2 loads no packages. Clients before 4.x
 //! have no packages at all.
 //!
-//! Keys live in the gserver world's `config/gpakkeys.txt` (never under
-//! `files/`, which is served): one `name.gpake HEX16` line per package, the
+//! Keys live in the gserver folder's `config/gpakkeys.txt` (never in the
+//! `world/` folder, which is served): one `name.gpake HEX16` line per package, the
 //! hex being the key as `PLO 104` sends it. [`set_key`] edits that file line
 //! by line.
 
@@ -297,20 +297,21 @@ pub fn plo104(name: &str, key: &Key) -> Vec<u8> {
     out
 }
 
-/// Where a seihai-gserver world keeps its packages: `files/gpaks/`. The
-/// gserver serves every file under `files/` by name, and pushes the
-/// packages it finds there to the clients that load them.
-pub fn world_package_path(world: &Path, name: &str) -> PathBuf {
-    world.join("files").join("gpaks").join(name)
+/// Where a gserver folder (`seihai-gserver-v2`'s `servers/<name>/`) keeps
+/// its packages: `world/gpaks/`. The default `foldersconfig.txt` serves
+/// `gpaks/*.gpak` and `gpaks/*.gpake` from there.
+pub fn server_package_path(server: &Path, name: &str) -> PathBuf {
+    server.join("world").join("gpaks").join(name)
 }
 
-/// The gserver world's key file.
-pub fn keys_path(world: &Path) -> PathBuf {
-    world.join("config").join("gpakkeys.txt")
+/// A gserver folder's key file: `config/gpakkeys.txt`, which the server
+/// reads but never serves.
+pub fn keys_path(server: &Path) -> PathBuf {
+    server.join("config").join("gpakkeys.txt")
 }
 
 const KEYS_HEADER: &str = "\
-# Keys for the encrypted packages (.gpake) in files/. One line each:
+# Keys for the encrypted packages (.gpake) in world/gpaks/. One line each:
 #   name.gpake KEY
 # KEY is 16 hex digits, the key the gserver sends in PLO 104 before the
 # package. Keep this file private: anyone with a key can unpack its package.
