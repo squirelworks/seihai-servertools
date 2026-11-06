@@ -2,6 +2,7 @@
 //! `setup-core` / `lat-core`, prints, and sets the exit code. It is the only
 //! place that prints or reads the environment (see docs/ARCHITECTURE.md).
 
+mod gpak;
 mod lab;
 mod setup;
 
@@ -19,6 +20,10 @@ Usage:
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
+  seihai-servertools gpak pack FOLDER OUT [--server DIR] [--key HEX16] [--keys FILE]
+  seihai-servertools gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --server DIR]
+                                    resource packages (.gpak, .gpake) for 4.20 and 6.x
+                                    clients (`gpak --help`)
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|check]
                                     open the window
   seihai-servertools --version | --help
@@ -55,6 +60,11 @@ fn main() -> ExitCode {
         ["check", world] => check(Path::new(world), false),
         ["check", "--json", world] | ["check", world, "--json"] => check(Path::new(world), true),
         ["setup", rest @ ..] => setup::run(rest),
+        ["gpak", "--help" | "-h"] => {
+            println!("{}", gpak::USAGE);
+            ExitCode::SUCCESS
+        }
+        ["gpak", rest @ ..] => gpak::run(rest),
         ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");

@@ -11,6 +11,7 @@
 //! | [`diff`] | The line diff the editors show before an upload, and when the server's copy changed | working |
 //! | [`level`] | Open a level, change a tile, write `GLEVNW01` text, paint with `seihai-draw` | editing |
 //! | [`gani`] | Open a gani, change a sprite frame, write it back, paint one frame | editing |
+//! | [`gpak`] | Resource packages: build a `.gpak` or encrypted `.gpake`, keep the gserver's key file | working |
 //! | [`preview`] | The RGBA buffers those editors hand the window | working |
 //! | [`npc`] | NPC scripts: the GS1 check of level NPCs, used by [`check`] and the NPC editor page; NPC-server objects are planned | level NPCs working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts |
@@ -22,6 +23,7 @@
 pub mod check;
 pub mod diff;
 pub mod gani;
+pub mod gpak;
 pub mod level;
 pub mod npc;
 pub mod preview;

@@ -36,6 +36,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | LAT level editor: open, change a tile, preview, upload | `seihai-servertools gui --page levels` | working ([design](docs/design/lat-tools.md)) |
 | Gani editor: open, change a sprite frame, preview, upload | `seihai-servertools gui --page ganis` | working ([design](docs/design/lat-tools.md)) |
 | NPC editor: level NPC scripts with the GS1 check, upload | `seihai-servertools gui --page npcs` | level NPCs working; NPC-server objects planned ([design](docs/design/lat-tools.md)) |
+| Resource packages: build a `.gpak` / encrypted `.gpake` for a gserver folder ([notes](docs/design/gpak.md)) | `seihai-servertools gpak pack\|unpack` | working |
 | World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts |
 | The window | `seihai-servertools gui` | pages laid out |
 
