@@ -103,8 +103,8 @@ pub fn des_key(key: &Key) -> Key {
 fn crypt(data: &[u8], key: &Key, encrypt: bool) -> Vec<u8> {
     let cipher = des::Des::new(GenericArray::from_slice(&des_key(key)));
     let mut out = data.to_vec();
-    let full = out.len() & !7;
-    for block in out[..full].chunks_exact_mut(8) {
+    // Whole 8-byte blocks only; a shorter tail stays as it is.
+    for block in out.as_chunks_mut::<8>().0 {
         let b = GenericArray::from_mut_slice(block);
         if encrypt {
             cipher.encrypt_block(b);
