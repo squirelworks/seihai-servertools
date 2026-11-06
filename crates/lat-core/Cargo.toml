@@ -18,6 +18,10 @@ seihai-core.workspace = true
 seihai-draw.workspace = true
 # Live file link. The editor does not speak RC itself.
 seihai-rc.workspace = true
+# .gpak/.gpake packages (gpak.rs).
+zip.workspace = true
+des.workspace = true
+getrandom.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

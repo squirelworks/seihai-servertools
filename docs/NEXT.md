@@ -36,6 +36,15 @@ session that built the setup did not do them:
 - [ ] The 1000-player mixed-version run, once the suite parts are further
       along (Squirrel, 2026-11-04: a later side project).
 
+## Resource packages (`lat-core::gpak`, `docs/design/gpak.md`)
+
+- [x] `gpak pack|unpack`: plain `.gpak`/`.zip` and encrypted `.gpake` with
+      the client's bit-reversed DES; the key goes into a seihai-gserver
+      world's `config/gpakkeys.txt`.
+- [ ] A Packages page in the window (same calls as the command line).
+- [ ] `check`: warn about a `.gpake` in `files/` with no key, and a plain
+      `.gpak` when 4.20 clients are allowed.
+
 ## Done
 
 - [x] Scaffold: workspace, licences, `AGENTS.md`, docs, CI, release workflow.

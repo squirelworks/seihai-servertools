@@ -40,6 +40,11 @@ toml_edit = "0.22"
 # This machine's addresses for the "Listen on" lists (MIT OR BSD-3-Clause).
 if-addrs = "0.15"
 tempfile = "3"
+# Resource packages (.gpak/.gpake, lat-core::gpak): the ZIP container, the
+# DES the encrypted entries use, and a random key. All MIT or MIT/Apache.
+zip = { version = "9", default-features = false, features = ["deflate"] }
+des = "0.8"
+getrandom = "0.2"
 
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }
