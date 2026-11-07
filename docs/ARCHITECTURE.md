@@ -112,6 +112,7 @@ servers.
 | `preview` | RGBA buffer, stand-in tile colours and a stand-in sprite picture | working |
 | `npc` | Level NPCs and NPC-server NPCs | contract only |
 | `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds | working |
+| `code_cache` | `GWEBL001` level caches and `GRESCR01` script caches (`code show`) | working |
 
 Every editor reads and writes through `RemoteFiles`, so the same editor works
 on a local folder and on a live server (`RcFiles`). The directory reply is
@@ -128,7 +129,7 @@ a page never parses a file itself.
 
 ## Command line
 
-`src/main.rs` dispatches; `src/lab.rs` is `lab start|plan`; `src/setup.rs` is
+`src/main.rs` dispatches; `src/code.rs` is `code show|crc|dump|pack`; `src/lab.rs` is `lab start|plan`; `src/setup.rs` is
 the setup wizard as prompts (`status`, `public`, `lab`, `undo`). Prompts go
 through a small `Io` (input, output, `--yes`) so tests drive the wizard by
 piping answers to the binary (`tests/cli.rs`). The parser is hand-written in `crates/seihai-servertools/src/main.rs`, like the other

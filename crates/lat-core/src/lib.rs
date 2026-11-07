@@ -12,6 +12,7 @@
 //! | [`level`] | Open a level, change a tile, write `GLEVNW01` text, paint with `seihai-draw` | editing |
 //! | [`gani`] | Open a gani, change a sprite frame, write it back, paint one frame | editing |
 //! | [`gpak`] | Resource packages: build a `.gpak` or encrypted `.gpake`, keep the gserver's key file | working |
+//! | [`code_cache`] | `GWEBL001` level caches and `GRESCR01` script caches | working |
 //! | [`preview`] | The RGBA buffers those editors hand the window | working |
 //! | [`npc`] | NPC scripts: the GS1 check of level NPCs, used by [`check`] and the NPC editor page; NPC-server objects are planned | level NPCs working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts |
@@ -21,6 +22,7 @@
 //! gani parser, and do not copy the drawing (`docs/ARCHITECTURE.md`).
 
 pub mod check;
+pub mod code_cache;
 pub mod diff;
 pub mod gani;
 pub mod gpak;
