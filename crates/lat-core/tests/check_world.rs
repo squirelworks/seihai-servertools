@@ -5,6 +5,57 @@ use std::fs;
 use lat_core::check::{check_world, Severity};
 
 #[test]
+fn gani_reach_uses_profile_support_even_with_gif_art_or_symbolic_sheets() {
+    use seihai_core::protocol::ClientVersion;
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("levels/ganis")).unwrap();
+    let literal = "SPRITE 0 custom.png 0 0 16 16\nDEFAULTHEAD head.gif\nSINGLEDIRECTION\nANI\n0 0 0\nANIEND\n";
+    let symbolic = "SPRITE 0 BODY 0 0 16 16\nSPRITE 1 HEAD 0 0 16 16\nSINGLEDIRECTION\nANI\n0 0 0,1 0 0\nANIEND\n";
+    fs::write(w.join("levels/ganis/custom.gani"), literal).unwrap();
+    fs::write(w.join("levels/ganis/idle.GANI"), symbolic).unwrap();
+    fs::write(w.join("custom.png"), b"png").unwrap();
+    fs::write(w.join("custom.gif"), b"gif").unwrap();
+    fs::write(w.join("head.gif"), b"gif").unwrap();
+    fs::write(w.join("notes.txt"), literal).unwrap();
+    let findings = lat_core::check::check_image_reach(w);
+    assert_eq!(findings.len(), 2, "{findings:?}");
+    for f in &findings {
+        assert_eq!(f.severity, Severity::Warn);
+        assert!(f.file.to_ascii_lowercase().ends_with(".gani"));
+        assert!(f.text.contains("if it is used"));
+        assert!(f.text.contains("no nearest built-in animation is inferred"));
+        let labels = f
+            .text
+            .split('[')
+            .nth(1)
+            .unwrap()
+            .split(']')
+            .next()
+            .unwrap()
+            .split(", ")
+            .collect::<Vec<_>>();
+        assert!(!ClientVersion::V139.profile().ui.ganis);
+        assert!(ClientVersion::V141.profile().ui.ganis);
+        assert!(labels.contains(&ClientVersion::V139.label()));
+        assert!(!labels.contains(&ClientVersion::V141.label()));
+        assert!(!labels.contains(&ClientVersion::V205.label()));
+    }
+    // No literal BODY/HEAD lookup, conversion or mutation is introduced.
+    assert_eq!(
+        fs::read_to_string(w.join("levels/ganis/custom.gani")).unwrap(),
+        literal
+    );
+    assert_eq!(
+        fs::read_to_string(w.join("levels/ganis/idle.GANI")).unwrap(),
+        symbolic
+    );
+    assert!(!w.join("BODY.gif").exists());
+    let ordinary = check_world(w);
+    assert!(ordinary.findings.is_empty(), "{:?}", ordinary.findings);
+}
+
+#[test]
 fn image_reach_checks_references_and_gif_counterparts_without_writing() {
     let dir = tempfile::tempdir().unwrap();
     let w = dir.path();

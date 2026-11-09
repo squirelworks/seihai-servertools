@@ -172,6 +172,40 @@ fn client_reach_is_optional_and_included_in_json() {
 }
 
 #[test]
+fn client_reach_reports_gani_fallback_in_text_and_json_only_when_requested() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = "SPRITE 0 BODY 0 0 16 16\nSINGLEDIRECTION\nANI\n0 0 0\nANIEND\n";
+    fs::write(dir.path().join("idle.gani"), source).unwrap();
+    let normal = bin().arg("check").arg(dir.path()).output().unwrap();
+    assert!(normal.status.success());
+    assert!(!String::from_utf8_lossy(&normal.stdout).contains("fallback review"));
+    for json in [false, true] {
+        let mut cmd = bin();
+        cmd.args(["check", "--client-reach"]).arg(dir.path());
+        if json {
+            cmd.arg("--json");
+        }
+        let out = cmd.output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "{text}");
+        assert!(text.contains("idle.gani"), "{text}");
+        assert!(
+            text.contains("server animation fallback review if it is used"),
+            "{text}"
+        );
+        if json {
+            assert_eq!(text.lines().count(), 1);
+            assert!(text.contains("\"ganis\":1"), "{text}");
+            assert!(text.contains("\"warnings\":1"), "{text}");
+        }
+    }
+    assert_eq!(
+        fs::read_to_string(dir.path().join("idle.gani")).unwrap(),
+        source
+    );
+}
+
+#[test]
 fn check_json_reports_both_kinds_of_findings() {
     let w = lab_world();
     fs::write(w.path().join("bad.nw"), "nope").unwrap();
