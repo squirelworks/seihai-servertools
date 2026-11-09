@@ -766,3 +766,60 @@ fn code_cache_round_trip_on_the_command_line() {
     assert!(shown.contains("signature: 73"), "{shown}");
     assert!(shown.contains("body_bytes: 5"), "{shown}");
 }
+
+#[test]
+fn code_crc_selects_an_explicit_domain_on_known_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("synthetic.code");
+    let mut file = b"GRESCR01".to_vec();
+    file.extend([
+        0x85, 0xE8, 0x13, 0x54, 0x0F, 0x0A, 0xB4, 0x05, b'x', b'y', b'z',
+    ]);
+    fs::write(&path, &file).unwrap();
+    for args in [
+        vec![],
+        vec!["--domain", "plain"],
+        vec!["--domain", "stored"],
+    ] {
+        let stored = args.contains(&"stored");
+        let out = bin()
+            .args(["code", "crc"])
+            .arg(&path)
+            .args(args)
+            .args(if stored {
+                vec![]
+            } else {
+                vec!["--key", "C82CEA9ED93DFB8F"]
+            })
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).trim(),
+            if stored { "2627766304" } else { "2773182824" }
+        );
+    }
+    let shown = bin()
+        .args(["code", "show"])
+        .arg(&path)
+        .args(["--key", "C82CEA9ED93DFB8F"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&shown.stdout);
+    assert!(shown.status.success());
+    assert!(text.contains("crc32: 2773182824\n"));
+    assert!(text.contains("stored_crc32: 2627766304\n"));
+    for args in [
+        vec!["crc"],
+        vec!["crc", "--domain", "unknown"],
+        vec!["show", "--domain", "stored"],
+    ] {
+        let out = bin().arg("code").args(args).arg(&path).output().unwrap();
+        assert!(!out.status.success());
+    }
+    assert_eq!(fs::read(path).unwrap(), file);
+}

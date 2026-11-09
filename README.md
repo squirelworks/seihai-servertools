@@ -53,6 +53,23 @@ gmaps and tiles are not covered by this first slice of issue #38.
 
 ## Start a lab world
 
+### Inspect client cache CRCs
+
+```sh
+seihai-servertools code show synthetic.code --key C82CEA9ED93DFB8F
+seihai-servertools code crc synthetic.code --domain plain --key C82CEA9ED93DFB8F
+seihai-servertools code crc synthetic.code --domain stored
+```
+
+The default CRC domain stays `plain` for compatibility. `stored` needs no
+key and covers on-disk bytes after the `GRESCR01` magic, before transformation.
+`show` labels both CRCs. The inspected Windows 6.03 **weapon** caller compares
+the stored-body CRC; other builds and class callers are not established by
+that finding. Neither CRC calculation nor decrypted output proves accepted
+cache status, a valid GS2 container or script execution. See the
+[format and acceptance audit](docs/design/code-caches.md) for scope and open
+real-client evidence. Commands operate on local files only.
+
 A lab world is an unpacked `seihai-gserver-v2` release: `gs2emu` and a
 `servers/` folder with `default` (port 14802) and `classic` (port 14803), both
 on `127.0.0.1`. Put `seihai-listserver` and `seihai-servertools` in the same
