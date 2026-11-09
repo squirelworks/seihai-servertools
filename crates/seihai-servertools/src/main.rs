@@ -17,7 +17,7 @@ Usage:
   seihai-servertools lab start [--world DIR] [--listserver PATH | --no-listserver]
                                [--gserver PATH] [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
-  seihai-servertools check [--json] WORLD
+  seihai-servertools check [--json] [--client-reach] WORLD
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
@@ -43,7 +43,9 @@ to save is an error. Exit code 1 on errors (a missing image or sound is a
 warning). --json prints one JSON object instead, for CI: format (1), the
 counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
 (error, warning, note), source (world or settings), file, key (or null) and
-text.";
+text. --client-reach also inventories level NPC image references (including
+fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
+It does not convert art or certify script, gani, tile or gmap compatibility.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -59,8 +61,7 @@ fn main() -> ExitCode {
         }
         ["lab", "start", rest @ ..] => lab::run(rest, true),
         ["lab", "plan", rest @ ..] => lab::run(rest, false),
-        ["check", world] => check(Path::new(world), false),
-        ["check", "--json", world] | ["check", world, "--json"] => check(Path::new(world), true),
+        ["check", rest @ ..] => check_args(rest),
         ["setup", rest @ ..] => setup::run(rest),
         ["code", "--help" | "-h"] => {
             println!("{}", code::USAGE);
@@ -91,12 +92,39 @@ struct Line {
     text: String,
 }
 
-fn check(world: &Path, json: bool) -> ExitCode {
+fn check_args(args: &[&str]) -> ExitCode {
+    let mut world = None;
+    let mut json = false;
+    let mut reach = false;
+    for arg in args {
+        match *arg {
+            "--json" => json = true,
+            "--client-reach" => reach = true,
+            value if !value.starts_with('-') && world.is_none() => world = Some(value),
+            _ => {
+                eprintln!("{USAGE}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    let Some(world) = world else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    check(Path::new(world), json, reach)
+}
+
+fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
     if !world.is_dir() {
         eprintln!("check: no folder {}", world.display());
         return ExitCode::from(2);
     }
-    let report = lat_core::check::check_world(world);
+    let mut report = lat_core::check::check_world(world);
+    if reach {
+        report
+            .findings
+            .extend(lat_core::check::check_image_reach(world));
+    }
     let mut lines: Vec<Line> = report
         .findings
         .iter()

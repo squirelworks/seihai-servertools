@@ -55,6 +55,37 @@ fn check_fails_on_a_broken_level() {
 }
 
 #[test]
+fn client_reach_is_optional_and_included_in_json() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("start.nw"),
+        "GLEVNW01\nNPC tree.png 1 1\nNPCEND\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("tree.png"), b"art").unwrap();
+    let normal = bin().arg("check").arg(dir.path()).output().unwrap();
+    assert!(normal.status.success());
+    assert!(!String::from_utf8_lossy(&normal.stdout).contains("client reach:"));
+    for json in [false, true] {
+        let mut cmd = bin();
+        cmd.args(["check", "--client-reach"]).arg(dir.path());
+        if json {
+            cmd.arg("--json");
+        }
+        let out = cmd.output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "{text}");
+        assert!(text.contains("client reach:"), "{text}");
+        assert!(text.contains("tree.gif"), "{text}");
+        if json {
+            assert_eq!(text.lines().count(), 1);
+            assert!(text.contains("\"warnings\":1"), "{text}");
+        }
+    }
+    assert!(!dir.path().join("tree.gif").exists());
+}
+
+#[test]
 fn check_json_reports_both_kinds_of_findings() {
     let w = lab_world();
     fs::write(w.path().join("bad.nw"), "nope").unwrap();
