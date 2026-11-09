@@ -54,6 +54,12 @@ session that built the setup did not do them:
 
 ## Setup track (go-public), `docs/design/go-public.md`
 
+- [x] Issue #18 remaining player-capacity control: explicit `setup capacity`
+      for the fork's `maxplayers` and Rust's `max_players`, with preview,
+      confirmation, comment-preserving save, backup and undo. The listserver's
+      `max_connections` stays in its existing TOML host wizard. Model/CLI
+      regression tests cover each format; no real-client or scale claim.
+
 Squirrel asked for all three parts in the first version (2026-10-31): the
 window wizard, the `setup` command line, and Host a listserver.
 

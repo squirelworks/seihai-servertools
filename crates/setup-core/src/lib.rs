@@ -20,6 +20,7 @@
 //! the work in `docs/NEXT.md`. Rules: `AGENTS.md`.
 
 pub mod browse;
+pub mod capacity;
 pub mod checks;
 pub mod config;
 pub mod folder;

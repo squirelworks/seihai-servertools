@@ -69,6 +69,34 @@ the gservers start alone (`--no-listserver` does that on purpose).
 
 ## Take a server public (and back)
 
+### Set a gserver player limit
+
+Use an explicit server kind; the two gservers use different files and keys:
+
+```sh
+# Fork: servers/default/config/serveroptions.txt, maxplayers
+seihai-servertools setup capacity --kind fork --world path/to/lab --max-players 1000
+# Rust: config/server.txt under this world, max_players (not TOML)
+seihai-servertools setup capacity --kind rust --world path/to/rust-world --max-players 1000
+# Restore the latest backup of that config, including other settings in it
+seihai-servertools setup capacity --kind rust --world path/to/rust-world --undo
+```
+
+The config must already exist. The command previews its file and old/new
+setting and asks before saving (`--yes` confirms for scripts). It preserves
+comments, unknown settings and line endings, keeps a dated backup, and refuses
+to overwrite a file changed since preview. Setting the same value does nothing.
+`--undo` restores the whole previous file, not only the capacity setting.
+For another fork folder, add its SERVER name; Rust uses only `--world`.
+
+This is the game-player admission limit. The listserver's separate
+`max_connections` limit counts its open player and gserver links together;
+raise it through `setup host-listserver --max-connections N` when needed.
+The stress rig already accepts `--max-players` and `--list-max-connections`.
+Increasing either setting does not establish a tested player capacity. The
+command does not restart servers; follow the selected server's config reload
+procedure. No window control for gserver capacity is added by this command.
+
 ```
 seihai-servertools setup status --world path/to/world default
 seihai-servertools setup public --world path/to/world default     # asks the wizard's questions

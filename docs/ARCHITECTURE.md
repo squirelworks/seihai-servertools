@@ -65,6 +65,13 @@ Bumping a tag is its own PR here, with `cargo test` and the lab checks.
 
 ## setup-core
 
+`capacity` previews an explicit fork (`maxplayers` in `serveroptions.txt`) or
+Rust (`max_players` in `config/server.txt`) player limit. It reuses the existing
+line-preserving config representation, with the selected reader's key-case
+rules, and the common backup/atomic-write/undo helpers. The CLI is
+`setup capacity --kind fork|rust --max-players N` (or `--undo`). It does not
+edit listserver TOML or start/restart a service.
+
 | Module | What | State |
 |---|---|---|
 | `folder` | `ListserverConfig` (the listserver's TOML: preview host / lab, findings incl. a missing accounts file, save, undo) and `ServerFolder`: open, `profile`, `status_findings`, `preview_public` / `preview_lab` (`Preview` with diff and findings), `save` (refuses blocked), `undo`. The command line and the window both use it | working |
