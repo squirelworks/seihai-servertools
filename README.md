@@ -44,6 +44,13 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
 
+`seihai-servertools check --client-reach [--json] WORLD` adds warnings for
+level NPC images and fixed GS1 script image names that have PNG art but no
+GIF counterpart for pre-2.1 clients. It inventories file names and never
+converts or writes art. A matching GIF name does not certify its contents or
+original-client rendering. Dynamic names, weapons, ganis, scripts' era,
+gmaps and tiles are not covered by this first slice of issue #38.
+
 ## Start a lab world
 
 A lab world is an unpacked `seihai-gserver-v2` release: `gs2emu` and a

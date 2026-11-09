@@ -204,6 +204,73 @@ pub fn check_world(root: &Path) -> Report {
 /// most lines, and one NPC should not bury the report.
 const MAX_SCRIPT_PROBLEMS: usize = 3;
 
+/// Inventory image references that have a PNG but no GIF counterpart for
+/// pre-2.1 clients (#38). This is a file-name check, not a claim that an
+/// original client rendered the image. Dynamic script names are not resolved.
+/// It never writes or converts files.
+pub fn check_image_reach(root: &Path) -> Vec<Finding> {
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let names: BTreeSet<String> = files
+        .iter()
+        .filter_map(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .collect();
+    let mut findings = Vec::new();
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        if !is_level(&lower) {
+            continue;
+        }
+        let Ok(bytes) = fs::read(path) else {
+            continue;
+        };
+        let Ok(level) = crate::level::open(&bytes) else {
+            continue;
+        };
+        let mut seen = BTreeSet::new();
+        for npc in &level.npcs {
+            let script = crate::npc::check_script(&npc.script);
+            let images = std::iter::once(npc.image.as_str()).chain(
+                script
+                    .files
+                    .iter()
+                    .filter(|f| f.kind == crate::npc::FileKind::Image)
+                    .map(|f| f.name.as_str()),
+            );
+            for image in images {
+                let image = image.trim();
+                if !picture_file(image) {
+                    continue;
+                }
+                let name = image
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap_or(image)
+                    .to_ascii_lowercase();
+                let stem = name
+                    .strip_suffix(".png")
+                    .or_else(|| name.strip_suffix(".gif"));
+                let Some(stem) = stem else {
+                    continue;
+                };
+                if names.contains(&format!("{stem}.png"))
+                    && !names.contains(&format!("{stem}.gif"))
+                    && seen.insert(stem.to_string())
+                {
+                    findings.push(Finding {
+                        severity: Severity::Warn,
+                        file: rel(root, path),
+                        text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
+                    });
+                }
+            }
+        }
+    }
+    findings
+}
+
 fn check_npc_script(
     report: &mut Report,
     seen: &mut BTreeSet<String>,

@@ -5,6 +5,38 @@ use std::fs;
 use lat_core::check::{check_world, Severity};
 
 #[test]
+fn image_reach_checks_references_and_gif_counterparts_without_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("levels/images")).unwrap();
+    let level = "GLEVNW01\nNPC Tree.PNG 1 1\nshowimg 1,tree.png,1,1;\nshowimg 2,flower.gif,1,1;\nNPCEND\nNPC paired.png 2 2\nNPCEND\nNPC - 3 3\nNPCEND\n";
+    fs::write(w.join("levels/start.nw"), level).unwrap();
+    for name in [
+        "Tree.PNG",
+        "flower.png",
+        "paired.png",
+        "PAIRED.GIF",
+        "unused.png",
+    ] {
+        fs::write(w.join("levels/images").join(name), b"art").unwrap();
+    }
+    let findings = lat_core::check::check_image_reach(w);
+    assert_eq!(findings.len(), 2, "{findings:?}");
+    assert!(findings
+        .iter()
+        .all(|f| f.file == "levels/start.nw" && f.severity == Severity::Warn));
+    assert!(findings.iter().any(|f| f.text.contains("tree.gif")));
+    assert!(findings.iter().any(|f| f.text.contains("flower.gif")));
+    assert_eq!(
+        fs::read_to_string(w.join("levels/start.nw")).unwrap(),
+        level
+    );
+    assert!(!w.join("levels/images/tree.gif").exists());
+    fs::write(w.join("levels/images/tree.gif"), b"gif").unwrap();
+    assert_eq!(lat_core::check::check_image_reach(w).len(), 1);
+}
+
+#[test]
 fn finds_bad_levels_missing_links_and_gmap_holes() {
     let dir = tempfile::tempdir().unwrap();
     let w = dir.path();

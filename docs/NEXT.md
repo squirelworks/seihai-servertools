@@ -170,6 +170,12 @@ Held until Seihai M4 or M5 asks for it:
 
 ## Checker track
 
+- [ ] Issue #38 client reach: `check --client-reach` inventories PNG-backed
+      level NPC images and fixed GS1 image references without GIF counterparts.
+      Tests and three-platform CI must pass before this slice is complete.
+      Script-era classification, weapons, ganis, gmaps, tiles and opt-in GIF
+      conversion remain separate follow-ups; this is not a fidelity certificate.
+
 - [x] Missing images and sounds named by levels, NPCs and ganis.
 - [x] GS1 syntax errors in level NPCs (and the images and sounds those
       scripts name, such as `showimg` and `play`): `lat_core::npc::check_script`,
