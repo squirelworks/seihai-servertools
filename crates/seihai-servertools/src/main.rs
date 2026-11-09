@@ -45,7 +45,9 @@ counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
 (error, warning, note), source (world or settings), file, key (or null) and
 text. --client-reach also inventories level NPC image references (including
 fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
-It does not convert art or certify script, gani, tile or gmap compatibility.";
+It flags parsed gani files for fallback review using shared profiles' gani
+support, without claiming use or choosing a built-in animation. It does not
+convert art or certify script, animation, tile or gmap compatibility.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

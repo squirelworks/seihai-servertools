@@ -170,10 +170,14 @@ Held until Seihai M4 or M5 asks for it:
 
 ## Checker track
 
-- [ ] Issue #38 client reach: `check --client-reach` inventories PNG-backed
+- [x] Issue #38 image-reference slice: `check --client-reach` inventories PNG-backed
       level NPC images and fixed GS1 image references without GIF counterparts.
-      Tests and three-platform CI must pass before this slice is complete.
-      Script-era classification, weapons, ganis, gmaps, tiles and opt-in GIF
+      Merged in #40; tests and three-platform CI passed.
+- [x] Issue #38 gani inventory slice: parsed gani files list the shared
+      profiles without `ui.ganis` for conditional fallback review. Presence
+      does not prove use; no nearest built-in animation or runtime parity
+      is inferred. Synthetic regression coverage only.
+- [ ] Script-era classification, weapons, gmaps, tiles and opt-in GIF
       conversion remain separate follow-ups; this is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
