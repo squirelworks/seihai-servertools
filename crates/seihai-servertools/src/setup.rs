@@ -31,6 +31,9 @@ seihai-servertools setup: take a gserver folder from the lab to the public and b
                [--interface AUTO|ADDR] [--server-ip AUTO|ADDR] [--upnp] [--yes]
   setup lab    [--world DIR] [SERVER] [--yes]      Back to lab
   setup undo   [--world DIR] [SERVER]              restore the last backup
+  setup capacity --kind fork|rust [--world DIR] [SERVER] --max-players N [--yes]
+  setup capacity --kind fork|rust [--world DIR] [SERVER] --undo [--yes]
+               preview and set the gserver's player limit, or undo it
   setup hq-password [--world DIR] [SERVER] --hq-password-env VAR
                write hq_password in config/adminconfig.txt (dated backup);
                `setup public` takes --hq-password-env too
@@ -61,7 +64,14 @@ the list.
 
 --silent-list-ms (default 500) lets real 1.41 rev 1, which waits without
 sending anything, get the server list; 0 turns it off. --max-connections
-(default 256) caps the listserver's open links, players and gservers together. With --yes and neither option, the list is left as it is.";
+(default 256) caps the listserver's open links, players and gservers together. With --yes and neither option, the list is left as it is.
+
+capacity: fork edits servers/SERVER/config/serveroptions.txt (maxplayers);
+rust edits config/server.txt (max_players) under --world, without a SERVER name.
+The file must exist. N must be a positive whole number. Only that player's
+limit setting changes; no server is started or restarted. The effective limit
+and reload behavior depend on the server. This does not raise listserver
+max_connections or guarantee that the machine can sustain that many players.";
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct Args {
@@ -983,7 +993,104 @@ pub fn run(args: &[&str]) -> ExitCode {
     run_with(args, &mut input, &mut out)
 }
 
+fn capacity(
+    args: &[&str],
+    input: &mut dyn BufRead,
+    out: &mut dyn Write,
+) -> Result<ExitCode, String> {
+    use setup_core::capacity::{Edit, Kind};
+    let mut kind = None;
+    let mut world = PathBuf::from(".");
+    let mut server = None;
+    let mut players = None;
+    let mut yes = false;
+    let mut undo = false;
+    let mut it = args.iter();
+    while let Some(&arg) = it.next() {
+        let mut value = || {
+            it.next()
+                .copied()
+                .ok_or_else(|| format!("{arg} needs a value"))
+        };
+        match arg {
+            "--kind" if kind.is_none() => {
+                kind = Some(match value()? {
+                    "fork" => Kind::Fork,
+                    "rust" => Kind::Rust,
+                    _ => return Err("--kind must be fork or rust".into()),
+                })
+            }
+            "--world" => world = value()?.into(),
+            "--max-players" if players.is_none() => {
+                let n = value()?
+                    .parse::<u32>()
+                    .map_err(|_| "--max-players needs a positive whole number")?;
+                if n == 0 {
+                    return Err("--max-players must be at least 1".into());
+                }
+                players = Some(n);
+            }
+            "--yes" | "-y" => yes = true,
+            "--undo" => undo = true,
+            s if !s.starts_with('-') && server.is_none() => server = Some(s),
+            _ => return Err(format!("unexpected capacity argument {arg}")),
+        }
+    }
+    let kind = kind.ok_or("capacity requires --kind fork or rust")?;
+    let path = kind.path(&world, server)?;
+    let mut io = Io { input, out, yes };
+    if undo {
+        if players.is_some() {
+            return Err("--undo cannot be combined with --max-players".into());
+        }
+        io.say(&format!("Restore the last backup of {}.", path.display()));
+        if !io.confirm("Undo this config change")? {
+            return Ok(ExitCode::FAILURE);
+        }
+        let restored = setup_core::capacity::undo(&path)?;
+        io.say(&format!("Restored {}.", restored.display()));
+        return Ok(ExitCode::SUCCESS);
+    }
+    let edit = Edit::preview(
+        path,
+        kind,
+        players.ok_or("capacity requires --max-players N (or --undo)")?,
+    )?;
+    io.say(&format!("Review: {}", edit.path.display()));
+    io.say(&format!(
+        "  {}: {} -> {}",
+        edit.key,
+        edit.before
+            .as_deref()
+            .unwrap_or("(not set; server default)"),
+        edit.after
+    ));
+    io.say("This caps game players, independently of the listserver's max_connections. No server will be restarted.");
+    if !edit.changed() {
+        io.say("Nothing to change.");
+        return Ok(ExitCode::SUCCESS);
+    }
+    if !io.confirm("Save this capacity change")? {
+        io.say("Not saved.");
+        return Ok(ExitCode::FAILURE);
+    }
+    if let Some(backup) = edit.save()? {
+        io.say(&format!("Backup: {}", backup.display()));
+    }
+    io.say(&format!(
+        "Saved {}. Undo with the same capacity command and --undo instead of --max-players N.",
+        edit.path.display()
+    ));
+    Ok(ExitCode::SUCCESS)
+}
+
 fn run_with(args: &[&str], input: &mut dyn BufRead, out: &mut dyn Write) -> ExitCode {
+    if let ["capacity", rest @ ..] = args {
+        return capacity(rest, input, out).unwrap_or_else(|e| {
+            eprintln!("setup capacity: {e}");
+            ExitCode::FAILURE
+        });
+    }
     let (cmd, rest) = match args.split_first() {
         Some((c, r)) => (*c, r),
         None => {

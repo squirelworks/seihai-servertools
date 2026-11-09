@@ -17,6 +17,92 @@ fn version_and_help() {
 }
 
 #[test]
+fn capacity_edits_only_the_selected_gserver_format_and_can_undo() {
+    let w = lab_world();
+    let fork = w.path().join("servers/default/config/serveroptions.txt");
+    let original = fs::read_to_string(&fork).unwrap();
+    fs::create_dir_all(w.path().join("config")).unwrap();
+    let rust = w.path().join("config/server.txt");
+    fs::write(&rust, "# Rust config\nmax_players = 256 # players\n").unwrap();
+    for kind in ["fork", "rust"] {
+        let out = bin()
+            .args(["setup", "capacity", "--kind", kind, "--world"])
+            .arg(w.path())
+            .args(["--max-players", "1200", "--yes"])
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{text} {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(text.contains("Backup:"));
+        assert!(text.contains("max_connections"));
+        if kind == "fork" {
+            assert!(fs::read_to_string(&fork)
+                .unwrap()
+                .ends_with("maxplayers = 1200\n"));
+            assert_eq!(
+                fs::read_to_string(&rust).unwrap(),
+                "# Rust config\nmax_players = 256 # players\n"
+            );
+        } else {
+            assert!(fs::read_to_string(&rust)
+                .unwrap()
+                .ends_with("max_players = 1200 # players\n"));
+        }
+        let out = bin()
+            .args(["setup", "capacity", "--kind", kind, "--world"])
+            .arg(w.path())
+            .args(["--undo", "--yes"])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    assert_eq!(fs::read_to_string(fork).unwrap(), original);
+    assert_eq!(
+        fs::read_to_string(rust).unwrap(),
+        "# Rust config\nmax_players = 256 # players\n"
+    );
+}
+
+#[test]
+fn capacity_requires_confirmation_and_rejects_invalid_or_ambiguous_requests() {
+    let w = lab_world();
+    let path = w.path().join("servers/default/config/serveroptions.txt");
+    let original = fs::read(&path).unwrap();
+    for extra in [
+        vec!["--kind", "fork", "--max-players", "1000"],
+        vec!["--kind", "fork", "--max-players", "0", "--yes"],
+        vec!["--kind", "fork", "--max-players", "-1", "--yes"],
+        vec![
+            "--kind",
+            "rust",
+            "default",
+            "--max-players",
+            "1000",
+            "--yes",
+        ],
+        vec!["--max-players", "1000", "--yes"],
+        vec!["--kind", "fork", "--max-connections", "1000", "--yes"],
+    ] {
+        let out = bin()
+            .args(["setup", "capacity", "--world"])
+            .arg(w.path())
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+}
+
+#[test]
 fn lab_plan_prints_the_servers() {
     let dir = tempfile::tempdir().unwrap();
     let w = dir.path();
