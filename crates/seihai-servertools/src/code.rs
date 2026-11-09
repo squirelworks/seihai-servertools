@@ -13,9 +13,12 @@ pub const USAGE: &str = "\
 code show FILE [--key HEX16] [--level NAME]
     GWEBL001 (a level cache): host, signature, mod time, level name, body size.
     The level name defaults to the file name (start.nw-14802.code is start.nw).
-    GRESCR01 (a script cache): the CRC32 of the plain body. Needs --key.
-code crc FILE --key HEX16
-    Prints that CRC32 and nothing else: the integer a 197 header carries.
+    GRESCR01: decrypted and stored-body CRC32. Needs --key to decrypt.
+code crc FILE [--domain plain|stored] [--key HEX16]
+    Prints only the CRC32. Default plain preserves the decrypted-body result
+    and needs --key. Stored excludes the magic and needs no key: the inspected
+    Windows 6.03 weapon path compares this before transformation. This is not
+    a cache-acceptance check and is not established for every build/caller.
 code dump FILE --out PLAIN [--key HEX16] [--level NAME]
     Writes the plain level text, or the plain script body.
 code pack PLAIN --out FILE [--key HEX16]
@@ -40,6 +43,7 @@ struct Opts {
     key: Option<Key>,
     level: Option<String>,
     out: Option<String>,
+    domain: Option<bool>, // true: stored bytes; false: decrypted body
 }
 
 fn parse(args: &[&str]) -> Result<Opts, String> {
@@ -48,6 +52,7 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
         key: None,
         level: None,
         out: None,
+        domain: None,
     };
     let mut it = args.iter();
     while let Some(&a) = it.next() {
@@ -59,6 +64,13 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
             }
             "--level" => o.level = Some(value()?.to_string()),
             "--out" => o.out = Some(value()?.to_string()),
+            "--domain" if o.domain.is_none() => {
+                o.domain = Some(match value()? {
+                    "plain" => false,
+                    "stored" => true,
+                    _ => return Err("--domain must be plain or stored".into()),
+                })
+            }
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s => o.plain.push(s.to_string()),
         }
@@ -78,6 +90,9 @@ pub fn run(args: &[&str]) -> ExitCode {
             return usage();
         }
     };
+    if o.domain.is_some() && cmd != "crc" {
+        return usage();
+    }
     match cmd {
         "show" => show(&o),
         "crc" => crc(&o),
@@ -120,7 +135,21 @@ fn crc(o: &Opts) -> ExitCode {
     let Some(file) = o.plain.first() else {
         return usage();
     };
-    if o.plain.len() != 1 || o.key.is_none() {
+    if o.plain.len() != 1 {
+        return usage();
+    }
+    if o.domain == Some(true) {
+        return match read_file(file)
+            .and_then(|data| code_cache::stored_script_crc32(&data).map_err(fail))
+        {
+            Ok(crc) => {
+                println!("{crc}");
+                ExitCode::SUCCESS
+            }
+            Err(code) => code,
+        };
+    }
+    if o.key.is_none() {
         return usage();
     }
     match open_file(o, file) {

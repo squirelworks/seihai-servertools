@@ -38,6 +38,12 @@ session that built the setup did not do them:
 
 ## Resource packages (`lat-core::gpak`, `docs/design/gpak.md`)
 
+- [x] Issue #37 tool audit: explicit stored/decrypted CRC domains, full GCHAR
+      level-header lengths and independent known-byte regression fixtures.
+      See `docs/design/code-caches.md`; no native-cache acceptance claim.
+- [ ] Issue #37 original evidence: real GRESCR01 file plus matching key and
+      qualified body classification. Synthetic round trips do not close it.
+
 - [x] `gpak pack|unpack`: plain `.gpak`/`.zip` and encrypted `.gpake` with
       the client's bit-reversed DES; the key goes into a gserver folder's
       `config/gpakkeys.txt`, which seihai-gserver-v2 reads.

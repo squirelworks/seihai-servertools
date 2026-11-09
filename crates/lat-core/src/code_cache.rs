@@ -3,8 +3,9 @@
 //! A level cache is DES-ECB with a fresh key on every 8-byte block. The key
 //! stream is seeded from the level name, so the file needs no key beside it.
 //! A script cache is one DES key (the two words a server sends with the
-//! script). The CRC32 of the plain body is the integer a "use your cache"
-//! header carries. DES key bytes are bit-reversed, the same way [`crate::gpak`]
+//! script). Plain and stored-body CRCs are distinct: the inspected Windows
+//! 6.03 weapon caller checks the stored bytes before transformation; do not
+//! generalize that to every build/caller. DES key bytes are bit-reversed, as [`crate::gpak`]
 //! encrypts a package.
 //!
 //! Nothing here talks to a server. Tests build the bytes themselves.
@@ -30,8 +31,10 @@ pub struct LevelCache {
 /// A `GRESCR01` script cache, after decryption.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptCache {
-    /// zlib CRC-32 of `body`: the integer the 197 header carries.
+    /// zlib CRC-32 of the decrypted `body`, not universal packet-197 acceptance.
     pub crc32: u32,
+    /// zlib CRC-32 of the stored body, excluding the GRESCR01 magic.
+    pub stored_crc32: u32,
     pub body: Vec<u8>,
 }
 
@@ -187,6 +190,9 @@ pub fn level_plaintext(level: &LevelCache) -> Result<Vec<u8>, Error> {
     if host.len() > 223 {
         return Err(err("host must be at most 223 bytes"));
     }
+    if level.signature >= 1 << 14 {
+        return Err(err("signature does not fit in 14 bits"));
+    }
     if level.mod_time >= 1 << 35 {
         return Err(err("mod time does not fit in 35 bits"));
     }
@@ -269,7 +275,11 @@ fn parse_level(plain: &[u8]) -> Result<LevelCache, Error> {
         *i += 1;
         Ok(b)
     };
-    let host_len = gval(take(&mut i)?) as usize;
+    // GCHAR lengths have 223 possible values; unlike GINT groups they
+    // are not masked to seven bits.
+    let host_len = take(&mut i)?
+        .checked_sub(0x20)
+        .ok_or_else(|| err("invalid host length"))? as usize;
     let host = plain
         .get(i..i + host_len)
         .ok_or_else(|| err("level cache host is cut off"))?
@@ -281,7 +291,9 @@ fn parse_level(plain: &[u8]) -> Result<LevelCache, Error> {
     for _ in 0..5 {
         mod_time = (mod_time << 7) | u64::from(gval(take(&mut i)?));
     }
-    let name_len = gval(take(&mut i)?) as usize;
+    let name_len = take(&mut i)?
+        .checked_sub(0x20)
+        .ok_or_else(|| err("invalid level name length"))? as usize;
     let name = plain
         .get(i..i + name_len)
         .ok_or_else(|| err("level cache name is cut off"))?
@@ -310,14 +322,25 @@ pub fn write_script(body: &[u8], key: &Key) -> Vec<u8> {
 
 /// Decrypt a script cache.
 pub fn read_script(data: &[u8], key: &Key) -> Result<ScriptCache, Error> {
+    let stored_crc32 = stored_script_crc32(data)?;
     let body = data
         .strip_prefix(b"GRESCR01")
         .ok_or_else(|| err("script cache is not GRESCR01"))?;
     let body = gpak::decrypt_entry(body, key);
     Ok(ScriptCache {
         crc32: crc32(&body),
+        stored_crc32,
         body,
     })
+}
+
+/// CRC of the on-disk script body before transformation, excluding magic.
+/// This needs no key and does not determine cache acceptance or valid GS2.
+pub fn stored_script_crc32(data: &[u8]) -> Result<u32, Error> {
+    let stored = data
+        .strip_prefix(b"GRESCR01")
+        .ok_or_else(|| err("script cache is not GRESCR01"))?;
+    Ok(crc32(stored))
 }
 
 /// Open a cache file. A `GRESCR01` file needs `key`. Anything else is read
@@ -343,9 +366,10 @@ pub fn show_text(cache: &Cache) -> String {
             level.body.len()
         ),
         Cache::Script(script) => format!(
-            "GRESCR01\ncrc32: {}\nbody_bytes: {}\n",
+            "GRESCR01\ncrc32: {}\nbody_bytes: {}\nstored_crc32: {}\ncrc32_domain: decrypted body; stored_crc32_domain: stored body excluding magic\n",
             script.crc32,
-            script.body.len()
+            script.body.len(),
+            script.stored_crc32
         ),
     }
 }
@@ -353,6 +377,68 @@ pub fn show_text(cache: &Cache) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_gchar_lengths_above_127_without_losing_the_high_bit() {
+        for (host_len, name_len) in [(127, 128), (128, 127), (223, 223)] {
+            // Independently assembled plaintext fields, not produced by our writer.
+            let mut plain = b"GWEBL001".to_vec();
+            plain.push((host_len + 0x20) as u8);
+            plain.extend(vec![b'h'; host_len]);
+            plain.extend([0x20, 0x69]); // signature 73
+            plain.extend([0x20; 5]); // modtime zero
+            plain.push((name_len + 0x20) as u8);
+            plain.extend(vec![b'n'; name_len]);
+            plain.extend(b"body");
+            let level = parse_level_plaintext(&plain).unwrap();
+            assert_eq!(level.host, "h".repeat(host_len));
+            assert_eq!(level.level, "n".repeat(name_len));
+            assert_eq!(level.signature, 73);
+            assert_eq!(level.mod_time, 0);
+            assert_eq!(level.body, b"body");
+            let packed = write_level(&level).unwrap();
+            assert_eq!(read_level(&packed, &level.level).unwrap(), level);
+        }
+    }
+
+    #[test]
+    fn rejects_a_signature_that_cannot_fit_the_two_seven_bit_groups() {
+        let mut level = sample_level();
+        level.signature = (1 << 14) - 1;
+        let plain = level_plaintext(&level).unwrap();
+        assert_eq!(
+            parse_level_plaintext(&plain).unwrap().signature,
+            level.signature
+        );
+        level.signature += 1;
+        assert!(level_plaintext(&level).is_err());
+        assert!(write_level(&level).is_err());
+    }
+
+    #[test]
+    fn known_script_bytes_distinguish_stored_and_decrypted_crc_domains() {
+        // Textbook DES vector already independently checked in gpak tests:
+        // 0123456789ABCDEF -> 85E813540F0AB405 with bit-reversed wire key.
+        // The final xyz is a short untransformed tail. No official payload.
+        let key = gpak::parse_key("C82CEA9ED93DFB8F").unwrap();
+        let mut file = b"GRESCR01".to_vec();
+        file.extend([
+            0x85, 0xE8, 0x13, 0x54, 0x0F, 0x0A, 0xB4, 0x05, b'x', b'y', b'z',
+        ]);
+        assert_eq!(stored_script_crc32(&file).unwrap(), 2_627_766_304);
+        let decoded = read_script(&file, &key).unwrap();
+        assert_eq!(
+            decoded.body,
+            [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, b'x', b'y', b'z']
+        );
+        assert_eq!(decoded.crc32, 2_773_182_824);
+        assert_eq!(decoded.stored_crc32, 2_627_766_304);
+        assert_ne!(decoded.crc32, decoded.stored_crc32);
+        // Magic recognition plus zero CRC is extraction, never a positive
+        // cache-acceptance claim (the exact Windows603 weapon path rejects it).
+        assert_eq!(stored_script_crc32(b"GRESCR01").unwrap(), 0);
+        assert!(stored_script_crc32(b"GWEBL001").is_err());
+    }
 
     fn sample_level() -> LevelCache {
         LevelCache {
