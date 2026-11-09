@@ -37,7 +37,9 @@ to 223 bytes but the reader masked those counts to seven bits. It now reads
 the full count. Independently assembled plaintext headers test 127/128 and
 223-byte boundaries, then exercise encrypted round trips. This fixes a
 tool writer/reader inconsistency; it does not prove every historical client
-accepts those lengths. Existing newline-padding ambiguity remains: an
+accepts those lengths. The writer also rejects signatures above the 14-bit
+two-group field instead of silently discarding high bits. Existing
+newline-padding ambiguity remains: an
 original level body ending in padding-like line feeds can lose those bytes
 on extraction. Do not claim arbitrary-body lossless round trips.
 

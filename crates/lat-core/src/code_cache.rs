@@ -190,6 +190,9 @@ pub fn level_plaintext(level: &LevelCache) -> Result<Vec<u8>, Error> {
     if host.len() > 223 {
         return Err(err("host must be at most 223 bytes"));
     }
+    if level.signature >= 1 << 14 {
+        return Err(err("signature does not fit in 14 bits"));
+    }
     if level.mod_time >= 1 << 35 {
         return Err(err("mod time does not fit in 35 bits"));
     }
@@ -396,6 +399,20 @@ mod tests {
             let packed = write_level(&level).unwrap();
             assert_eq!(read_level(&packed, &level.level).unwrap(), level);
         }
+    }
+
+    #[test]
+    fn rejects_a_signature_that_cannot_fit_the_two_seven_bit_groups() {
+        let mut level = sample_level();
+        level.signature = (1 << 14) - 1;
+        let plain = level_plaintext(&level).unwrap();
+        assert_eq!(
+            parse_level_plaintext(&plain).unwrap().signature,
+            level.signature
+        );
+        level.signature += 1;
+        assert!(level_plaintext(&level).is_err());
+        assert!(write_level(&level).is_err());
     }
 
     #[test]
