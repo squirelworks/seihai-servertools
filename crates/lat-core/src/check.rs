@@ -204,10 +204,10 @@ pub fn check_world(root: &Path) -> Report {
 /// most lines, and one NPC should not bury the report.
 const MAX_SCRIPT_PROBLEMS: usize = 3;
 
-/// Inventory image references that have a PNG but no GIF counterpart for
-/// pre-2.1 clients (#38). This is a file-name check, not a claim that an
-/// original client rendered the image. Dynamic script names are not resolved.
-/// It never writes or converts files.
+/// Inventory PNG references without GIF counterparts and parsed gani files
+/// needing fallback review for shared profiles without `ui.ganis` (#38).
+/// Presence does not prove use or original-client rendering. Dynamic script
+/// names are not resolved. This never writes or converts files.
 pub fn check_image_reach(root: &Path) -> Vec<Finding> {
     let mut files = Vec::new();
     walk(root, &mut files);
@@ -218,14 +218,34 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
         .map(|n| n.to_string_lossy().to_ascii_lowercase())
         .collect();
     let mut findings = Vec::new();
+    let without_ganis = ClientVersion::all_versions()
+        .iter()
+        .filter(|v| !v.profile().ui.ganis)
+        .map(|v| v.label())
+        .collect::<Vec<_>>()
+        .join(", ");
     for path in &files {
         let lower = path.to_string_lossy().to_ascii_lowercase();
-        if !is_level(&lower) {
+        if !is_level(&lower) && !lower.ends_with(".gani") {
             continue;
         }
         let Ok(bytes) = fs::read(path) else {
             continue;
         };
+        if lower.ends_with(".gani") {
+            // Reuse the shared parser. Ordinary check_world reports parse
+            // errors and missing literal images/sounds; do not duplicate them.
+            if crate::gani::open(&bytes).is_ok() && !without_ganis.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warn,
+                    file: rel(root, path),
+                    text: format!(
+                        "client reach: gani file present; shared profiles without gani support [{without_ganis}] need server animation fallback review if it is used; file presence does not prove use, and no nearest built-in animation is inferred"
+                    ),
+                });
+            }
+            continue;
+        }
         let Ok(level) = crate::level::open(&bytes) else {
             continue;
         };

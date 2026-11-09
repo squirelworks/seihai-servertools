@@ -48,8 +48,19 @@ client keeps its own offline level editor.
 level NPC images and fixed GS1 script image names that have PNG art but no
 GIF counterpart for pre-2.1 clients. It inventories file names and never
 converts or writes art. A matching GIF name does not certify its contents or
-original-client rendering. Dynamic names, weapons, ganis, scripts' era,
-gmaps and tiles are not covered by this first slice of issue #38.
+original-client rendering.
+
+The same option reports parsed gani files and lists the pinned shared client
+profiles whose `ui.ganis` field is false. Those profiles need server animation
+fallback review if the file is used. This is an inventory, not a scan of
+animation call sites. The pinned data marks 1.41 unsupported and 1.42 supported;
+these are shared-profile values, not a new original-client observation. Unused
+and standard ganis are included too. A GIF copy
+of a sprite sheet does not give a client gani support, and no nearest built-in
+animation is inferred. Symbolic sheets such as `BODY` and `HEAD` are not
+treated as literal image filenames; ordinary checks still handle parse errors
+and missing images/sounds. Dynamic names, weapons, scripts' era, gmaps and
+tiles remain outside this slice of issue #38.
 
 ## Start a lab world
 
