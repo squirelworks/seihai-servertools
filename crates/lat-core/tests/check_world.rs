@@ -36,9 +36,11 @@ fn gani_reach_uses_profile_support_even_with_gif_art_or_symbolic_sheets() {
             .split(", ")
             .collect::<Vec<_>>();
         assert!(!ClientVersion::V139.profile().ui.ganis);
-        assert!(ClientVersion::V141.profile().ui.ganis);
+        assert!(!ClientVersion::V141.profile().ui.ganis);
+        assert!(ClientVersion::V142.profile().ui.ganis);
         assert!(labels.contains(&ClientVersion::V139.label()));
-        assert!(!labels.contains(&ClientVersion::V141.label()));
+        assert!(labels.contains(&ClientVersion::V141.label()));
+        assert!(!labels.contains(&ClientVersion::V142.label()));
         assert!(!labels.contains(&ClientVersion::V205.label()));
     }
     // No literal BODY/HEAD lookup, conversion or mutation is introduced.
