@@ -1,8 +1,8 @@
 # Operator checklist
 
 Tick this before the first public publish, and again after an incident.
-Lab checks stay on `127.0.0.1` and the lab ports (gservers 14802 and
-14803, listserver registration 14900, clients 14921 to 14923). Addresses
+Lab checks stay on `127.0.0.1` and the lab ports (gservers 14802, 14803
+and 14805, listserver registration 14900, clients 14921 to 14923). Addresses
 you publish are ones you type (`<listserver-host>`, `<public-host>`);
 this repo ships none.
 

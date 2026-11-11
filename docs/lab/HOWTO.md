@@ -8,8 +8,9 @@ before and after, and the log files.
 ## A lab world
 
 1. Build or unpack `seihai-gserver-v2` (its `bin/` folder is the world:
-   `gs2emu`, `servers/default`, `servers/classic`; see that repo's
-   `bin/docs/lab-world.md`).
+   `gs2emu`, `servers/default` (14802), `servers/classic` (14803) and, from
+   seihai-gserver-v2 #31, `servers/modern` (14805, 4.20r8 to 6.037, the folder
+   for `.gpak` packages); see that repo's `bin/docs/lab-world.md`).
 2. Build `seihai-listserver` (`cargo build --release`) and copy the binary
    into the world folder.
 3. Build this repo and copy `target/release/seihai-servertools` and
