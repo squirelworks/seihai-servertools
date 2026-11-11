@@ -46,16 +46,15 @@ The rule: one copy of every parser and every drawing routine, in the
 `seihai` repo, used here through a pinned git commit
 (`[workspace.dependencies]` in `Cargo.toml`). A tag is preferred when one
 contains the crate. `seihai-draw` and the `TCP_NODELAY` change (seihai #360)
-are on seihai `main` and not in a tag yet (`v0.0.5` is older), so
-`seihai-core` and `seihai-draw` are both pinned to the same `main` commit
-(`5195744`); switch both to `v0.0.6` once it is published. `seihai-rc`'s file link is on its `main` (`294f2c1`)
+are in seihai `v0.0.6`, so `seihai-core` and `seihai-draw` are both pinned to
+that tag; bump them together. `seihai-rc`'s file link is on its `main` (`294f2c1`)
 and has no tag, so it is pinned to that commit too. Do not follow a branch.
 
 | What | Where today | Used here through |
 |---|---|---|
-| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` commit `5195744` |
+| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` tag `v0.0.6` |
 | GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (the world check uses the GS1 parser; the NPC editor will too) |
-| Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` commit `5195744` |
+| Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` tag `v0.0.6` |
 | Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
 | RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `294f2c1` |
 
