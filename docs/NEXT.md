@@ -15,7 +15,13 @@ session that built the setup did not do them:
       that a Seihai client gets it in the server list. Steps: "Step 4 lab
       run" below and `docs/lab/HOWTO.md`. So far the gserver side was only a
       stand-in script (`docs/lab/2026-10-31-lab-start.md`,
-      `docs/lab/2026-10-31-host-listserver.md`).
+      `docs/lab/2026-10-31-host-listserver.md`). This one run also covers
+      "Step 4 lab run" (Setup track) and "Lab run with a real `gs2emu`"
+      (Lab track) below.
+- [ ] **Real 1.41 rev 1 gets the list** from a listserver written by Host a
+      listserver (`silent_list_after_ms = 500`). Left over from issue #18,
+      whose setup and capacity parts are done (#21, #41); so far only
+      Seihai's 1.41 profile was run (`docs/lab/2026-11-04-suite-stress.md`).
 
 ## Suite stress (`crates/suite-stress`, `docs/lab/suite-stress.md`)
 
@@ -83,7 +89,7 @@ window wizard, the `setup` command line, and Host a listserver.
       "reachable from outside" always says it cannot be proven from here);
       `setup test-connection HOST[:PORT]` (`setup_core::net`). Tested with a
       stand-in gserver that prints the fork's console lines.
-- [ ] **Step 4 lab run** (needs a built fork; handed to the team, see the top): `seihai-listserver` on
+- [ ] **Step 4 lab run** (same run as the real-fork lab run at the top): `seihai-listserver` on
       `127.0.0.1`, the fork's `default` folder taken public with
       `setup public --interface 127.0.0.2 --listserver 127.0.0.1` on Linux,
       `setup start` shows listening on 127.0.0.2 and the listserver linked,
@@ -139,8 +145,9 @@ window wizard, the `setup` command line, and Host a listserver.
       `docs/lab/2026-11-04-lab-page.md`.
 - [ ] Rust gserver: a gserver kind in `LabOptions` once `seihai-gserver` can
       run a world folder.
-- [ ] Lab run with a real `gs2emu` from a fork release (today's run used a
-      stand-in; `docs/lab/2026-10-31-lab-start.md`).
+- [ ] Lab run with a real `gs2emu` from a fork release (same run as the
+      real-fork lab run at the top; today's run used a stand-in,
+      `docs/lab/2026-10-31-lab-start.md`).
 - [ ] **Graal3D lab kind** (after Seihai plannedmilestones M3 / G3D-9): start
       and stop the Rust Graal3D host on loopback with a `levels/` folder of
       `.x` files; document the recipe next to the 2D lab. Not the fork and
@@ -187,7 +194,10 @@ Held until Seihai M4 or M5 asks for it:
       profiles without `ui.ganis` for conditional fallback review. Presence
       does not prove use; no nearest built-in animation or runtime parity
       is inferred. Synthetic regression coverage only.
-- [ ] Script-era classification, weapons, gmaps, tiles and opt-in GIF
+- [ ] Issue #38 gmap slice: list the shared profiles without gmap support
+      for linked-level fallback review (started 2026-11-09, no branch or PR
+      yet).
+- [ ] Issue #38 script-era classification, weapons, tiles and opt-in GIF
       conversion remain separate follow-ups; this is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
