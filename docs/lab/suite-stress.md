@@ -4,6 +4,10 @@
 drives bot clients at it, so each part can be stress-tested on its own and
 together, and the same run can be repeated as the parts grow.
 
+For one scripted client against a gserver you started yourself (any gserver,
+including seihai-gserver-v2), use `seihai-suite-stress probe`: see
+[`probe/README.md`](probe/README.md).
+
 What one run does:
 
 1. Writes a throwaway lab folder: a listserver TOML (open mode, one client

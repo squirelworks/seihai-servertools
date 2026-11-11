@@ -1,0 +1,53 @@
+# Steps for `seihai-suite-stress probe` against the npcdemo world (start at 30,40 in npcdemo_start.nw).
+# walk X Y DIR | chat TEXT | trigger X Y ACTION PARAMS | warp LEVEL X Y | wait SECONDS
+# To touch a 2x2 NPC at (nx,ny) walking left, end at (nx+1.5, ny-1).
+wait 3
+# 6 Listener (15,45): playerchats
+walk 16 46 1
+chat hello
+wait 1
+chat time
+wait 1
+# 2 sign (20,36)
+walk 25 35 1
+walk 21.5 35 1
+wait 1
+# 3 counter (40,36), twice
+walk 45 35 1
+walk 41.5 35 1
+wait 1
+walk 45 35 1
+walk 41.5 35 1
+wait 1
+# 7 trigger target (50,30)
+trigger 50.5 30.5 demo hi
+wait 1
+# 5 weapon giver (45,45), twice
+walk 49 44 1
+walk 46.5 44 1
+wait 1
+walk 49 44 1
+walk 46.5 44 1
+wait 1
+# the Demo Wand's server half
+trigger 0 0 serverside Demo Wand,zap
+wait 1
+# Control-NPC
+trigger 0 0 serverping abc
+wait 1
+# 8 split script (10,30)
+walk 14 29 1
+walk 11.5 29 1
+wait 1
+# 12 strings (10,50)
+walk 14 49 1
+walk 11.5 49 1
+wait 1
+# 9 spawner (54,44 then 51.5,44); the spawned NPC destroys itself after 5 s
+walk 56 44 1
+walk 51.5 44 1
+wait 7
+# 4 warp (30,50), walking down
+walk 29.5 43 2
+walk 29.5 47.5 2
+wait 3

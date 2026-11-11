@@ -14,6 +14,7 @@
 pub mod bot;
 pub mod external;
 pub mod lab;
+pub mod probe;
 pub mod rc;
 pub mod report;
 pub mod sample;

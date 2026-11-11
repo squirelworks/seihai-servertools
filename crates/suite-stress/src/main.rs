@@ -20,6 +20,10 @@ USAGE:
   seihai-suite-stress compat [options]   one bot per version profile (--versions all),
                                          5 s each: which profiles the suite takes today
   seihai-suite-stress versions           list every Seihai version profile
+  seihai-suite-stress probe ADDR VERSION ACCOUNT STEPS
+                                         one client against a loopback gserver you
+                                         started: log in, run the STEPS file, print
+                                         every server message (see docs/lab/probe/)
 
 OPTIONS:
   --bin-dir DIR        where seihai-gserver, -listserver, -npcserver and -rc are
@@ -199,6 +203,7 @@ fn main() {
     let code = match args.first().map(String::as_str) {
         Some("run") => go(&args[1..], false),
         Some("compat") => go(&args[1..], true),
+        Some("probe") => probe(&args[1..]),
         Some("versions") => {
             for v in ClientVersion::all_versions() {
                 println!("{}\t{}", v.label(), v.token());
@@ -544,4 +549,77 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
     println!("{md}");
     eprintln!("results in {}", out.display());
     Ok(())
+}
+
+/// `probe ADDR VERSION ACCOUNT STEPS`. Password `labpw` (a lab gserver with
+/// `localhost = true` takes any). `STEP_MS` sets the wait after each step
+/// (default 300 ms).
+fn probe(args: &[String]) -> Result<(), String> {
+    use seihai_core::net::{describe_message, login_gserver, random_key};
+    use suite_stress::probe::{parse_steps, Step};
+    let [addr, ver, account, steps] = args else {
+        return Err("usage: seihai-suite-stress probe ADDR VERSION ACCOUNT STEPS".into());
+    };
+    suite_stress::check_loopback(addr)?;
+    let version =
+        ClientVersion::from_label(ver).ok_or_else(|| format!("no version profile {ver:?}"))?;
+    let text = std::fs::read_to_string(steps).map_err(|e| format!("{steps}: {e}"))?;
+    let steps = parse_steps(&text).map_err(|e| format!("{steps}: {e}"))?;
+    let step_wait = Duration::from_millis(
+        std::env::var("STEP_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(300),
+    );
+    let mut s = login_gserver(addr, version, random_key(), account, LAB_PASSWORD, false)
+        .map_err(|e| format!("login: {e}"))?;
+    let rx = s.conn.spawn_reader().map_err(|e| e.to_string())?;
+    let t0 = Instant::now();
+    let drain = |until: Instant| -> Result<(), String> {
+        while Instant::now() < until {
+            match rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(Ok(body)) => {
+                    for m in body.split_inclusive(|b| *b == b'\n') {
+                        println!(
+                            "[{:6.2}] S>C {}",
+                            t0.elapsed().as_secs_f32(),
+                            describe_message(m)
+                        );
+                    }
+                }
+                Ok(Err(e)) => {
+                    println!("[{:6.2}] closed: {e}", t0.elapsed().as_secs_f32());
+                    return Err("the server closed the connection".into());
+                }
+                Err(_) => {}
+            }
+        }
+        Ok(())
+    };
+    drain(Instant::now() + Duration::from_secs(2))?;
+    let _ = s.enter_level.at_login(&mut s.conn);
+    for step in &steps {
+        println!("[{:6.2}] STEP {step:?}", t0.elapsed().as_secs_f32());
+        let sent = match step {
+            Step::Wait(secs) => {
+                drain(Instant::now() + Duration::from_secs_f32(*secs))?;
+                Ok(())
+            }
+            Step::Walk { x, y, dir } => s.conn.send_position(*x, *y, *dir),
+            Step::Chat(text) => s.conn.send_chat(text),
+            Step::Trigger {
+                x,
+                y,
+                action,
+                params,
+            } => s.conn.send_trigger_action(*x, *y, action, params),
+            Step::Warp { level, x, y } => s.conn.send_levelwarp(*x, *y, level),
+            Step::Enter => s.conn.send_enter_level(version, &[]).map(|_| ()),
+        };
+        if let Err(e) = sent {
+            println!("send error {e}");
+        }
+        drain(Instant::now() + step_wait)?;
+    }
+    drain(Instant::now() + Duration::from_secs(1))
 }
