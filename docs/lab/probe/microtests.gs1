@@ -1,0 +1,42 @@
+// Chat-driven GS1 micro tests used in docs/lab/2026-10-31-npcserver-gs1.md.
+// Put it as an NPC script in a lab level and say t1, t2, ... next to it.
+if (created) { showcharacter; setcharprop #n,Probe; }
+if (playerchats) {
+  if (strequals(#c,t1)) message A=#a N=#n C=#c;
+  if (strequals(#c,t2)) { setstring server.labx,#a; message S=#s(server.labx); }
+  if (strequals(#c,t3)) { setstring this.s,#a; message T=#s(this.s); }
+  if (strequals(#c,t4)) { setstring client.s,abc; message CL=#s(client.s); }
+  if (strequals(#c,t5)) { hide; message V=#v(visible); }
+  if (strequals(#c,t6)) { show; message V=#v(visible); }
+  if (strequals(#c,t7)) { setstring this.s2,#n; message N2=#s(this.s2); }
+  if (strequals(#c,t8)) { message X=#v(playerx) Y=#v(playery) R=#v(playerrupees) H=#v(playerhearts); }
+  if (strequals(#c,t9)) { playerrupees = playerrupees + 5; message R=#v(playerrupees); }
+  if (strequals(#c,t10)) { setplayerprop #c,player chat set; message ok; }
+  if (strequals(#c,t11)) { setcharprop #c,npc chat set #n; }
+  if (strequals(#c,t12)) { this.arr = {1,2,3}; message L=#v(arraylen(this.arr)) E=#v(this.arr[1]); }
+  if (strequals(#c,t13)) { for (i=0;i<3;i++) this.sum += i; message SUM=#v(this.sum); }
+  if (strequals(#c,t14)) { sleep 1; message after sleep; }
+  if (strequals(#c,t15)) { message rand #v(random(0,10)) #v(int(3.7)) #v(abs(-2)) #v(sin(0)); }
+  if (strequals(#c,t16)) { setstring this.list,a,b,c; message cnt #v(sarraylen(this.list)) #I(this.list,1); }
+  if (strequals(#c,t17)) { message weap #v(hasweapon(Demo Wand)) #v(playerswimming) #v(isleader); }
+  if (strequals(#c,t18)) { setplayerprop #P1,attr1val; message P1=#P1; }
+  if (strequals(#c,t19)) { message level #L id #v(id) npcs #v(npcscount) players #v(playerscount); }
+  if (strequals(#c,t21)) { playerrupees = 7; message after assign; }
+  if (strequals(#c,t22)) { message before; playerrupees += 1; }
+  if (strequals(#c,t23)) { this.x = 1; message after this.x; }
+  if (strequals(#c,t24)) { playerrupees = playerrupees + 5; }
+  if (strequals(#c,t25)) { message R=#v(playerrupees); }
+  if (strequals(#c,t26)) { play sound.wav; message after play; }
+  if (strequals(#c,t27)) { set flagA; if (flagA) message player flag ok; else message no flag; }
+  if (strequals(#c,t28)) { lay greenrupee; message laid; }
+  if (strequals(#c,t29)) { hurt 1; message hurt done; }
+  if (strequals(#c,t30)) { message P=#v(playerhearts); }
+  if (strequals(#c,t31)) { say 0; message said; }
+  if (strequals(#c,t32)) { toinventory Demo Wand; message after toinventory; }
+  if (strequals(#c,t40)) message H=#v(playerhearts);
+  if (strequals(#c,t41)) message P=1;
+  if (strequals(#c,t42)) message A P=#v(playerhearts);
+  if (strequals(#c,t43)) message hp #v(playerhearts);
+  if (strequals(#c,t44)) message Q=2;
+  if (strequals(#c,t33)) { playerx = 20; playery = 20; setlevel npcdemo_room.nw; }
+}
