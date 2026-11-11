@@ -38,18 +38,23 @@ session that built the setup did not do them:
 
 ## Resource packages (`lat-core::gpak`, `docs/design/gpak.md`)
 
-- [x] Issue #37 tool audit: explicit stored/decrypted CRC domains, full GCHAR
-      level-header lengths and independent known-byte regression fixtures.
-      See `docs/design/code-caches.md`; no native-cache acceptance claim.
-- [ ] Issue #37 original evidence: real GRESCR01 file plus matching key and
-      qualified body classification. Synthetic round trips do not close it.
-
 - [x] `gpak pack|unpack`: plain `.gpak`/`.zip` and encrypted `.gpake` with
       the client's bit-reversed DES; the key goes into a gserver folder's
       `config/gpakkeys.txt`, which seihai-gserver-v2 reads.
 - [ ] A Packages page in the window (same calls as the command line).
 - [ ] `check`: warn about a `.gpake` in `files/` with no key, and a plain
       `.gpak` when 4.20 clients are allowed.
+
+## Client caches (`lat-core::code_cache`, `docs/design/code-caches.md`)
+
+- [x] Issue #37 `code show|crc|dump|pack` for `GWEBL001` level caches and
+      `GRESCR01` script caches, reusing `gpak`'s DES (#39). Round-trip
+      tests on synthetic files only.
+- [x] Issue #37 tool audit: explicit stored/decrypted CRC domains, full GCHAR
+      level-header lengths and independent known-byte regression fixtures
+      (#43). See `docs/design/code-caches.md`; no native-cache acceptance claim.
+- [ ] Issue #37 original evidence: real GRESCR01 file plus matching key and
+      qualified body classification. Synthetic round trips do not close it.
 
 ## Done
 
@@ -59,12 +64,6 @@ session that built the setup did not do them:
 - [x] World checker, first checks: `seihai-servertools check`.
 
 ## Setup track (go-public), `docs/design/go-public.md`
-
-- [x] Issue #18 remaining player-capacity control: explicit `setup capacity`
-      for the fork's `maxplayers` and Rust's `max_players`, with preview,
-      confirmation, comment-preserving save, backup and undo. The listserver's
-      `max_connections` stays in its existing TOML host wizard. Model/CLI
-      regression tests cover each format; no real-client or scale claim.
 
 Squirrel asked for all three parts in the first version (2026-10-31): the
 window wizard, the `setup` command line, and Host a listserver.
@@ -127,6 +126,11 @@ window wizard, the `setup` command line, and Host a listserver.
       `config/adminconfig.txt`, dated backup) so it matches the listserver
       row: `setup hq-password`, `setup public --hq-password-env`, and the
       HQ password field on the Server setup page.
+- [x] Issue #18 remaining player-capacity control (#41): explicit `setup capacity`
+      for the fork's `maxplayers` and Rust's `max_players`, with preview,
+      confirmation, comment-preserving save, backup and undo. The listserver's
+      `max_connections` stays in its existing TOML host wizard. Model/CLI
+      regression tests cover each format; no real-client or scale claim.
 
 ## Lab track
 
@@ -154,7 +158,7 @@ Held until Seihai M4 or M5 asks for it:
 ## LAT track, `docs/design/lat-tools.md`
 
 - [x] **Shared drawing** is `seihai-draw` on seihai `main` (not in a tag
-      yet). Pinned here at `72bb8d2`, with `seihai-core` on that same
+      yet). Pinned here at `5195744`, with `seihai-core` on that same
       commit. The level *document* (line-preserving save) is still only in
       the client's offline editor; this editor writes `GLEVNW01` text from
       the parsed level.
