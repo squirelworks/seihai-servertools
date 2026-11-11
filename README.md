@@ -82,12 +82,13 @@ cache status, a valid GS2 container or script execution. See the
 real-client evidence. Commands operate on local files only.
 
 A lab world is an unpacked `seihai-gserver-v2` release: `gs2emu` and a
-`servers/` folder with `default` (port 14802) and `classic` (port 14803), both
-on `127.0.0.1`. Put `seihai-listserver` and `seihai-servertools` in the same
+`servers/` folder with `default` (port 14802), `classic` (port 14803) and, in
+releases from 2026-11-11, `modern` (port 14805, 4.20r8 to 6.037 and `.gpak`
+packages), all on `127.0.0.1`. Put `seihai-listserver` and `seihai-servertools` in the same
 folder (or on `PATH`), then:
 
 ```
-seihai-servertools lab start --world path/to/world     # listserver, then default and classic
+seihai-servertools lab start --world path/to/world     # listserver, then default, classic and modern
 seihai-servertools lab start --world path/to/world classic
 seihai-servertools lab plan  --world path/to/world     # print what start would run
 ```

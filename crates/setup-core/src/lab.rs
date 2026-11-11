@@ -32,7 +32,7 @@ use crate::config::options_txt::OptionsTxt;
 use crate::run::ProcessSpec;
 
 /// The server folders started when none are named, if they exist.
-pub const DEFAULT_SERVERS: &[&str] = &["default", "classic"];
+pub const DEFAULT_SERVERS: &[&str] = &["default", "classic", "modern"];
 
 /// File name of a program on this OS (`gs2emu` or `gs2emu.exe`).
 pub fn exe_name(stem: &str) -> String {

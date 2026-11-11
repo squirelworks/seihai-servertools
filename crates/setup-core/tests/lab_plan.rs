@@ -20,6 +20,7 @@ fn world() -> tempfile::TempDir {
     fs::write(dir.path().join(exe_name("gs2emu")), b"").unwrap();
     server(dir.path(), "default", "127.0.0.1", 14802);
     server(dir.path(), "classic", "127.0.0.1", 14803);
+    server(dir.path(), "modern", "127.0.0.1", 14805);
     dir
 }
 
@@ -32,13 +33,14 @@ fn opts(world: &Path) -> LabOptions {
 }
 
 #[test]
-fn starts_default_and_classic_when_none_named() {
+fn starts_default_classic_and_modern_when_none_named() {
     let w = world();
     let p = plan(&opts(w.path())).unwrap();
     let names: Vec<_> = p.gservers.iter().map(|g| g.name.as_str()).collect();
-    assert_eq!(names, ["default", "classic"]);
+    assert_eq!(names, ["default", "classic", "modern"]);
     assert_eq!(p.gservers[0].spec.args, ["--server", "default"]);
     assert_eq!(p.gservers[1].port.as_deref(), Some("14803"));
+    assert_eq!(p.gservers[2].port.as_deref(), Some("14805"));
     assert!(p.notes.is_empty(), "{:?}", p.notes);
     assert!(p.listserver.is_none());
 }
@@ -48,7 +50,18 @@ fn only_existing_default_folders() {
     let w = world();
     fs::remove_dir_all(w.path().join("servers/classic")).unwrap();
     let p = plan(&opts(w.path())).unwrap();
-    assert_eq!(p.gservers.len(), 1);
+    assert_eq!(p.gservers.len(), 2);
+}
+
+#[test]
+fn world_without_modern_still_starts() {
+    // Releases before seihai-gserver-v2's servers/modern have only default and classic.
+    let w = world();
+    fs::remove_dir_all(w.path().join("servers/modern")).unwrap();
+    let p = plan(&opts(w.path())).unwrap();
+    let names: Vec<_> = p.gservers.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["default", "classic"]);
+    assert!(p.notes.is_empty(), "{:?}", p.notes);
 }
 
 #[test]
