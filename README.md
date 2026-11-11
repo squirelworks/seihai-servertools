@@ -33,6 +33,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Go-public setup: Join a listserver, Back to lab, undo | `seihai-servertools setup public\|lab\|undo\|status` | command line working ([design](docs/design/go-public.md)) |
 | Go-public setup in the window (same steps, Start and check lights) | `seihai-servertools gui --page setup` | working |
 | Host a listserver (edits `seihai-listserver.toml`, adds the first account) | `setup host-listserver\|listserver-lab\|listserver-undo`, window | working |
+| Gserver player limit (fork `maxplayers`, Rust `max_players`) | `seihai-servertools setup capacity` | command line working |
 | LAT level editor: open, change a tile, preview, upload | `seihai-servertools gui --page levels` | working ([design](docs/design/lat-tools.md)) |
 | Gani editor: open, change a sprite frame, preview, upload | `seihai-servertools gui --page ganis` | working ([design](docs/design/lat-tools.md)) |
 | NPC editor: level NPC scripts with the GS1 check, upload | `seihai-servertools gui --page npcs` | level NPCs working; NPC-server objects planned ([design](docs/design/lat-tools.md)) |
@@ -64,23 +65,6 @@ tiles remain outside this slice of issue #38.
 
 ## Start a lab world
 
-### Inspect client cache CRCs
-
-```sh
-seihai-servertools code show synthetic.code --key C82CEA9ED93DFB8F
-seihai-servertools code crc synthetic.code --domain plain --key C82CEA9ED93DFB8F
-seihai-servertools code crc synthetic.code --domain stored
-```
-
-The default CRC domain stays `plain` for compatibility. `stored` needs no
-key and covers on-disk bytes after the `GRESCR01` magic, before transformation.
-`show` labels both CRCs. The inspected Windows 6.03 **weapon** caller compares
-the stored-body CRC; other builds and class callers are not established by
-that finding. Neither CRC calculation nor decrypted output proves accepted
-cache status, a valid GS2 container or script execution. See the
-[format and acceptance audit](docs/design/code-caches.md) for scope and open
-real-client evidence. Commands operate on local files only.
-
 A lab world is an unpacked `seihai-gserver-v2` release: `gs2emu` and a
 `servers/` folder with `default` (port 14802), `classic` (port 14803) and, in
 releases from 2026-11-11, `modern` (port 14805, 4.20r8 to 6.037 and `.gpak`
@@ -104,34 +88,6 @@ right away is reported with the end of its console. Without a listserver,
 the gservers start alone (`--no-listserver` does that on purpose).
 
 ## Take a server public (and back)
-
-### Set a gserver player limit
-
-Use an explicit server kind; the two gservers use different files and keys:
-
-```sh
-# Fork: servers/default/config/serveroptions.txt, maxplayers
-seihai-servertools setup capacity --kind fork --world path/to/lab --max-players 1000
-# Rust: config/server.txt under this world, max_players (not TOML)
-seihai-servertools setup capacity --kind rust --world path/to/rust-world --max-players 1000
-# Restore the latest backup of that config, including other settings in it
-seihai-servertools setup capacity --kind rust --world path/to/rust-world --undo
-```
-
-The config must already exist. The command previews its file and old/new
-setting and asks before saving (`--yes` confirms for scripts). It preserves
-comments, unknown settings and line endings, keeps a dated backup, and refuses
-to overwrite a file changed since preview. Setting the same value does nothing.
-`--undo` restores the whole previous file, not only the capacity setting.
-For another fork folder, add its SERVER name; Rust uses only `--world`.
-
-This is the game-player admission limit. The listserver's separate
-`max_connections` limit counts its open player and gserver links together;
-raise it through `setup host-listserver --max-connections N` when needed.
-The stress rig already accepts `--max-players` and `--list-max-connections`.
-Increasing either setting does not establish a tested player capacity. The
-command does not restart servers; follow the selected server's config reload
-procedure. No window control for gserver capacity is added by this command.
 
 ```
 seihai-servertools setup status --world path/to/world default
@@ -175,6 +131,34 @@ can raise `max_connections` for a big world (`--max-connections`, listserver
 default 256). `lab start` notes when the listserver would leave 1.41 rev 1
 without a list.
 
+### Set a gserver player limit
+
+Use an explicit server kind; the two gservers use different files and keys:
+
+```sh
+# Fork: servers/default/config/serveroptions.txt, maxplayers
+seihai-servertools setup capacity --kind fork --world path/to/lab --max-players 1000
+# Rust: config/server.txt under this world, max_players (not TOML)
+seihai-servertools setup capacity --kind rust --world path/to/rust-world --max-players 1000
+# Restore the latest backup of that config, including other settings in it
+seihai-servertools setup capacity --kind rust --world path/to/rust-world --undo
+```
+
+The config must already exist. The command previews its file and old/new
+setting and asks before saving (`--yes` confirms for scripts). It preserves
+comments, unknown settings and line endings, keeps a dated backup, and refuses
+to overwrite a file changed since preview. Setting the same value does nothing.
+`--undo` restores the whole previous file, not only the capacity setting.
+For another fork folder, add its SERVER name; Rust uses only `--world`.
+
+This is the game-player admission limit. The listserver's separate
+`max_connections` limit counts its open player and gserver links together;
+raise it through `setup host-listserver --max-connections N` when needed.
+The stress rig already accepts `--max-players` and `--list-max-connections`.
+Increasing either setting does not establish a tested player capacity. The
+command does not restart servers; follow the selected server's config reload
+procedure. No window control for gserver capacity is added by this command.
+
 ## Check a world
 
 ```
@@ -191,6 +175,23 @@ refuse to save, such as `localhost = true` off loopback, is an error. The exit c
 there are errors (a missing image or sound is a warning), so it can run in CI.
 `check --json WORLD` prints the same findings as one JSON object (`format` 1,
 the counts, and each finding's `level`, `source`, `file`, `key` and `text`).
+
+## Inspect client cache CRCs
+
+```sh
+seihai-servertools code show synthetic.code --key C82CEA9ED93DFB8F
+seihai-servertools code crc synthetic.code --domain plain --key C82CEA9ED93DFB8F
+seihai-servertools code crc synthetic.code --domain stored
+```
+
+The default CRC domain stays `plain` for compatibility. `stored` needs no
+key and covers on-disk bytes after the `GRESCR01` magic, before transformation.
+`show` labels both CRCs. The inspected Windows 6.03 **weapon** caller compares
+the stored-body CRC; other builds and class callers are not established by
+that finding. Neither CRC calculation nor decrypted output proves accepted
+cache status, a valid GS2 container or script execution. See the
+[format and acceptance audit](docs/design/code-caches.md) for scope and open
+real-client evidence. Commands operate on local files only.
 
 ## Build
 

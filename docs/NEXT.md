@@ -15,7 +15,13 @@ session that built the setup did not do them:
       that a Seihai client gets it in the server list. Steps: "Step 4 lab
       run" below and `docs/lab/HOWTO.md`. So far the gserver side was only a
       stand-in script (`docs/lab/2026-10-31-lab-start.md`,
-      `docs/lab/2026-10-31-host-listserver.md`).
+      `docs/lab/2026-10-31-host-listserver.md`). This one run also covers
+      "Step 4 lab run" (Setup track) and "Lab run with a real `gs2emu`"
+      (Lab track) below.
+- [ ] **Real 1.41 rev 1 gets the list** from a listserver written by Host a
+      listserver (`silent_list_after_ms = 500`). Left over from issue #18,
+      whose setup and capacity parts are done (#21, #41); so far only
+      Seihai's 1.41 profile was run (`docs/lab/2026-11-04-suite-stress.md`).
 
 ## Suite stress (`crates/suite-stress`, `docs/lab/suite-stress.md`)
 
@@ -38,18 +44,23 @@ session that built the setup did not do them:
 
 ## Resource packages (`lat-core::gpak`, `docs/design/gpak.md`)
 
-- [x] Issue #37 tool audit: explicit stored/decrypted CRC domains, full GCHAR
-      level-header lengths and independent known-byte regression fixtures.
-      See `docs/design/code-caches.md`; no native-cache acceptance claim.
-- [ ] Issue #37 original evidence: real GRESCR01 file plus matching key and
-      qualified body classification. Synthetic round trips do not close it.
-
 - [x] `gpak pack|unpack`: plain `.gpak`/`.zip` and encrypted `.gpake` with
       the client's bit-reversed DES; the key goes into a gserver folder's
       `config/gpakkeys.txt`, which seihai-gserver-v2 reads.
 - [ ] A Packages page in the window (same calls as the command line).
 - [ ] `check`: warn about a `.gpake` in `files/` with no key, and a plain
       `.gpak` when 4.20 clients are allowed.
+
+## Client caches (`lat-core::code_cache`, `docs/design/code-caches.md`)
+
+- [x] Issue #37 `code show|crc|dump|pack` for `GWEBL001` level caches and
+      `GRESCR01` script caches, reusing `gpak`'s DES (#39). Round-trip
+      tests on synthetic files only.
+- [x] Issue #37 tool audit: explicit stored/decrypted CRC domains, full GCHAR
+      level-header lengths and independent known-byte regression fixtures
+      (#43). See `docs/design/code-caches.md`; no native-cache acceptance claim.
+- [ ] Issue #37 original evidence: real GRESCR01 file plus matching key and
+      qualified body classification. Synthetic round trips do not close it.
 
 ## Done
 
@@ -59,12 +70,6 @@ session that built the setup did not do them:
 - [x] World checker, first checks: `seihai-servertools check`.
 
 ## Setup track (go-public), `docs/design/go-public.md`
-
-- [x] Issue #18 remaining player-capacity control: explicit `setup capacity`
-      for the fork's `maxplayers` and Rust's `max_players`, with preview,
-      confirmation, comment-preserving save, backup and undo. The listserver's
-      `max_connections` stays in its existing TOML host wizard. Model/CLI
-      regression tests cover each format; no real-client or scale claim.
 
 Squirrel asked for all three parts in the first version (2026-10-31): the
 window wizard, the `setup` command line, and Host a listserver.
@@ -84,7 +89,7 @@ window wizard, the `setup` command line, and Host a listserver.
       "reachable from outside" always says it cannot be proven from here);
       `setup test-connection HOST[:PORT]` (`setup_core::net`). Tested with a
       stand-in gserver that prints the fork's console lines.
-- [ ] **Step 4 lab run** (needs a built fork; handed to the team, see the top): `seihai-listserver` on
+- [ ] **Step 4 lab run** (same run as the real-fork lab run at the top): `seihai-listserver` on
       `127.0.0.1`, the fork's `default` folder taken public with
       `setup public --interface 127.0.0.2 --listserver 127.0.0.1` on Linux,
       `setup start` shows listening on 127.0.0.2 and the listserver linked,
@@ -127,6 +132,11 @@ window wizard, the `setup` command line, and Host a listserver.
       `config/adminconfig.txt`, dated backup) so it matches the listserver
       row: `setup hq-password`, `setup public --hq-password-env`, and the
       HQ password field on the Server setup page.
+- [x] Issue #18 remaining player-capacity control (#41): explicit `setup capacity`
+      for the fork's `maxplayers` and Rust's `max_players`, with preview,
+      confirmation, comment-preserving save, backup and undo. The listserver's
+      `max_connections` stays in its existing TOML host wizard. Model/CLI
+      regression tests cover each format; no real-client or scale claim.
 
 ## Lab track
 
@@ -135,8 +145,9 @@ window wizard, the `setup` command line, and Host a listserver.
       `docs/lab/2026-11-04-lab-page.md`.
 - [ ] Rust gserver: a gserver kind in `LabOptions` once `seihai-gserver` can
       run a world folder.
-- [ ] Lab run with a real `gs2emu` from a fork release (today's run used a
-      stand-in; `docs/lab/2026-10-31-lab-start.md`).
+- [ ] Lab run with a real `gs2emu` from a fork release (same run as the
+      real-fork lab run at the top; today's run used a stand-in,
+      `docs/lab/2026-10-31-lab-start.md`).
 - [ ] **Graal3D lab kind** (after Seihai plannedmilestones M3 / G3D-9): start
       and stop the Rust Graal3D host on loopback with a `levels/` folder of
       `.x` files; document the recipe next to the 2D lab. Not the fork and
@@ -154,7 +165,7 @@ Held until Seihai M4 or M5 asks for it:
 ## LAT track, `docs/design/lat-tools.md`
 
 - [x] **Shared drawing** is `seihai-draw` on seihai `main` (not in a tag
-      yet). Pinned here at `72bb8d2`, with `seihai-core` on that same
+      yet). Pinned here at `5195744`, with `seihai-core` on that same
       commit. The level *document* (line-preserving save) is still only in
       the client's offline editor; this editor writes `GLEVNW01` text from
       the parsed level.
@@ -183,7 +194,10 @@ Held until Seihai M4 or M5 asks for it:
       profiles without `ui.ganis` for conditional fallback review. Presence
       does not prove use; no nearest built-in animation or runtime parity
       is inferred. Synthetic regression coverage only.
-- [ ] Script-era classification, weapons, gmaps, tiles and opt-in GIF
+- [ ] Issue #38 gmap slice: list the shared profiles without gmap support
+      for linked-level fallback review (started 2026-11-09, no branch or PR
+      yet).
+- [ ] Issue #38 script-era classification, weapons, tiles and opt-in GIF
       conversion remain separate follow-ups; this is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.

@@ -59,10 +59,11 @@ client's own gani player for timing). Load and save through `RemoteFiles`.
 `seihai-servertools check WORLD` and the World check page. Today: parse
 errors, links to missing levels, gmap cells naming missing levels, ganis
 that do not parse, and images or sounds that level NPCs and ganis name but
-the world folder lacks (`seihai-core`'s asset resolver). Next: GS1 syntax
-errors, including images and sounds named inside NPC scripts, the
-`serveroptions.txt` safety checks from `setup-core`, and a `--json` report.
-Later the same checks run on a live server through `RcFiles`.
+the world folder lacks (`seihai-core`'s asset resolver), GS1 syntax
+problems in level NPC scripts and the images and sounds they name, the
+`serveroptions.txt` and listserver safety checks from `setup-core`, a
+`--json` report, and `--client-reach` (which client eras miss art or ganis;
+issue #38). Later the same checks run on a live server through `RcFiles`.
 
 ## Testing
 

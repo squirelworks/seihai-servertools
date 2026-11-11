@@ -45,16 +45,17 @@ Rules for the layers:
 The rule: one copy of every parser and every drawing routine, in the
 `seihai` repo, used here through a pinned git commit
 (`[workspace.dependencies]` in `Cargo.toml`). A tag is preferred when one
-contains the crate. `seihai-draw` is on seihai `main` and not in a tag yet
-(`v0.0.5` is older), so `seihai-core` and `seihai-draw` are both pinned to
-that merge (`72bb8d2`). `seihai-rc`'s file link is on its `main` (`294f2c1`)
+contains the crate. `seihai-draw` and the `TCP_NODELAY` change (seihai #360)
+are on seihai `main` and not in a tag yet (`v0.0.5` is older), so
+`seihai-core` and `seihai-draw` are both pinned to the same `main` commit
+(`5195744`); switch both to `v0.0.6` once it is published. `seihai-rc`'s file link is on its `main` (`294f2c1`)
 and has no tag, so it is pinned to that commit too. Do not follow a branch.
 
 | What | Where today | Used here through |
 |---|---|---|
-| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` commit `72bb8d2` |
+| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` commit `5195744` |
 | GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (the world check uses the GS1 parser; the NPC editor will too) |
-| Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` commit `72bb8d2` |
+| Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` commit `5195744` |
 | Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
 | RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `294f2c1` |
 
@@ -76,6 +77,9 @@ edit listserver TOML or start/restart a service.
 |---|---|---|
 | `folder` | `ListserverConfig` (the listserver's TOML: preview host / lab, findings incl. a missing accounts file, save, undo) and `ServerFolder`: open, `profile`, `status_findings`, `preview_public` / `preview_lab` (`Preview` with diff and findings), `save` (refuses blocked), `undo`. The command line and the window both use it | working |
 | `lab` | Lab world layout, finding `gs2emu` and `seihai-listserver`, the start `Plan` | working |
+| `lab_run` | `LabRun`: the same `Plan` on a worker thread for the window's Lab page, a `Status` per frame, stop together | working |
+| `capacity` | Gserver player limit: fork `maxplayers` / Rust `max_players`, preview, save, undo | working |
+| `browse` | The folder picker's listing: subfolders, and whether a folder looks like a world | working |
 | `run` | `ProcessSpec`, `start`, `Group` (wait, stop together: SIGTERM then kill), `tail` | working |
 | `config::options_txt` | `serveroptions.txt`, every line kept; `get`, `set` (in place, change comment), `diff`, `render` | working |
 | `config::backup` | `save` (dated backup, temp + rename), `backups`, `undo` (undoable) | working |
@@ -84,7 +88,7 @@ edit listserver TOML or start/restart a service.
 | `profile` | `Profile`, key tables, `detect`, `back_to_lab` (localhost last), `apply_public` (`PublicAnswers`), `staff_with` | working |
 | `checks` | `check_gserver(options, target)` (refused combinations + safety check), `check_server_folder` (lab accounts, default account), `check_listserver`, `may_save` | working |
 | `lights` | `Lights::read(console, public)`: listening on, listserver, reachable (always unknown) | working |
-| `net` | `test_connection` (one TCP connect to a typed address); interfaces and UPnP planned | partly |
+| `net` | `test_connection` (one TCP connect to a typed address), `interfaces` (this machine's addresses, `if-addrs`); opt-in UPnP planned | partly |
 
 ### The one-step lab start
 
@@ -117,9 +121,11 @@ servers.
 | `level` | `LevelDoc`: open, `set_tile`, `encode` (`GLEVNW01` text), `paint` via `seihai-draw` | editing |
 | `gani` | `GaniDoc`: open, `set_sprite_frame`, `encode`, `paint` via `seihai-draw` | editing |
 | `preview` | RGBA buffer, stand-in tile colours and a stand-in sprite picture | working |
-| `npc` | Level NPCs and NPC-server NPCs | contract only |
-| `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds | working |
-| `code_cache` | `GWEBL001` level caches and `GRESCR01` script caches (`code show`) | working |
+| `npc` | `check_script`: GS1 check of level NPC scripts and the images and sounds they name. NPC-server objects wait for `seihai-rc` stage 5 | level NPCs working |
+| `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds, NPC script warnings; `--client-reach` image and gani inventory (issue #38) | working |
+| `diff` | Line diff for the editors' review before an upload | working |
+| `gpak` | `.gpak` / encrypted `.gpake` resource packages: pack, unpack, `gpakkeys.txt` | working |
+| `code_cache` | `GWEBL001` level caches and `GRESCR01` script caches (`code show|crc|dump|pack`) | working |
 
 Every editor reads and writes through `RemoteFiles`, so the same editor works
 on a local folder and on a live server (`RcFiles`). The directory reply is
@@ -128,16 +134,23 @@ names only, so a listing does not say which names are folders.
 ## app (the window)
 
 `App` has a side bar of `Tab`s and one module per page in `src/pages/`.
-Today: Lab (shows the plan), Server setup (the Join a listserver wizard,
-Back to lab, undo, Start and check), World check (runs the checker),
-Level editor and Gani editor (open, edit, preview the RGBA buffer, upload).
-The NPC editor still says what it will do. Each page calls the core crates;
+Today: Lab (shows the plan, starts and stops it, console tails), Server
+setup (the Join a listserver wizard, Back to lab, undo, Start and check,
+and the Host a listserver half), World check (runs the checker), Level
+editor and Gani editor (open, edit, preview the RGBA buffer, review the
+diff, upload), and NPC editor (level NPCs: edit, GS1 check, upload).
+Shared pieces: `link` (folder or RC login), `review` (diff and refused
+upload), `addrs` (Listen on pick list), `picker` (Browse... folder picker). Each page calls the core crates;
 a page never parses a file itself.
 
 ## Command line
 
-`src/main.rs` dispatches; `src/code.rs` is `code show|crc|dump|pack`; `src/lab.rs` is `lab start|plan`; `src/setup.rs` is
-the setup wizard as prompts (`status`, `public`, `lab`, `undo`). Prompts go
+`src/main.rs` dispatches and runs `check` and `gui`; `src/code.rs` is
+`code show|crc|dump|pack`; `src/gpak.rs` is `gpak pack|unpack`;
+`src/lab.rs` is `lab start|plan`; `src/setup.rs` is the setup wizard as
+prompts (`status`, `public`, `lab`, `undo`, `start`, `test-connection`,
+`hq-password`, `capacity`, `host-listserver`, `listserver-lab`,
+`listserver-undo`). Prompts go
 through a small `Io` (input, output, `--yes`) so tests drive the wizard by
 piping answers to the binary (`tests/cli.rs`). The parser is hand-written in `crates/seihai-servertools/src/main.rs`, like the other
 stack repos. When `setup` grows its subcommands, switching to `clap`
