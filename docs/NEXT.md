@@ -36,8 +36,8 @@ session that built the setup did not do them:
 - [x] Other client programs next to the bots (`--external`); first used
       with graal-delphi's headless 2.05r2.
 - [x] Bump seihai-core once its client sets `TCP_NODELAY` (seihai #360):
-      pinned to seihai main `5195744` by rev in #29; switch to the `v0.0.6`
-      tag once it is published. A stress rerun should lose the ~40 ms
+      pinned to seihai main `5195744` by rev in #29, now on the `v0.0.6`
+      tag. A stress rerun should lose the ~40 ms
       file-probe tail the bots added.
 - [ ] The 1000-player mixed-version run, once the suite parts are further
       along (Squirrel, 2026-11-04: a later side project).
@@ -164,9 +164,8 @@ Held until Seihai M4 or M5 asks for it:
 
 ## LAT track, `docs/design/lat-tools.md`
 
-- [x] **Shared drawing** is `seihai-draw` on seihai `main` (not in a tag
-      yet). Pinned here at `5195744`, with `seihai-core` on that same
-      commit. The level *document* (line-preserving save) is still only in
+- [x] **Shared drawing** is `seihai-draw`, pinned here at seihai tag
+      `v0.0.6`, with `seihai-core` on that same tag. The level *document* (line-preserving save) is still only in
       the client's offline editor; this editor writes `GLEVNW01` text from
       the parsed level.
 - [x] Level editor on a local folder (`LocalFolder`) and through `RcFiles`:

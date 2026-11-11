@@ -20,14 +20,12 @@ publish = false
 # the Seihai client. Pinned on purpose; never follow a branch.
 # See docs/ARCHITECTURE.md, "Code shared with Seihai".
 #
-# seihai main 5195744: seihai-draw (tile and gani RGBA) and seihai #360
+# seihai v0.0.6: seihai-draw (tile and gani RGBA) and seihai #360
 # (TCP_NODELAY on seihai-core's game connections, which suite-stress uses).
-# Neither is in a tag yet (v0.0.5 is the newest; switch to v0.0.6 once it is
-# published). seihai-core is pinned to the same commit as seihai-draw so a
-# Level or Gani from the parser is the same type seihai-draw paints. Bump
-# both together.
-seihai-core = { git = "https://github.com/squirelworks/seihai", rev = "51957441b9adc55ce75362fa2cb70acb9d05cde2", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai", rev = "51957441b9adc55ce75362fa2cb70acb9d05cde2" }
+# seihai-core is pinned to the same tag as seihai-draw so a Level or Gani
+# from the parser is the same type seihai-draw paints. Bump both together.
+seihai-core = { git = "https://github.com/squirelworks/seihai", tag = "v0.0.6", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai", tag = "v0.0.6" }
 # RC file link: list_dir, get_file, put_file. Those methods are on
 # seihai-rc main (294f2c1, file link in #5, NPC commands in #6). No tag yet.
 seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "294f2c119e0d2f00a6241cc64eefef535ca166f5" }
