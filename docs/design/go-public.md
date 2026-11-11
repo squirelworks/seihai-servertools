@@ -65,7 +65,7 @@ Gserver (`servers/<name>/config/serveroptions.txt`):
 | `serverinterface` | `127.0.0.1` | `AUTO` (every interface) or one chosen interface | Network |
 | `serverip` | `127.0.0.1` | `AUTO`, or the owner's public address | Network |
 | `localip` | `127.0.0.1` | `AUTO` | Network |
-| `serverport` | `14802` / `14803` | unchanged unless the owner edits it | Network |
+| `serverport` | `14802` / `14803` / `14805` | unchanged unless the owner edits it | Network |
 | `localhost` | `true` | `false` (logins checked by the listserver) | automatic |
 | `listip` / `listport` | `127.0.0.1` / `14900` | what the owner types | Listserver |
 | `upnp` | `false` | owner's choice, default off | Router |
@@ -86,7 +86,7 @@ Listserver (Rust `seihai-listserver` config, `seihai-listserver.toml`):
 
 ## Wizard: Join a listserver
 
-0. **Pick a server folder** (`default`, `classic`, or another under `servers/`).
+0. **Pick a server folder** (`default`, `classic`, `modern`, or another under `servers/`).
    Show its current state: "Lab (loopback only)" or "Public".
 1. **Safety check**. Block or warn before anything changes:
    - `staff` still contains `YOURACCOUNT`: block, ask for the owner's account.

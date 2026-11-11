@@ -31,7 +31,7 @@ Usage:
   seihai-servertools --version | --help
 
 lab start: starts the listserver (if one is found) and then the gservers of a
-lab world (default: servers/default and servers/classic), each console in a
+lab world (default: servers/default, classic and modern, those that exist), each console in a
 log file, and stops them all on Ctrl+C. --world defaults to the current folder.
 
 check: reads every level, gmap and gani under WORLD and reports parse errors,

@@ -5,7 +5,7 @@
 # Put this file in the lab world folder (next to gs2emu and servers/), with
 # seihai-servertools and seihai-listserver beside it or on PATH.
 #
-#   ./start.sh            listserver, then servers/default and servers/classic
+#   ./start.sh            listserver, then servers/default, classic and modern
 #   ./start.sh classic    listserver, then only servers/classic
 #
 # Stop with Ctrl+C. Consoles go to servers/<name>/logs/console.txt and

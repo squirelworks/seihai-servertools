@@ -14,16 +14,21 @@ option and `config/gpakkeys.txt`).
 ## Build one for a gserver folder
 
 ```
-seihai-servertools gpak pack art/ art.gpake --server path/to/servers/default
+seihai-servertools gpak pack art/ art.gpake --server path/to/servers/modern
 ```
 
-writes `servers/default/world/gpaks/art.gpake` and adds `art.gpake <KEY>`
-to `servers/default/config/gpakkeys.txt` (a random key unless `--key
+writes `servers/modern/world/gpaks/art.gpake` and adds `art.gpake <KEY>`
+to `servers/modern/config/gpakkeys.txt` (a random key unless `--key
 HEX16` is given). Then set `gpaks = art.gpake` in `serveroptions.txt` to
 send it at login; the gserver sends the key first. Keep `gpakkeys.txt` out
 of `world/`: everything there can be downloaded.
 
-`gpak unpack art.gpake out/ --server path/to/servers/default` gets the
+In the stock lab world use `servers/modern` (127.0.0.1:14805): it is the
+folder whose generation and `allowedversions.txt` let in the clients that
+load packages (4.20r8 to 6.037). `servers/default` (14802) only lets in 2.00
+to 3.153, which load none.
+
+`gpak unpack art.gpake out/ --server path/to/servers/modern` gets the
 files back.
 
 ## Which name to use

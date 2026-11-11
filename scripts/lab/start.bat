@@ -5,7 +5,7 @@ rem
 rem Put this file in the lab world folder (next to gs2emu.exe and servers\),
 rem with seihai-servertools.exe and seihai-listserver.exe beside it or on PATH.
 rem
-rem   start.bat            listserver, then servers\default and servers\classic
+rem   start.bat            listserver, then servers\default, classic and modern
 rem   start.bat classic    listserver, then only servers\classic
 rem
 rem Press Ctrl+C or close this window to stop them all. Consoles go to

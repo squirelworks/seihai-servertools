@@ -83,7 +83,7 @@ to do next. In short:
   connects only to the address the owner typed. No admin rights; UPnP and
   firewall changes are opt-in.
 - **Placeholders, not hosts.** Docs and UI use `<listserver-host>`,
-  `<public-host>`, `127.0.0.1` and the lab ports (14802, 14803, 14900,
+  `<public-host>`, `127.0.0.1` and the lab ports (14802, 14803, 14805, 14900,
   14921 to 14923) only.
 - **Scripts:** `scripts/lab/*.bat` stay CRLF; `*.sh` and `*.command` stay LF
   and executable.
