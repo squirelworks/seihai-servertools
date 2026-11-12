@@ -2895,7 +2895,7 @@ dependencies = [
 [[package]]
 name = "seihai-draw"
 version = "0.0.7"
-source = "git+https://github.com/squirelworks/seihai?rev=688c135cac7ba9c527798d1daedc49e877a9c94d#688c135cac7ba9c527798d1daedc49e877a9c94d"
+source = "git+https://github.com/squirelworks/seihai?rev=f62d253766fa31d9b105bacd26989cf0c0a6c5d5#f62d253766fa31d9b105bacd26989cf0c0a6c5d5"
 dependencies = [
  "seihai-core 0.0.7",
 ]
