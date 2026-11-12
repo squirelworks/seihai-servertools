@@ -31,6 +31,18 @@ to 3.153, which load none.
 `gpak unpack art.gpake out/ --server path/to/servers/modern` gets the
 files back.
 
+The window's Packages page (`gui --page packages`) does the same pack
+step, lists `world/gpaks/` with whether each `.gpake` has its key, and
+shows what a package holds.
+
+`seihai-servertools check WORLD` warns, per gserver folder, about a
+`.gpake` with no key in `config/gpakkeys.txt`, a `gpakkeys.txt` under
+`world/` or `files/` (served, so anyone could download the keys), and a
+plain `.gpak` when `config/allowedversions.txt` may let in 4.20r8: a line
+naming `G3D20126`, a `*`, or a range around it in Seihai's version order.
+When `serveroptions.txt` sets `generation`, only that generation's
+`name = ...` lines count.
+
 ## Which name to use
 
 | Client | `.gpake` | `.gpak` | `.zip` |

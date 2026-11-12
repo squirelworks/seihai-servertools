@@ -15,7 +15,7 @@
 //! | [`code_cache`] | `GWEBL001` level caches and `GRESCR01` script caches | working |
 //! | [`preview`] | The RGBA buffers those editors hand the window | working |
 //! | [`npc`] | NPC scripts: the GS1 check of level NPCs, used by [`check`] and the NPC editor page; NPC-server objects are planned | level NPCs working |
-//! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts |
+//! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
 //! Parsers come from `seihai-core` and painting from `seihai-draw`, both
 //! pinned in the workspace `Cargo.toml`. Do not write a second level or
