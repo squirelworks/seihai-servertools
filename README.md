@@ -75,7 +75,18 @@ folder (or on `PATH`), then:
 seihai-servertools lab start --world path/to/world     # listserver, then default, classic and modern
 seihai-servertools lab start --world path/to/world classic
 seihai-servertools lab plan  --world path/to/world     # print what start would run
+seihai-servertools lab start --world path/to/world --rust rust   # also seihai-gserver on <world>/rust
 ```
+
+`--rust DIR` starts `seihai-gserver --world DIR` too (a folder with
+`config/server.txt`, relative to the world), after the listserver and next
+to the fork's folders; with no fork `gs2emu` it starts alone. Its console
+goes to `logs/<folder>-console.txt`. The program is looked for in the world
+folder, next to `seihai-servertools` and on `PATH`, or given with
+`--rust-gserver PATH`. Give it its own port: seihai-gserver's default, 14802,
+is `servers/default`'s too, and the plan says so. Its `config/server.txt` is
+never edited; if its `listserver` line does not point at the lab listserver
+(`127.0.0.1:14900`), the plan says which line to change.
 
 Or copy `scripts/lab/start.sh` (Linux, macOS), `start.command` (macOS
 Finder) or `start.bat` (Windows) into the world folder and run it.
