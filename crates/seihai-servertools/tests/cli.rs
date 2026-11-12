@@ -861,6 +861,30 @@ fn code_crc_defaults_to_the_stored_domain_on_known_bytes() {
 }
 
 #[test]
+fn client_reach_lists_gs2_level_npcs_and_new_tiles() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("start.nw"),
+        "GLEVNW01\nBOARD 0 0 1 0 4E\nNPC - 1 1\nfunction onCreated() { this.x = 1; }\nNPCEND\n",
+    )
+    .unwrap();
+    let normal = bin().arg("check").arg(dir.path()).output().unwrap();
+    assert!(!String::from_utf8_lossy(&normal.stdout).contains("GS2 only"));
+    for json in [false, true] {
+        let mut cmd = bin();
+        cmd.args(["check", "--client-reach"]).arg(dir.path());
+        if json {
+            cmd.arg("--json");
+        }
+        let out = cmd.output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "{text}");
+        assert!(text.contains("NPC at 1,1 script is GS2 only"), "{text}");
+        assert!(text.contains("tiles past column 116"), "{text}");
+    }
+}
+
+#[test]
 fn make_gif_writes_only_the_copies_client_reach_asks_for() {
     let dir = tempfile::tempdir().unwrap();
     let w = dir.path();

@@ -52,10 +52,14 @@ text. --client-reach also inventories level NPC image references (including
 fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
 It flags parsed gani files for fallback review using shared profiles' gani
 support, without claiming use or choosing a built-in animation, and lists
-the profiles without gmap support or the level's format. It does not certify
-script, animation, tile or gmap compatibility. --make-gif (opt-in) first
-writes a GIF copy next to each PNG that --client-reach would report, keeping
-every pixel; it never replaces a file and skips art with over 256 colours.";
+the profiles without gmap support or the level's format. It lists level NPC
+and weapon (weapons/*.txt) scripts that are GS2 only or mix GS1 and GS2, with
+the shared profiles that do not run GS2 (before 3.153), and levels with tiles
+past column 116 of pics1.png, which the 1856-wide sheet of 1.28b2 to 2.05
+lacks. It does not certify script, animation, tile or gmap compatibility.
+--make-gif (opt-in) first writes a GIF copy next to each PNG that
+--client-reach would report, keeping every pixel; it never replaces a file
+and skips art with over 256 colours.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -151,6 +155,12 @@ fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
         report
             .findings
             .extend(lat_core::check::check_level_reach(world));
+        report
+            .findings
+            .extend(lat_core::check::check_script_reach(world));
+        report
+            .findings
+            .extend(lat_core::check::check_tile_reach(world));
     }
     let mut lines: Vec<Line> = report
         .findings

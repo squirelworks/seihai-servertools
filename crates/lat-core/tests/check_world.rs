@@ -472,3 +472,183 @@ fn level_reach_lists_profiles_without_gmaps_or_the_level_format() {
     // Inventory only: nothing written.
     assert_eq!(fs::read_dir(w.join("levels")).unwrap().count(), 5);
 }
+
+#[test]
+fn script_reach_lists_gs2_and_mixed_level_npcs_and_weapons() {
+    use seihai_core::protocol::ClientVersion;
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::write(
+        w.join("start.nw"),
+        "GLEVNW01\n\
+         NPC - 1 1\nif (playerenters) { message hi; }\nNPCEND\n\
+         NPC - 2 2\nfunction onCreated() { this.x = 1; }\nNPCEND\n\
+         NPC - 3 3\nif (created) { message hi; }\nfunction onPlayerChats() { temp.a = 1; }\nNPCEND\n",
+    )
+    .unwrap();
+    fs::create_dir_all(w.join("servers/default/weapons")).unwrap();
+    fs::write(
+        w.join("servers/default/weapons/weapon-Bow.txt"),
+        "GRAWP001\nREALNAME -Bow\nIMAGE bow.png\nSCRIPT\nfunction onActionServerSide() { player.chat = \"x\"; }\nSCRIPTEND\n",
+    )
+    .unwrap();
+    fs::write(
+        w.join("servers/default/weapons/weapon-Old.txt"),
+        "GRAWP001\nREALNAME -Old\nIMAGE old.gif\nSCRIPT\nif (weaponfired) { message #c; }\nSCRIPTEND\n",
+    )
+    .unwrap();
+    // Not a weapon file: wrong folder.
+    fs::write(
+        w.join("notes.txt"),
+        "GRAWP001\nSCRIPT\nfunction onCreated() {}\nSCRIPTEND\n",
+    )
+    .unwrap();
+    let f = lat_core::check::check_script_reach(w);
+    let texts: Vec<String> = f
+        .iter()
+        .map(|f| format!("{}: {}", f.file, f.text))
+        .collect();
+    assert_eq!(f.len(), 3, "{texts:#?}");
+    assert!(f.iter().all(|f| f.severity == Severity::Warn));
+    assert!(
+        texts[0].starts_with(
+            "servers/default/weapons/weapon-Bow.txt: client reach: weapon -Bow script is GS2 only"
+        ),
+        "{texts:#?}"
+    );
+    assert!(
+        texts[1].starts_with("start.nw: client reach: NPC at 2,2 script is GS2 only"),
+        "{texts:#?}"
+    );
+    assert!(
+        texts[2].starts_with("start.nw: client reach: NPC at 3,3 script is both GS1 and GS2"),
+        "{texts:#?}"
+    );
+    for t in &texts {
+        let lists: Vec<Vec<&str>> = t
+            .split('[')
+            .skip(1)
+            .map(|p| p.split(']').next().unwrap().split(", ").collect())
+            .collect();
+        let (no, unknown) = (&lists[0], &lists[1]);
+        // The lists are seihai-core's `scripts.gs2` field.
+        for v in ClientVersion::all_versions() {
+            let gs2 = v.profile().scripts.gs2.as_str();
+            assert_eq!(no.contains(&v.label()), gs2 == "no", "{v:?} {t}");
+            assert_eq!(unknown.contains(&v.label()), gs2 == "unknown", "{v:?} {t}");
+        }
+        for v in [
+            ClientVersion::V121,
+            ClientVersion::V231,
+            ClientVersion::V304,
+        ] {
+            assert!(no.contains(&v.label()), "{v:?} {t}");
+        }
+        for v in [
+            ClientVersion::V3153,
+            ClientVersion::V404R2,
+            ClientVersion::V603R7,
+        ] {
+            assert!(
+                !no.contains(&v.label()) && !unknown.contains(&v.label()),
+                "{v:?} {t}"
+            );
+        }
+        for v in [
+            ClientVersion::V210,
+            ClientVersion::V230,
+            ClientVersion::V6015,
+        ] {
+            assert!(
+                unknown.contains(&v.label()) && !no.contains(&v.label()),
+                "{v:?} {t}"
+            );
+        }
+    }
+    let weapon =
+        lat_core::check::read_weapon(&w.join("servers/default/weapons/weapon-Bow.txt")).unwrap();
+    assert_eq!(weapon.name, "-Bow");
+    assert_eq!(weapon.image, "bow.png");
+    assert!(lat_core::check::read_weapon(&w.join("notes.txt")).is_none());
+}
+
+#[test]
+fn tile_reach_lists_levels_past_the_1856_wide_sheet() {
+    use seihai_core::protocol::ClientVersion;
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    // 3588 ("4E") sits in block 7, column 112 + 4 = 116: past the old sheet.
+    // 3587 ("4D") is column 115, the old sheet's last. "AA" is tile 0.
+    fs::write(w.join("new.nw"), "GLEVNW01\nBOARD 0 0 4 0 AA4E4E4D\n").unwrap();
+    fs::write(w.join("old.nw"), "GLEVNW01\nBOARD 0 0 2 0 AA4D\n").unwrap();
+    let f = lat_core::check::check_tile_reach(w);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].file, "new.nw");
+    assert_eq!(f[0].severity, Severity::Warn);
+    assert!(
+        f[0].text.contains("2 cells use tiles past column 116"),
+        "{}",
+        f[0].text
+    );
+    assert!(f[0].text.contains("(ids 3588)"), "{}", f[0].text);
+    let labels: Vec<&str> = f[0]
+        .text
+        .split('[')
+        .nth(1)
+        .unwrap()
+        .split(']')
+        .next()
+        .unwrap()
+        .split(", ")
+        .collect();
+    for v in [
+        ClientVersion::V128B2,
+        ClientVersion::V139,
+        ClientVersion::V205,
+    ] {
+        assert!(labels.contains(&v.label()), "{v:?}");
+    }
+    for v in [
+        ClientVersion::V121,
+        ClientVersion::V142,
+        ClientVersion::V222,
+    ] {
+        assert!(!labels.contains(&v.label()), "{v:?}");
+    }
+}
+
+#[test]
+fn weapon_images_join_the_gif_inventory_and_copies() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("servers/default/weapons")).unwrap();
+    fs::write(
+        w.join("servers/default/weapons/weapon-Bow.txt"),
+        "GRAWP001\nREALNAME -Bow\nIMAGE bow.png\nSCRIPT\nif (weaponfired) { setimg arrow.png; }\nSCRIPTEND\n",
+    )
+    .unwrap();
+    fs::write(w.join("bow.png"), b"png").unwrap();
+    fs::write(w.join("arrow.png"), b"png").unwrap();
+    fs::write(w.join("unused.png"), b"png").unwrap();
+    let f = lat_core::check::check_image_reach(w);
+    assert_eq!(f.len(), 2, "{f:?}");
+    assert!(f
+        .iter()
+        .all(|f| f.file == "servers/default/weapons/weapon-Bow.txt"));
+    assert!(
+        f[0].text.contains("bow.gif") && f[1].text.contains("arrow.gif"),
+        "{f:?}"
+    );
+    let copies = lat_core::check::gif_copies_wanted(w);
+    assert_eq!(
+        copies,
+        vec![
+            (w.join("arrow.png"), w.join("arrow.gif")),
+            (w.join("bow.png"), w.join("bow.gif")),
+        ]
+    );
+    // A GRAWP001 file outside weapons/ names nothing.
+    fs::remove_dir_all(w.join("servers")).unwrap();
+    fs::write(w.join("weapon-Bow.txt"), "GRAWP001\nIMAGE bow.png\n").unwrap();
+    assert!(lat_core::check::check_image_reach(w).is_empty());
+}

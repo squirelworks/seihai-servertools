@@ -46,7 +46,7 @@ The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
 
 `seihai-servertools check --client-reach [--json] WORLD` adds warnings for
-level NPC images and fixed GS1 script image names that have PNG art but no
+level NPC and weapon images, and fixed GS1 script image names, that have PNG art but no
 GIF counterpart for pre-2.1 clients. It inventories file names and never
 converts or writes art. A matching GIF name does not certify its contents or
 original-client rendering.
@@ -66,8 +66,28 @@ It also lists, for each parsed gmap, the shared profiles whose
 `levels.gmap` is false (they need linked single levels if players reach
 it), and for each level the profiles that cannot open its format. The
 format comes from the level's magic (`GLEVNW01`, `GR-V1`, `Z3-V1`), not its
-extension. Dynamic names, weapons, scripts' era and tiles remain outside
-these slices of issue #38.
+extension.
+
+Scripts: each level NPC and weapon (`weapons/*.txt` files starting
+`GRAWP001`) whose script is GS2 only, or mixes GS1 and GS2, is listed with
+the shared profiles that do not run GS2, and those not known either way.
+The era is read from the
+text: GS2 event functions (`function onCreated()`), `temp.`, `player.`,
+`params[` and `new Name(`; GS1 event flags (`if (playerenters)`) and `#`
+codes outside strings. GS1-only scripts run on every client and are not
+listed. Which clients run GS2 follows seihai #430's evidence (the binary
+handles packet 131): yes from 3.153 on; no for 1.21 to 2.31 and 3.04;
+unknown for 2.10 to 2.16, 2.30, 6.015 and 6.034, which have no binary. The
+check reads seihai-core's `VersionProfile::scripts.gs2` field.
+
+Tiles: each level with tiles past column 116 of the default `pics1.png` is
+listed with the profiles whose shipped sheet is 1856×512 (1.28 beta 2 to
+1.41, and 2.00 to 2.05); they draw nothing in those cells. That sheet's 116
+columns match the left 116 of the 2048-wide 1.42 sheet cell for cell, so
+tile ids map the same way and the old sheet just ends early. 1.21 (a
+1280-wide sheet whose layout is not established) and 2.1x (no sheet in the
+archives) are not listed, and `tiledefs` sheets are not matched. Dynamic
+names remain outside these slices of issue #38.
 
 `check --make-gif WORLD` (opt-in) first writes a GIF copy next to each PNG
 that `--client-reach` reports as having none, then runs the check. A copy

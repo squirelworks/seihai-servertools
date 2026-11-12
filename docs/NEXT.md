@@ -8,17 +8,18 @@ same PR. Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`.
 Squirrel left these for the other agents (Cursor, Grok, Chiaki); the Claude
 session that built the setup did not do them:
 
-- [ ] **Real-fork lab run** of the whole setup: build `seihai-gserver-v2`,
+- [x] **Real-fork lab run** of the whole setup (2026-11-12,
+      `docs/lab/2026-11-12-real-fork-lab-run.md`): build `seihai-gserver-v2`,
       run it with `seihai-listserver` through `lab start`, take `default`
-      public with `setup public` (127.0.0.2 as the outside interface on
-      Linux), check `setup start` shows the gserver listening and linked, and
+      public with `setup public` (a dummy-interface address as the outside
+      interface; 127/8 is refused for a public server), check `setup start` shows the gserver listening and linked, and
       that a Seihai client gets it in the server list. Steps: "Step 4 lab
       run" below and `docs/lab/HOWTO.md`. So far the gserver side was only a
       stand-in script (`docs/lab/2026-10-31-lab-start.md`,
       `docs/lab/2026-10-31-host-listserver.md`). This one run also covers
       "Step 4 lab run" (Setup track) and "Lab run with a real `gs2emu`"
       (Lab track) below.
-- [ ] **Real 1.41 rev 1 gets the list** from a listserver written by Host a
+- [x] **Real 1.41 rev 1 gets the list** (2026-11-12, same run note) from a listserver written by Host a
       listserver (`silent_list_after_ms = 500`). Left over from issue #18,
       whose setup and capacity parts are done (#21, #41); so far only
       Seihai's 1.41 profile was run (`docs/lab/2026-11-04-suite-stress.md`).
@@ -94,10 +95,11 @@ window wizard, the `setup` command line, and Host a listserver.
       "reachable from outside" always says it cannot be proven from here);
       `setup test-connection HOST[:PORT]` (`setup_core::net`). Tested with a
       stand-in gserver that prints the fork's console lines.
-- [ ] **Step 4 lab run** (same run as the real-fork lab run at the top): `seihai-listserver` on
+- [x] **Step 4 lab run** (2026-11-12, `docs/lab/2026-11-12-real-fork-lab-run.md`): `seihai-listserver` on
       `127.0.0.1`, the fork's `default` folder taken public with
-      `setup public --interface 127.0.0.2 --listserver 127.0.0.1` on Linux,
-      `setup start` shows listening on 127.0.0.2 and the listserver linked,
+      `setup public --interface 192.0.2.2 --listserver 127.0.0.1` (a dummy
+      interface in a network namespace) on Linux,
+      `setup start` shows listening on 192.0.2.2 and the listserver linked,
       a Seihai client gets the server in the list. Write it up in
       `docs/lab/`. If the fork prints its lines differently, fix
       `lights.rs` and its table.
@@ -155,8 +157,8 @@ window wizard, the `setup` command line, and Host a listserver.
       `docs/lab/2026-11-12-lab-start-rust.md`.
 - [ ] The same with a listserver and Seihai `--list-only` seeing the Rust
       world (needs the lab machine; this run was gserver only).
-- [ ] Lab run with a real `gs2emu` from a fork release (same run as the
-      real-fork lab run at the top; today's run used a stand-in,
+- [x] Lab run with a real `gs2emu` from a fork release (2026-11-12,
+      `v4.0.0-seihai.1`, `docs/lab/2026-11-12-real-fork-lab-run.md`; the earlier run used a stand-in,
       `docs/lab/2026-10-31-lab-start.md`).
 - [ ] **Graal3D lab kind** (after Seihai plannedmilestones M3 / G3D-9): start
       and stop the Rust Graal3D host on loopback with a `levels/` folder of
@@ -211,8 +213,17 @@ Held until Seihai M4 or M5 asks for it:
       to each PNG `--client-reach` reports, pixel for pixel, never replacing
       a file; art over 256 colours is skipped with the reason. Not drawn by
       a real pre-2.1 client yet.
-- [ ] Issue #38 script-era classification, weapons and tiles remain
-      separate follow-ups; this is not a fidelity certificate.
+- [x] Issue #38 script-era slice: `--client-reach` lists level NPC and
+      weapon scripts that are GS2 only or mix GS1 and GS2, with the shared
+      profiles without GS2 (3.153 and later run it, per seihai #430). Read
+      from the script text, not compiled; the client lists come from
+      seihai-core's `VersionProfile::scripts.gs2` (#60).
+- [x] Issue #38 tile slice: levels with tiles past column 116 of
+      `pics1.png`, listed with the profiles that ship the 1856-wide sheet
+      (1.28b2 to 1.41, 2.00 to 2.05). 1.21 and 2.1x left out (no evidence).
+- [x] Issue #38 weapon images: a weapon file's `IMAGE` and fixed script
+      image names join the GIF inventory and `--make-gif`.
+- [ ] Issue #38 dynamic image names. This is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
 - [x] GS1 syntax errors in level NPCs (and the images and sounds those
