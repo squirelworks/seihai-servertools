@@ -22,6 +22,9 @@ seihai-rc.workspace = true
 zip.workspace = true
 des.workspace = true
 getrandom.workspace = true
+# GIF copies of PNG art (gifcopy.rs).
+png.workspace = true
+gif.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

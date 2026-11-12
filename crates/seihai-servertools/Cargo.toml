@@ -25,3 +25,5 @@ ctrlc.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# Builds a real PNG for the --make-gif test.
+png.workspace = true

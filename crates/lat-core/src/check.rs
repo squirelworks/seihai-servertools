@@ -374,46 +374,12 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
             }
             continue;
         }
-        let Ok(level) = crate::level::open(&bytes) else {
-            continue;
-        };
-        let mut seen = BTreeSet::new();
-        for npc in &level.npcs {
-            let script = crate::npc::check_script(&npc.script);
-            let images = std::iter::once(npc.image.as_str()).chain(
-                script
-                    .files
-                    .iter()
-                    .filter(|f| f.kind == crate::npc::FileKind::Image)
-                    .map(|f| f.name.as_str()),
-            );
-            for image in images {
-                let image = image.trim();
-                if !picture_file(image) {
-                    continue;
-                }
-                let name = image
-                    .rsplit(['/', '\\'])
-                    .next()
-                    .unwrap_or(image)
-                    .to_ascii_lowercase();
-                let stem = name
-                    .strip_suffix(".png")
-                    .or_else(|| name.strip_suffix(".gif"));
-                let Some(stem) = stem else {
-                    continue;
-                };
-                if names.contains(&format!("{stem}.png"))
-                    && !names.contains(&format!("{stem}.gif"))
-                    && seen.insert(stem.to_string())
-                {
-                    findings.push(Finding {
-                        severity: Severity::Warn,
-                        file: rel(root, path),
-                        text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
-                    });
-                }
-            }
+        for (image, stem) in gif_wanted_in(&bytes, &names) {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
+            });
         }
     }
     findings
@@ -489,6 +455,86 @@ pub fn check_level_reach(root: &Path) -> Vec<Finding> {
         }
     }
     findings
+}
+
+/// The images a level's NPCs name (the NPC picture and fixed script names)
+/// that have PNG art in the world but no GIF of the same name, which
+/// pre-2.1 clients ask for: `(name as written, lower-case stem)`, each stem
+/// once. `names` holds every file name in the world, lower case.
+fn gif_wanted_in(level_bytes: &[u8], names: &BTreeSet<String>) -> Vec<(String, String)> {
+    let Ok(level) = crate::level::open(level_bytes) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+    for npc in &level.npcs {
+        let script = crate::npc::check_script(&npc.script);
+        let images = std::iter::once(npc.image.as_str()).chain(
+            script
+                .files
+                .iter()
+                .filter(|f| f.kind == crate::npc::FileKind::Image)
+                .map(|f| f.name.as_str()),
+        );
+        for image in images {
+            let image = image.trim();
+            if !picture_file(image) {
+                continue;
+            }
+            let name = image
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap_or(image)
+                .to_ascii_lowercase();
+            let Some(stem) = name
+                .strip_suffix(".png")
+                .or_else(|| name.strip_suffix(".gif"))
+            else {
+                continue;
+            };
+            if names.contains(&format!("{stem}.png"))
+                && !names.contains(&format!("{stem}.gif"))
+                && seen.insert(stem.to_string())
+            {
+                out.push((image.to_string(), stem.to_string()));
+            }
+        }
+    }
+    out
+}
+
+/// The PNG files `check --client-reach` reports as missing a GIF copy, and
+/// the GIF path each would get (same folder, same stem, `.gif`), in path
+/// order. Every PNG with a wanted stem is listed, wherever it lies in the
+/// world, since the gserver finds files by name alone.
+pub fn gif_copies_wanted(root: &Path) -> Vec<(PathBuf, PathBuf)> {
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let names: BTreeSet<String> = files
+        .iter()
+        .filter_map(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .collect();
+    let mut stems = BTreeSet::new();
+    for path in &files {
+        if !is_level(&path.to_string_lossy().to_ascii_lowercase()) {
+            continue;
+        }
+        if let Ok(bytes) = fs::read(path) {
+            stems.extend(gif_wanted_in(&bytes, &names).into_iter().map(|(_, s)| s));
+        }
+    }
+    files
+        .iter()
+        .filter_map(|p| {
+            let name = p.file_name()?.to_string_lossy().to_ascii_lowercase();
+            let stem = name.strip_suffix(".png")?;
+            stems
+                .contains(stem)
+                .then(|| (p.clone(), p.with_file_name(format!("{stem}.gif"))))
+        })
+        .collect()
 }
 
 fn check_npc_script(
