@@ -58,7 +58,7 @@ prints nothing). Bump all three together. Do not follow a branch.
 | GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (the world check uses the GS1 parser; the NPC editor will too) |
 | Tile and one gani frame, into an RGBA buffer | `seihai-draw` (seihai-core repo) | `seihai-draw` tag `v0.0.11` |
 | Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
-| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `d6fba7c` (core `v0.0.11`) |
+| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `afc2107` (core `v0.0.11`) |
 
 Do not depend on `seihai-mae`: it pulls in the game window and sound. The
 client's offline level editor stays in the Seihai repo.
