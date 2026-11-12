@@ -750,7 +750,7 @@ fn code_cache_round_trip_on_the_command_line() {
     let shown = String::from_utf8_lossy(&show.stdout);
     assert!(shown.contains("GRESCR01"), "{shown}");
     assert!(
-        shown.contains(&format!("crc32: {}", crc_text.trim())),
+        shown.contains(&format!("stored_crc32: {}", crc_text.trim())),
         "{shown}"
     );
     let out = bin()
@@ -804,7 +804,7 @@ fn code_cache_round_trip_on_the_command_line() {
 }
 
 #[test]
-fn code_crc_selects_an_explicit_domain_on_known_bytes() {
+fn code_crc_defaults_to_the_stored_domain_on_known_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("synthetic.code");
     let mut file = b"GRESCR01".to_vec();
@@ -817,7 +817,7 @@ fn code_crc_selects_an_explicit_domain_on_known_bytes() {
         vec!["--domain", "plain"],
         vec!["--domain", "stored"],
     ] {
-        let stored = args.contains(&"stored");
+        let stored = !args.contains(&"plain");
         let out = bin()
             .args(["code", "crc"])
             .arg(&path)
@@ -850,7 +850,7 @@ fn code_crc_selects_an_explicit_domain_on_known_bytes() {
     assert!(text.contains("crc32: 2773182824\n"));
     assert!(text.contains("stored_crc32: 2627766304\n"));
     for args in [
-        vec!["crc"],
+        vec!["crc", "--domain", "plain"],
         vec!["crc", "--domain", "unknown"],
         vec!["show", "--domain", "stored"],
     ] {
