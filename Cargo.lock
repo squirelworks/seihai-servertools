@@ -2912,7 +2912,7 @@ dependencies = [
 [[package]]
 name = "seihai-rc"
 version = "0.1.0"
-source = "git+https://github.com/squirelworks/seihai-rc?rev=afc21072e36d6b66ec2e37af72ee8ee9a5b7c55f#afc21072e36d6b66ec2e37af72ee8ee9a5b7c55f"
+source = "git+https://github.com/squirelworks/seihai-rc?rev=443415d3f374685cf78816956e5ebcd9b9a2eb24#443415d3f374685cf78816956e5ebcd9b9a2eb24"
 dependencies = [
  "seihai-core",
 ]
