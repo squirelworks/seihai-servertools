@@ -66,8 +66,17 @@ It also lists, for each parsed gmap, the shared profiles whose
 `levels.gmap` is false (they need linked single levels if players reach
 it), and for each level the profiles that cannot open its format. The
 format comes from the level's magic (`GLEVNW01`, `GR-V1`, `Z3-V1`), not its
-extension. Dynamic names, weapons, scripts' era and tiles remain outside
-these slices of issue #38.
+extension.
+
+Scripts: each level NPC and weapon (`weapons/*.txt` files starting
+`GRAWP001`) whose script is GS2 only, or mixes GS1 and GS2, is listed with
+the shared profiles before 4.x, which run only GS1. The era is read from the
+text: GS2 event functions (`function onCreated()`), `temp.`, `player.`,
+`params[` and `new Name(`; GS1 event flags (`if (playerenters)`) and `#`
+codes outside strings. GS1-only scripts run on every client and are not
+listed. seihai-core's profiles have no GS2 flag, so the cut is 4.04r2, the
+first 4.x row. Dynamic names, weapon images and tiles remain outside these
+slices of issue #38.
 
 ## Start a lab world
 

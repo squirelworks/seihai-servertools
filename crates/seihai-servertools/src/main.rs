@@ -51,7 +51,9 @@ counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
 text. --client-reach also inventories level NPC image references (including
 fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
 It flags parsed gani files for fallback review using shared profiles' gani
-support, without claiming use or choosing a built-in animation. It does not
+support, without claiming use or choosing a built-in animation. It lists
+level NPC and weapon (weapons/*.txt) scripts that are GS2 only or mix GS1
+and GS2, with the shared profiles before 4.x, which run only GS1. It does not
 convert art or certify script, animation, tile or gmap compatibility.";
 
 fn main() -> ExitCode {
@@ -134,6 +136,9 @@ fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
         report
             .findings
             .extend(lat_core::check::check_level_reach(world));
+        report
+            .findings
+            .extend(lat_core::check::check_script_reach(world));
     }
     let mut lines: Vec<Line> = report
         .findings

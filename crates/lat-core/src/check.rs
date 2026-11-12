@@ -491,6 +491,136 @@ pub fn check_level_reach(root: &Path) -> Vec<Finding> {
     findings
 }
 
+/// A gserver weapon file (`weapons/*.txt`, first line `GRAWP001`): its
+/// name, `IMAGE` and the script between `SCRIPT` and `SCRIPTEND`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WeaponFile {
+    pub name: String,
+    pub image: String,
+    pub script: String,
+}
+
+/// Read a weapon file, or `None` when `path` is not a `.txt` file in a
+/// `weapons` folder that starts with `GRAWP001`.
+pub fn read_weapon(path: &Path) -> Option<WeaponFile> {
+    let in_weapons = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .is_some_and(|n| n.eq_ignore_ascii_case("weapons"));
+    let txt = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("txt"));
+    if !in_weapons || !txt {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&fs::read(path).ok()?).into_owned();
+    let mut lines = text.lines();
+    if lines.next()?.trim() != "GRAWP001" {
+        return None;
+    }
+    let mut weapon = WeaponFile::default();
+    let mut in_script = false;
+    for line in lines {
+        let trimmed = line.trim_end_matches('\r');
+        if in_script {
+            if trimmed.trim() == "SCRIPTEND" {
+                in_script = false;
+            } else {
+                weapon.script.push_str(trimmed);
+                weapon.script.push('\n');
+            }
+            continue;
+        }
+        let (key, value) = trimmed
+            .split_once(' ')
+            .map_or((trimmed.trim(), ""), |(k, v)| (k.trim(), v.trim()));
+        match key {
+            "REALNAME" => weapon.name = value.to_string(),
+            "IMAGE" => weapon.image = value.to_string(),
+            "SCRIPT" => in_script = true,
+            _ => {}
+        }
+    }
+    Some(weapon)
+}
+
+/// The shared profiles (oldest first) before 4.x, as labels: the clients
+/// that do not run GS2. seihai-core's profiles have no GS2 flag, so this
+/// is the cut in its version order at 4.04r2, the first 4.x row (#38: "GS2
+/// only (4.x and later)").
+fn profiles_without_gs2() -> String {
+    let all = ClientVersion::all_versions();
+    let cut = all
+        .iter()
+        .position(|v| *v == ClientVersion::V404R2)
+        .unwrap_or(all.len());
+    all[..cut]
+        .iter()
+        .map(|v| v.label())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Script era reach (#38): every level NPC and weapon whose script is GS2
+/// only, or mixes GS1 and GS2 ([`crate::npc::script_era`]), with the
+/// shared profiles before 4.x that do not run GS2. GS1-only scripts run on
+/// every client and are not listed. An inventory from the script text:
+/// presence does not prove a player reaches the level or gets the weapon,
+/// and nothing is compiled or written.
+pub fn check_script_reach(root: &Path) -> Vec<Finding> {
+    use crate::npc::{script_era, ScriptEra};
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let old = profiles_without_gs2();
+    let mut findings = Vec::new();
+    let note = |what: &str, era: ScriptEra| {
+        match era {
+        ScriptEra::Gs1 => None,
+        ScriptEra::Gs2 => Some(format!(
+            "client reach: {what} script is GS2 only; shared profiles before 4.x [{old}] do not run it"
+        )),
+        ScriptEra::Both => Some(format!(
+            "client reach: {what} script is both GS1 and GS2; shared profiles before 4.x [{old}] run only the GS1 part and skip the GS2 lines"
+        )),
+    }
+    };
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        let mut texts = Vec::new();
+        if is_level(&lower) {
+            let Ok(bytes) = fs::read(path) else {
+                continue;
+            };
+            let Ok(level) = crate::level::open(&bytes) else {
+                continue;
+            };
+            for npc in &level.npcs {
+                if let Some(era) = script_era(&npc.script) {
+                    texts.extend(note(&format!("NPC at {},{}", npc.x, npc.y), era));
+                }
+            }
+        } else if let Some(weapon) = read_weapon(path) {
+            if let Some(era) = script_era(&weapon.script) {
+                let what = if weapon.name.is_empty() {
+                    "weapon".to_string()
+                } else {
+                    format!("weapon {}", weapon.name)
+                };
+                texts.extend(note(&what, era));
+            }
+        }
+        for text in texts {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text,
+            });
+        }
+    }
+    findings
+}
+
 fn check_npc_script(
     report: &mut Report,
     seen: &mut BTreeSet<String>,

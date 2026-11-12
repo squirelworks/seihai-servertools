@@ -207,8 +207,11 @@ Held until Seihai M4 or M5 asks for it:
       parsed gmap, the shared profiles without `levels.gmap` (linked-level
       fallback review), and per level the profiles that cannot open its
       format (read from the magic: NW, GR-V1, Z3-V1). Inventory only.
-- [ ] Issue #38 script-era classification, weapons, tiles and opt-in GIF
-      conversion remain separate follow-ups; this is not a fidelity certificate.
+- [x] Issue #38 script-era slice: `--client-reach` lists level NPC and
+      weapon scripts that are GS2 only or mix GS1 and GS2, with the shared
+      profiles before 4.x. Read from the script text, not compiled.
+- [ ] Issue #38 tiles, weapon images in the GIF inventory, and opt-in GIF
+      conversion (#57) remain; this is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
 - [x] GS1 syntax errors in level NPCs (and the images and sounds those
