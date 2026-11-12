@@ -535,3 +535,48 @@ fn script_reach_lists_gs2_and_mixed_level_npcs_and_weapons() {
     assert_eq!(weapon.image, "bow.png");
     assert!(lat_core::check::read_weapon(&w.join("notes.txt")).is_none());
 }
+
+#[test]
+fn tile_reach_lists_levels_past_the_1856_wide_sheet() {
+    use seihai_core::protocol::ClientVersion;
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    // 3588 ("4E") sits in block 7, column 112 + 4 = 116: past the old sheet.
+    // 3587 ("4D") is column 115, the old sheet's last. "AA" is tile 0.
+    fs::write(w.join("new.nw"), "GLEVNW01\nBOARD 0 0 4 0 AA4E4E4D\n").unwrap();
+    fs::write(w.join("old.nw"), "GLEVNW01\nBOARD 0 0 2 0 AA4D\n").unwrap();
+    let f = lat_core::check::check_tile_reach(w);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].file, "new.nw");
+    assert_eq!(f[0].severity, Severity::Warn);
+    assert!(
+        f[0].text.contains("2 cells use tiles past column 116"),
+        "{}",
+        f[0].text
+    );
+    assert!(f[0].text.contains("(ids 3588)"), "{}", f[0].text);
+    let labels: Vec<&str> = f[0]
+        .text
+        .split('[')
+        .nth(1)
+        .unwrap()
+        .split(']')
+        .next()
+        .unwrap()
+        .split(", ")
+        .collect();
+    for v in [
+        ClientVersion::V128B2,
+        ClientVersion::V139,
+        ClientVersion::V205,
+    ] {
+        assert!(labels.contains(&v.label()), "{v:?}");
+    }
+    for v in [
+        ClientVersion::V121,
+        ClientVersion::V142,
+        ClientVersion::V222,
+    ] {
+        assert!(!labels.contains(&v.label()), "{v:?}");
+    }
+}

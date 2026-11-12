@@ -621,6 +621,111 @@ pub fn check_script_reach(root: &Path) -> Vec<Finding> {
     findings
 }
 
+/// Columns of 16-pixel tiles on the `pics1.png` the 1.28 beta 2 to 1.41
+/// and 2.00 to 2.05 clients ship: 1856×512. The 1.42 NewMain sheet and
+/// later is 2048×512 (128 columns).
+const OLD_SHEET_COLUMNS: u16 = 116;
+
+/// The column of tile `id` on a `pics1.png` laid out as eight blocks of 16
+/// columns by 32 rows (512 tiles per block): `id % 16 + (id / 512) * 16`.
+fn tile_column(id: u16) -> u16 {
+    id % 16 + (id / 512) * 16
+}
+
+/// A board tile's 12-bit id from its two base64 characters (high six bits
+/// first), the code `GLEVNW01` boards use and seihai-core's parser keeps.
+fn tile_id(tile: [u8; 2]) -> u16 {
+    fn val(c: u8) -> u16 {
+        match c {
+            b'A'..=b'Z' => (c - b'A') as u16,
+            b'a'..=b'z' => (c - b'a') as u16 + 26,
+            b'0'..=b'9' => (c - b'0') as u16 + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => 0,
+        }
+    }
+    (val(tile[0]) << 6) | val(tile[1])
+}
+
+/// The shared profiles that ship the 1856-wide sheet, as labels.
+///
+/// Evidence (Graal_analysis `version-profiles/matrix/README.md` and the
+/// shipped files): the `pics1` of 1.28 beta 2, 1.31, 1.33 to 1.39, 1.41
+/// rev 1 and 2.05 rev 2 is 1856×512, and its 116 columns match the left
+/// 116 columns of the 1.42 NewMain sheet cell for cell (3,570 to 3,654 of
+/// 3,712 cells identical; the rest are redrawn tiles), so tile ids map the
+/// same way and the old sheet just ends at column 116. The 1.3 test, 1.32,
+/// 1.40 and 2.00 to 2.04 rows ship no sheet in the archives and are taken
+/// to be the same as their neighbours (inferred). 1.21's 1280-wide sheet
+/// is left out: its layout is not established. The 2.1x rows are left out
+/// too: no sheet of theirs is in the archives.
+fn profiles_with_old_sheet() -> String {
+    use ClientVersion::*;
+    [
+        V128B2, V13T, V131, V132, V133, V134, V135, V136, V137, V138, V139, V141, V200, V201, V202,
+        V202R2, V203, V204, V205,
+    ]
+    .iter()
+    .map(|v| v.label())
+    .collect::<Vec<_>>()
+    .join(", ")
+}
+
+/// Tile reach (#38): every parsed level that uses tiles past column 116 of
+/// the default `pics1.png`, which the 1856-wide sheet of the 1.28 beta 2 to
+/// 2.05 clients does not have ([`profiles_with_old_sheet`]). Those clients
+/// draw nothing in that cell. Only the default sheet is considered: a
+/// level drawn with a `tiledefs` sheet is not matched to it here. An
+/// inventory; nothing is written.
+pub fn check_tile_reach(root: &Path) -> Vec<Finding> {
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let old = profiles_with_old_sheet();
+    let mut findings = Vec::new();
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        if !is_level(&lower) {
+            continue;
+        }
+        let Ok(bytes) = fs::read(path) else {
+            continue;
+        };
+        let Ok(level) = crate::level::open(&bytes) else {
+            continue;
+        };
+        let mut cells = 0usize;
+        let mut ids = BTreeSet::new();
+        for run in &level.boards {
+            for tile in &run.tiles {
+                let id = tile_id(*tile);
+                if tile_column(id) >= OLD_SHEET_COLUMNS {
+                    cells += 1;
+                    ids.insert(id);
+                }
+            }
+        }
+        if cells == 0 {
+            continue;
+        }
+        let mut shown: Vec<String> = ids.iter().take(5).map(u16::to_string).collect();
+        if ids.len() > 5 {
+            shown.push(format!("and {} more", ids.len() - 5));
+        }
+        let word = if cells == 1 { "cell uses" } else { "cells use" };
+        findings.push(Finding {
+            severity: Severity::Warn,
+            file: rel(root, path),
+            text: format!(
+                "client reach: {cells} {word} tiles past column {OLD_SHEET_COLUMNS} of pics1.png (ids {}); shared profiles with the 1856-wide sheet [{old}] draw nothing there",
+                shown.join(", ")
+            ),
+        });
+    }
+    findings
+}
+
 fn check_npc_script(
     report: &mut Report,
     seen: &mut BTreeSet<String>,

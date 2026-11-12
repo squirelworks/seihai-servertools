@@ -121,7 +121,7 @@ servers.
 | `gani` | `GaniDoc`: open, `set_sprite_frame`, `encode`, `paint` via `seihai-draw` | editing |
 | `preview` | RGBA buffer, stand-in tile colours and a stand-in sprite picture | working |
 | `npc` | `check_script`: GS1 check of level NPC scripts and the images and sounds they name. NPC-server objects wait for `seihai-rc` stage 5 | level NPCs working |
-| `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds, NPC script warnings; `--client-reach` image, gani, gmap, level-format and script-era inventory (issue #38) | working |
+| `check` | `check_world`: parse errors, missing link targets, gmap holes, missing images and sounds, NPC script warnings; `--client-reach` image, gani, gmap, level-format, script-era and tile inventory (issue #38) | working |
 | `diff` | Line diff for the editors' review before an upload | working |
 | `gpak` | `.gpak` / encrypted `.gpake` resource packages: pack, unpack, `gpakkeys.txt` | working |
 | `code_cache` | `GWEBL001` level caches and `GRESCR01` script caches (`code show|crc|dump|pack`) | working |

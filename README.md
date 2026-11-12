@@ -75,8 +75,16 @@ text: GS2 event functions (`function onCreated()`), `temp.`, `player.`,
 `params[` and `new Name(`; GS1 event flags (`if (playerenters)`) and `#`
 codes outside strings. GS1-only scripts run on every client and are not
 listed. seihai-core's profiles have no GS2 flag, so the cut is 4.04r2, the
-first 4.x row. Dynamic names, weapon images and tiles remain outside these
-slices of issue #38.
+first 4.x row.
+
+Tiles: each level with tiles past column 116 of the default `pics1.png` is
+listed with the profiles whose shipped sheet is 1856×512 (1.28 beta 2 to
+1.41, and 2.00 to 2.05); they draw nothing in those cells. That sheet's 116
+columns match the left 116 of the 2048-wide 1.42 sheet cell for cell, so
+tile ids map the same way and the old sheet just ends early. 1.21 (a
+1280-wide sheet whose layout is not established) and 2.1x (no sheet in the
+archives) are not listed, and `tiledefs` sheets are not matched. Dynamic
+names and weapon images remain outside these slices of issue #38.
 
 ## Start a lab world
 

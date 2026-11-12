@@ -210,7 +210,10 @@ Held until Seihai M4 or M5 asks for it:
 - [x] Issue #38 script-era slice: `--client-reach` lists level NPC and
       weapon scripts that are GS2 only or mix GS1 and GS2, with the shared
       profiles before 4.x. Read from the script text, not compiled.
-- [ ] Issue #38 tiles, weapon images in the GIF inventory, and opt-in GIF
+- [x] Issue #38 tile slice: levels with tiles past column 116 of
+      `pics1.png`, listed with the profiles that ship the 1856-wide sheet
+      (1.28b2 to 1.41, 2.00 to 2.05). 1.21 and 2.1x left out (no evidence).
+- [ ] Issue #38 weapon images in the GIF inventory, and opt-in GIF
       conversion (#57) remain; this is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
