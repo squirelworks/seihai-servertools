@@ -131,6 +131,9 @@ fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
         report
             .findings
             .extend(lat_core::check::check_image_reach(world));
+        report
+            .findings
+            .extend(lat_core::check::check_level_reach(world));
     }
     let mut lines: Vec<Line> = report
         .findings

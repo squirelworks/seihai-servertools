@@ -201,9 +201,10 @@ Held until Seihai M4 or M5 asks for it:
       profiles without `ui.ganis` for conditional fallback review. Presence
       does not prove use; no nearest built-in animation or runtime parity
       is inferred. Synthetic regression coverage only.
-- [ ] Issue #38 gmap slice: list the shared profiles without gmap support
-      for linked-level fallback review (started 2026-11-09, no branch or PR
-      yet).
+- [x] Issue #38 gmap and level-format slice: `--client-reach` lists, per
+      parsed gmap, the shared profiles without `levels.gmap` (linked-level
+      fallback review), and per level the profiles that cannot open its
+      format (read from the magic: NW, GR-V1, Z3-V1). Inventory only.
 - [ ] Issue #38 script-era classification, weapons, tiles and opt-in GIF
       conversion remain separate follow-ups; this is not a fidelity certificate.
 

@@ -163,9 +163,11 @@ fn client_reach_is_optional_and_included_in_json() {
         assert!(out.status.success(), "{text}");
         assert!(text.contains("client reach:"), "{text}");
         assert!(text.contains("tree.gif"), "{text}");
+        // start.nw is an NW level, which the oldest profiles cannot open.
+        assert!(text.contains("client reach: NW level"), "{text}");
         if json {
             assert_eq!(text.lines().count(), 1);
-            assert!(text.contains("\"warnings\":1"), "{text}");
+            assert!(text.contains("\"warnings\":2"), "{text}");
         }
     }
     assert!(!dir.path().join("tree.gif").exists());

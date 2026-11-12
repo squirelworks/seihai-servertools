@@ -419,6 +419,78 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
     findings
 }
 
+/// The shared profiles (oldest first) for which `lacks` is true, as labels.
+fn profiles_lacking(lacks: impl Fn(&seihai_core::protocol::Levels) -> bool) -> String {
+    ClientVersion::all_versions()
+        .iter()
+        .filter(|v| lacks(&v.profile().levels))
+        .map(|v| v.label())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Level and gmap reach (#38): every parsed `.gmap`, with the shared
+/// profiles whose `levels.gmap` is false (they need the linked-level
+/// fallback, if a player can reach the gmap), and every level whose format
+/// some profiles cannot open. The format is read from the level's magic
+/// (`GLEVNW01`, `GR-V1`, `Z3-V1`), as the clients do; the extension decides
+/// nothing. An inventory: presence does not prove a player reaches the
+/// file, and no fallback or conversion is inferred or written.
+pub fn check_level_reach(root: &Path) -> Vec<Finding> {
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let mut findings = Vec::new();
+    let no_gmap = profiles_lacking(|l| !l.gmap);
+    let formats: [(&str, &str, String); 3] = [
+        ("GLEVNW01", "NW", profiles_lacking(|l| !l.nw)),
+        ("GR-V1", "GR-V1 (.graal)", profiles_lacking(|l| !l.graal)),
+        ("Z3-V1", "Z3-V1 (.zelda)", profiles_lacking(|l| !l.zelda)),
+    ];
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        let gmap = lower.ends_with(".gmap");
+        if !gmap && !is_level(&lower) {
+            continue;
+        }
+        let Ok(bytes) = fs::read(path) else {
+            continue;
+        };
+        if gmap {
+            if Gmap::parse(&String::from_utf8_lossy(&bytes)).is_some() && !no_gmap.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warn,
+                    file: rel(root, path),
+                    text: format!(
+                        "client reach: gmap; shared profiles without gmap support [{no_gmap}] need linked single levels if players reach it; matching level names do not prove the server sends the links"
+                    ),
+                });
+            }
+            continue;
+        }
+        if crate::level::open(&bytes).is_err() {
+            // check_world reports levels that do not parse.
+            continue;
+        }
+        let Some((_, name, lacking)) = formats
+            .iter()
+            .find(|(magic, _, _)| bytes.starts_with(magic.as_bytes()))
+        else {
+            continue;
+        };
+        if !lacking.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text: format!(
+                    "client reach: {name} level; shared profiles that cannot open it [{lacking}] get nothing if they reach it"
+                ),
+            });
+        }
+    }
+    findings
+}
+
 fn check_npc_script(
     report: &mut Report,
     seen: &mut BTreeSet<String>,
