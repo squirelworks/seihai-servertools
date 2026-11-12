@@ -374,6 +374,82 @@ pub fn set_key(path: &Path, package: &str, key: &Key) -> Result<(), Error> {
     Ok(())
 }
 
+/// What [`pack`] wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Packed {
+    pub path: PathBuf,
+    pub files: usize,
+    /// A `.gpake`'s key (given or random), `None` for a plain package.
+    pub key: Option<Key>,
+    /// The key file the key was saved in, if one was given.
+    pub key_file: Option<PathBuf>,
+}
+
+/// Pack every file under `folder` into `out`, the step `gpak pack` and the
+/// Packages page share. `out` ends in `.gpake` (encrypted), `.gpak` or
+/// `.zip` (plain). A `.gpake` uses `key`, or a random one, and the key is
+/// saved in `key_file` when given ([`set_key`]). A plain package refuses a
+/// key. A failed write leaves no half-written package behind.
+pub fn pack(
+    folder: &Path,
+    out: &Path,
+    key: Option<Key>,
+    key_file: Option<&Path>,
+) -> Result<Packed, Error> {
+    let name = out
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let lower = name.to_ascii_lowercase();
+    if ![".gpake", ".gpak", ".zip"]
+        .iter()
+        .any(|e| lower.ends_with(e))
+    {
+        return Err(Error::Invalid(format!(
+            "{name}: the name must end in .gpake, .gpak or .zip"
+        )));
+    }
+    let encrypted = is_encrypted(&name);
+    if !encrypted && (key.is_some() || key_file.is_some()) {
+        return Err(Error::Invalid("only a .gpake takes a key".into()));
+    }
+    let entries = collect(folder)?;
+    let key = match (encrypted, key) {
+        (false, _) => None,
+        (true, Some(k)) => Some(k),
+        (true, None) => Some(random_key()?),
+    };
+    if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
+    }
+    let file = std::fs::File::create(out)?;
+    if let Err(e) = write(std::io::BufWriter::new(file), &entries, key.as_ref()) {
+        let _ = std::fs::remove_file(out);
+        return Err(e);
+    }
+    if let (Some(k), Some(kf)) = (key, key_file) {
+        set_key(kf, &name, &k)?;
+    }
+    Ok(Packed {
+        path: out.to_path_buf(),
+        files: entries.len(),
+        key,
+        key_file: key_file.map(Path::to_path_buf),
+    })
+}
+
+/// The files in a package and their sizes, for showing its contents. A
+/// `.gpake` is decrypted with `key`; without one its sizes are still
+/// right (the cipher keeps the length), only the bytes are not read.
+pub fn list(package: &Path, key: Option<&Key>) -> Result<Vec<(String, usize)>, Error> {
+    let file = std::fs::File::open(package)?;
+    let entries = read(std::io::BufReader::new(file), key)?;
+    Ok(entries
+        .into_iter()
+        .map(|e| (e.name, e.data.len()))
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

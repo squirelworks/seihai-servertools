@@ -8,6 +8,7 @@ pub mod lab;
 pub mod levels;
 mod link;
 pub mod npcs;
+pub mod packages;
 mod picker;
 mod review;
 pub mod setup;

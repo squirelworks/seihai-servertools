@@ -47,9 +47,12 @@ session that built the setup did not do them:
 - [x] `gpak pack|unpack`: plain `.gpak`/`.zip` and encrypted `.gpake` with
       the client's bit-reversed DES; the key goes into a gserver folder's
       `config/gpakkeys.txt`, which seihai-gserver-v2 reads.
-- [ ] A Packages page in the window (same calls as the command line).
-- [ ] `check`: warn about a `.gpake` in `files/` with no key, and a plain
-      `.gpak` when 4.20 clients are allowed.
+- [x] Issue #49: a Packages page in the window (`gui --page packages`),
+      through the same `lat_core::gpak::pack` as the command line.
+- [x] Issue #49: `check` warns about a `.gpake` with no key in
+      `config/gpakkeys.txt`, a key file in a served folder (`world/`,
+      `files/`), and a plain `.gpak` when `allowedversions.txt` may let in
+      4.20r8. Tests only; no lab run of the page yet.
 
 ## Client caches (`lat-core::code_cache`, `docs/design/code-caches.md`)
 

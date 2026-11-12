@@ -293,3 +293,128 @@ NPCEND
     assert_eq!(npc3.len(), 4, "three listed, then a count: {texts:#?}");
     assert!(npc3[3].ends_with("1 more GS1 script problem"), "{texts:#?}");
 }
+
+/// A gserver folder as `seihai-gserver-v2` lays it out: `config/` and the
+/// served `world/`, packages in `world/gpaks/`.
+fn server(world: &std::path::Path, name: &str, allowed: &str, options: &str) -> std::path::PathBuf {
+    let s = world.join("servers").join(name);
+    fs::create_dir_all(s.join("config")).unwrap();
+    fs::create_dir_all(s.join("world/gpaks")).unwrap();
+    fs::write(s.join("config/allowedversions.txt"), allowed).unwrap();
+    fs::write(s.join("config/serveroptions.txt"), options).unwrap();
+    s
+}
+
+fn package_findings(w: &std::path::Path) -> Vec<(String, String)> {
+    lat_core::check::check_packages(w)
+        .into_iter()
+        .map(|f| {
+            assert_eq!(f.severity, Severity::Warn);
+            (f.file, f.text)
+        })
+        .collect()
+}
+
+#[test]
+fn packages_need_their_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    let s = server(w, "modern", "G3D0311C\n", "generation = modern\n");
+    fs::write(s.join("world/gpaks/art.gpake"), b"zip").unwrap();
+    fs::write(s.join("world/gpaks/Music.GPAKE"), b"zip").unwrap();
+    fs::write(
+        s.join("config/gpakkeys.txt"),
+        "# keys\nart.gpake 0123456789ABCDEF\n",
+    )
+    .unwrap();
+    let f = package_findings(w);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].0, "servers/modern/world/gpaks/Music.GPAKE");
+    assert!(f[0].1.contains("music.gpake has no key"), "{}", f[0].1);
+    assert!(f[0].1.contains("servers/modern/config/gpakkeys.txt"));
+
+    // A key line that does not parse is no key.
+    fs::write(
+        s.join("config/gpakkeys.txt"),
+        "art.gpake 0123\nmusic.gpake 0123456789abcdef\n",
+    )
+    .unwrap();
+    let f = package_findings(w);
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert!(f[0].0.ends_with("art.gpake"));
+
+    // check_world reports them too, so `check` and the Check page show them.
+    let r = check_world(w);
+    assert_eq!(r.findings.len(), 1, "{:?}", r.findings);
+    assert_eq!(r.errors(), 0);
+}
+
+#[test]
+fn a_served_key_file_is_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    let s = server(w, "default", "", "");
+    fs::write(s.join("world/gpakkeys.txt"), "art.gpake 0123456789ABCDEF\n").unwrap();
+    fs::write(s.join("world/gpaks/GPAKKEYS.TXT.bak"), "old\n").unwrap();
+    fs::write(
+        s.join("config/gpakkeys.txt"),
+        "art.gpake 0123456789ABCDEF\n",
+    )
+    .unwrap();
+    // seihai-gserver's world folder: config/ and the served files/ at the top.
+    fs::create_dir_all(w.join("config")).unwrap();
+    fs::create_dir_all(w.join("files")).unwrap();
+    fs::write(w.join("files/gpakkeys.txt"), "x\n").unwrap();
+    let f = package_findings(w);
+    let files: Vec<&str> = f.iter().map(|(file, _)| file.as_str()).collect();
+    assert_eq!(
+        files,
+        [
+            "files/gpakkeys.txt",
+            "servers/default/world/gpakkeys.txt",
+            "servers/default/world/gpaks/GPAKKEYS.TXT.bak",
+        ],
+        "{f:?}"
+    );
+    assert!(f.iter().all(|(_, t)| t.contains("anyone can download it")));
+}
+
+#[test]
+fn plain_gpak_warns_only_when_420_may_log_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    let s = server(w, "x", "", "");
+    fs::write(s.join("world/gpaks/art.gpak"), b"zip").unwrap();
+    fs::write(s.join("world/gpaks/art.zip"), b"zip").unwrap();
+    let allowed = s.join("config/allowedversions.txt");
+    let options = s.join("config/serveroptions.txt");
+    let warns = |allowed_txt: &str, options_txt: &str| {
+        fs::write(&allowed, allowed_txt).unwrap();
+        fs::write(&options, options_txt).unwrap();
+        let f = package_findings(w);
+        assert!(f.len() <= 1, "{f:?}");
+        f.first().map(|(file, text)| {
+            assert_eq!(file, "servers/x/world/gpaks/art.gpak");
+            assert!(text.contains("never loads it"), "{text}");
+            text.clone()
+        })
+    };
+    // 4.20r8 named, a range around it (4.04r2 to 6.03r7), or everything.
+    assert!(warns("G3D20126\n", "").is_some());
+    assert!(warns("G3D17026:G3D0311C\n", "").is_some());
+    assert!(warns("*\n", "").is_some());
+    // 5.12 to 6.03r7 Linux (beta4's stock modern line) leaves 4.20r8 out;
+    // so do 2.x-only lists and commented lines.
+    assert!(warns("G3D14097:G3D0511C\n", "").is_none());
+    assert!(warns("GNW03014:GNW28015\n# G3D20126\n// *\n", "").is_none());
+    // Generation lines: only the server's own generation counts.
+    let lines = "[generation-range]\nnewmain = GNW03014:GNW28015\nmodern = G3D17026:G3D0511C\n";
+    assert!(warns(lines, "generation = newmain\n").is_none());
+    let text = warns(lines, "generation = modern\n").unwrap();
+    assert!(text.contains("modern = G3D17026:G3D0511C"), "{text}");
+    // No generation set: any line may apply.
+    assert!(warns(lines, "").is_some());
+    // No allow-list at all: nothing to say.
+    fs::remove_file(&allowed).unwrap();
+    assert!(package_findings(w).is_empty());
+}

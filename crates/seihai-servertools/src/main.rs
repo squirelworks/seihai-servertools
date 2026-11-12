@@ -26,7 +26,7 @@ Usage:
   seihai-servertools gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --server DIR]
                                     resource packages (.gpak, .gpake) for 4.20 and 6.x
                                     clients (`gpak --help`)
-  seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|check]
+  seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
 
@@ -228,7 +228,9 @@ fn gui(args: &[&str]) -> ExitCode {
             ("--page", Some(p)) => match servertools_app::Tab::from_name(p) {
                 Some(t) => opts.tab = Some(t),
                 None => {
-                    eprintln!("gui: no page {p} (lab, setup, levels, npcs, ganis, check)");
+                    eprintln!(
+                        "gui: no page {p} (lab, setup, levels, npcs, ganis, packages, check)"
+                    );
                     return ExitCode::from(2);
                 }
             },

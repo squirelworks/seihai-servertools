@@ -19,16 +19,18 @@ pub enum Tab {
     Levels,
     Npcs,
     Ganis,
+    Packages,
     Check,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 6] = [
+    pub const ALL: [Tab; 7] = [
         Tab::Lab,
         Tab::Setup,
         Tab::Levels,
         Tab::Npcs,
         Tab::Ganis,
+        Tab::Packages,
         Tab::Check,
     ];
 
@@ -39,6 +41,7 @@ impl Tab {
             Tab::Levels => "Level editor (LAT)",
             Tab::Npcs => "NPC editor",
             Tab::Ganis => "Gani editor",
+            Tab::Packages => "Packages",
             Tab::Check => "World check",
         }
     }
@@ -52,6 +55,7 @@ pub struct App {
     levels: pages::levels::Page,
     ganis: pages::ganis::Page,
     npcs: pages::npcs::Page,
+    packages: pages::packages::Page,
     check: pages::check::Page,
 }
 
@@ -64,6 +68,7 @@ impl Default for App {
             levels: pages::levels::Page::default(),
             ganis: pages::ganis::Page::default(),
             npcs: pages::npcs::Page::default(),
+            packages: pages::packages::Page::default(),
             check: pages::check::Page::default(),
         }
     }
@@ -88,6 +93,7 @@ impl eframe::App for App {
                 Tab::Levels => self.levels.show(ui),
                 Tab::Npcs => self.npcs.show(ui),
                 Tab::Ganis => self.ganis.show(ui),
+                Tab::Packages => self.packages.show(ui),
             }
         });
     }
@@ -103,7 +109,8 @@ pub struct StartOptions {
 }
 
 impl Tab {
-    /// A page by a short name: lab, setup, levels, npcs, ganis, check.
+    /// A page by a short name: lab, setup, levels, npcs, ganis, packages,
+    /// check.
     pub fn from_name(name: &str) -> Option<Tab> {
         Some(match name {
             "lab" => Tab::Lab,
@@ -111,6 +118,7 @@ impl Tab {
             "levels" => Tab::Levels,
             "npcs" => Tab::Npcs,
             "ganis" => Tab::Ganis,
+            "packages" => Tab::Packages,
             "check" => Tab::Check,
             _ => return None,
         })
@@ -132,6 +140,11 @@ impl App {
             app.levels.set_folder(&w);
             app.ganis.set_folder(&w);
             app.npcs.set_folder(&w);
+            // The stock lab world's package folder, when it has one.
+            let modern = std::path::Path::new(&w).join("servers").join("modern");
+            if modern.join("config").is_dir() {
+                app.packages.set_server(&modern.display().to_string());
+            }
         }
         app
     }

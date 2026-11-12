@@ -78,62 +78,28 @@ pub fn run(args: &[&str]) -> ExitCode {
 }
 
 fn pack(folder: &Path, out: &str, o: &Opts) -> ExitCode {
-    let lower = out.to_ascii_lowercase();
-    if ![".gpake", ".gpak", ".zip"]
-        .iter()
-        .any(|e| lower.ends_with(e))
-    {
-        return fail(format!("{out}: the name must end in .gpake, .gpak or .zip"));
-    }
-    let encrypted = gpak::is_encrypted(out);
-    if !encrypted && (o.key.is_some() || o.keys.is_some()) {
-        return fail("only a .gpake takes a key");
-    }
     let (path, keys) = match &o.server {
         Some(w) => {
             if Path::new(out).components().count() != 1 {
                 return fail("with --server, OUT is a file name, not a path");
             }
-            (gpak::server_package_path(w, out), Some(gpak::keys_path(w)))
+            let keys = gpak::is_encrypted(out).then(|| gpak::keys_path(w));
+            (gpak::server_package_path(w, out), keys)
         }
         None => (PathBuf::from(out), o.keys.clone()),
     };
-    let entries = match gpak::collect(folder) {
-        Ok(e) => e,
-        Err(e) => return fail(format!("{}: {e}", folder.display())),
+    let packed = match gpak::pack(folder, &path, o.key, keys.as_deref()) {
+        Ok(p) => p,
+        Err(e) => return fail(e),
     };
-    let key = match (encrypted, o.key) {
-        (false, _) => None,
-        (true, Some(k)) => Some(k),
-        (true, None) => match gpak::random_key() {
-            Ok(k) => Some(k),
-            Err(e) => return fail(e),
-        },
-    };
-    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
-        if let Err(e) = std::fs::create_dir_all(dir) {
-            return fail(format!("{}: {e}", dir.display()));
-        }
-    }
-    let file = match std::fs::File::create(&path) {
-        Ok(f) => f,
-        Err(e) => return fail(format!("{}: {e}", path.display())),
-    };
-    if let Err(e) = gpak::write(std::io::BufWriter::new(file), &entries, key.as_ref()) {
-        let _ = std::fs::remove_file(&path);
-        return fail(e);
-    }
-    println!("wrote {} ({} files)", path.display(), entries.len());
-    if let Some(k) = key {
+    println!("wrote {} ({} files)", packed.path.display(), packed.files);
+    if let Some(k) = packed.key {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        match &keys {
-            Some(kf) => match gpak::set_key(kf, &name, &k) {
-                Ok(()) => println!("key for {name} saved in {}", kf.display()),
-                Err(e) => return fail(format!("{}: {e}", kf.display())),
-            },
+        match &packed.key_file {
+            Some(kf) => println!("key for {name} saved in {}", kf.display()),
             None => println!("key for {name}: {}", gpak::key_hex(&k)),
         }
     }

@@ -37,9 +37,9 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | LAT level editor: open, change a tile, preview, upload | `seihai-servertools gui --page levels` | working ([design](docs/design/lat-tools.md)) |
 | Gani editor: open, change a sprite frame, preview, upload | `seihai-servertools gui --page ganis` | working ([design](docs/design/lat-tools.md)) |
 | NPC editor: level NPC scripts with the GS1 check, upload | `seihai-servertools gui --page npcs` | level NPCs working; NPC-server objects planned ([design](docs/design/lat-tools.md)) |
-| Resource packages: build a `.gpak` / encrypted `.gpake` for a gserver folder ([notes](docs/design/gpak.md)) | `seihai-servertools gpak pack\|unpack` | working |
+| Resource packages: build a `.gpak` / encrypted `.gpake` for a gserver folder ([notes](docs/design/gpak.md)) | `seihai-servertools gpak pack\|unpack`, `gui --page packages` | working |
 | Client `.code` caches (`GWEBL001`, `GRESCR01`) | `seihai-servertools code show\|crc\|dump\|pack` | working |
-| World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts |
+| World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts, packages |
 | The window | `seihai-servertools gui` | pages laid out |
 
 The level editor here is for staff editing a live server. The Seihai
@@ -171,7 +171,11 @@ gmap cells naming missing levels, and images or sounds that a level NPC or
 a gani names but the world folder does not have. It also runs the setup
 checks on each `servers/<name>/config/serveroptions.txt` (and the `accounts/`
 of public folders) and on `seihai-listserver.toml`, so a setting `setup` would
-refuse to save, such as `localhost = true` off loopback, is an error. The exit code is 1 when
+refuse to save, such as `localhost = true` off loopback, is an error. In each
+gserver folder it warns about resource packages: a `.gpake` with no key in
+`config/gpakkeys.txt` (the gserver will not send it), a key file under the
+served `world/` or `files/`, and a plain `.gpak` when `allowedversions.txt`
+may let in 4.20r8, which never loads one. The exit code is 1 when
 there are errors (a missing image or sound is a warning), so it can run in CI.
 `check --json WORLD` prints the same findings as one JSON object (`format` 1,
 the counts, and each finding's `level`, `source`, `file`, `key` and `text`).

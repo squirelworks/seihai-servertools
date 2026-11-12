@@ -18,6 +18,13 @@
 //!   the client's, so server-side commands such as `addweapon` would show
 //!   up. See [`crate::npc::check_script`].
 //!
+//! - resource packages in each gserver folder (`servers/<name>/`, or the
+//!   world itself when it has a `config/` folder): a `.gpake` with no key
+//!   in `config/gpakkeys.txt` (the gserver will not send it), a key file
+//!   where the gserver serves files (anyone could download the keys), and
+//!   a plain `.gpak` when `config/allowedversions.txt` may let in 4.20r8,
+//!   which saves a `.gpak` but never loads it (`docs/design/gpak.md`).
+//!
 //! The server settings (`serveroptions.txt`, `seihai-listserver.toml`) are
 //! checked by `setup_core::folder::check_world_config`, which
 //! `seihai-servertools check` runs next to this.
@@ -196,7 +203,128 @@ pub fn check_world(root: &Path) -> Report {
             }
         }
     }
+    report.findings.extend(check_packages(root));
     report
+}
+
+/// The folders a gserver serves files from, relative to its folder:
+/// `world/` (seihai-gserver-v2's `servers/<name>/world/`, with packages in
+/// `world/gpaks/`) and `files/` (seihai-gserver's world folder).
+const SERVED: [&str; 2] = ["world", "files"];
+
+/// The package checks for every gserver folder in a world. See the module
+/// note; all are warnings, since the server still starts.
+pub fn check_packages(root: &Path) -> Vec<Finding> {
+    let mut servers = vec![root.to_path_buf()];
+    if let Ok(rd) = fs::read_dir(root.join("servers")) {
+        let mut more: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+        more.sort();
+        servers.extend(more);
+    }
+    let mut out = Vec::new();
+    for server in servers.iter().filter(|s| s.join("config").is_dir()) {
+        let config = server.join("config");
+        let keys = fs::read_to_string(crate::gpak::keys_path(server)).unwrap_or_default();
+        let lets_in_420 = allows_420(server);
+        let mut files = Vec::new();
+        for dir in SERVED {
+            walk(&server.join(dir), &mut files);
+        }
+        files.sort();
+        for path in &files {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            let file = rel(root, path);
+            if name.starts_with("gpakkeys.txt") {
+                out.push(Finding {
+                    severity: Severity::Warn,
+                    file,
+                    text: "a package key file in a folder the gserver serves: anyone can download it and unpack every .gpake; keep keys only in config/gpakkeys.txt".into(),
+                });
+            } else if crate::gpak::is_encrypted(&name) {
+                if crate::gpak::key_in(&keys, &name).is_none() {
+                    out.push(Finding {
+                        severity: Severity::Warn,
+                        file,
+                        text: format!(
+                            "{name} has no key in {}: the gserver will not send it (gpak pack --server writes the key)",
+                            rel(root, &config.join("gpakkeys.txt"))
+                        ),
+                    });
+                }
+            } else if name.ends_with(".gpak") {
+                if let Some(why) = &lets_in_420 {
+                    out.push(Finding {
+                        severity: Severity::Warn,
+                        file,
+                        text: format!(
+                            "a plain .gpak, and {why}: 4.20r8 saves a .gpak but never loads it; use a .gpake (or .zip) when 4.20 players matter"
+                        ),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Whether a gserver folder's `config/allowedversions.txt` may let in
+/// 4.20r8 (`G3D20126`), and the line that does. Each line is a token, a
+/// range `A:B`, `*`, or `name = entries` for one server generation; when
+/// `serveroptions.txt` names a `generation`, only that one's named lines
+/// count. A range counts when 4.20r8 lies between its ends in
+/// `seihai-core`'s version order (oldest first). Mac 4.20r6 (`G3D27076`)
+/// is not in the fork's version table, so it is not looked for. `None`
+/// when there is no such file, or nothing in it reaches 4.20r8.
+fn allows_420(server: &Path) -> Option<String> {
+    let text = fs::read_to_string(server.join("config/allowedversions.txt")).ok()?;
+    let options = fs::read_to_string(server.join("config/serveroptions.txt")).unwrap_or_default();
+    let generation = options.lines().find_map(|l| {
+        let (k, v) = l.split_once('=')?;
+        (k.trim().eq_ignore_ascii_case("generation")).then(|| v.trim().to_ascii_lowercase())
+    });
+    let order: Vec<&str> = ClientVersion::all_versions()
+        .iter()
+        .map(|v| v.token())
+        .collect();
+    let target = ClientVersion::V420R8.token();
+    let at = |t: &str| order.iter().position(|o| o.eq_ignore_ascii_case(t));
+    let target_at = at(target)?;
+    for raw in text.lines() {
+        let line = raw.split("//").next().unwrap_or("");
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() || line.starts_with('[') {
+            continue;
+        }
+        let entries = match line.split_once('=') {
+            Some((name, value)) => {
+                let name = name.trim().to_ascii_lowercase();
+                if generation.as_ref().is_some_and(|g| *g != name) {
+                    continue;
+                }
+                value
+            }
+            None => line,
+        };
+        for entry in entries.split([',', ' ', '\t']).filter(|e| !e.is_empty()) {
+            let hit = if entry == "*" {
+                true
+            } else if let Some((a, b)) = entry.split_once(':') {
+                matches!((at(a.trim()), at(b.trim())), (Some(a), Some(b)) if a <= target_at && target_at <= b)
+            } else {
+                entry.eq_ignore_ascii_case(target)
+            };
+            if hit {
+                return Some(format!(
+                    "config/allowedversions.txt lets in 4.20r8 (`{}`)",
+                    raw.trim()
+                ));
+            }
+        }
+    }
+    None
 }
 
 /// At most this many script problems are listed for one NPC; the rest are
