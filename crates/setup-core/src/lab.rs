@@ -16,6 +16,14 @@
 //! the command line then starts the plan with [`crate::run`]. The listserver
 //! starts first, so the gservers find it when they register.
 //!
+//! A lab world can also run `seihai-gserver` (the Rust gserver) on its own
+//! world folder, next to the fork's server folders or instead of them:
+//! [`LabOptions::rust_worlds`] (`lab start --rust DIR`). Its program,
+//! `seihai-gserver`, is found like the listserver below. Its
+//! `config/server.txt` is only read, never edited: when its `listserver`
+//! setting does not point at the lab listserver, the plan says which line
+//! to change.
+//!
 //! The listserver is `seihai-listserver`, looked for in this order: the path
 //! the user gave, the world folder, the folder of the running
 //! `seihai-servertools`, then `PATH`. If none is found the gservers start
@@ -61,12 +69,28 @@ pub struct LabOptions {
     pub listserver: ListserverChoice,
     /// The gserver program; `None` means `<world>/gs2emu`.
     pub gserver: Option<PathBuf>,
+    /// `seihai-gserver` world folders to start too (relative paths are
+    /// taken from the world folder). Each needs `config/server.txt`.
+    pub rust_worlds: Vec<PathBuf>,
+    /// The `seihai-gserver` program; `None` looks for it like the
+    /// listserver (world folder, next to this tool, `PATH`).
+    pub rust_gserver: Option<PathBuf>,
+}
+
+/// Which gserver a plan line starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerKind {
+    /// `gs2emu` from seihai-gserver-v2, one `servers/<name>` folder.
+    Fork,
+    /// `seihai-gserver`, one world folder with `config/server.txt`.
+    Rust,
 }
 
 /// One gserver in the plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GserverPlan {
     pub name: String,
+    pub kind: ServerKind,
     /// `serverinterface` and `serverport` from its options, for messages.
     pub interface: Option<String>,
     pub port: Option<String>,
@@ -97,6 +121,8 @@ pub enum LabError {
     NoServerFolder(String),
     NoServersFound(PathBuf),
     NoListserver(PathBuf),
+    NoRustWorld(PathBuf),
+    NoRustGserver(Option<PathBuf>),
 }
 
 impl fmt::Display for LabError {
@@ -116,6 +142,17 @@ impl fmt::Display for LabError {
                 p.join("servers").display()
             ),
             LabError::NoListserver(p) => write!(f, "no listserver at {}", p.display()),
+            LabError::NoRustWorld(p) => write!(
+                f,
+                "no seihai-gserver world at {} (config/server.txt expected)",
+                p.display()
+            ),
+            LabError::NoRustGserver(Some(p)) => write!(f, "no seihai-gserver at {}", p.display()),
+            LabError::NoRustGserver(None) => write!(
+                f,
+                "no {} found (world folder, next to seihai-servertools, PATH): give --rust-gserver",
+                exe_name("seihai-gserver")
+            ),
         }
     }
 }
@@ -131,7 +168,12 @@ fn options_path(world: &Path, name: &str) -> PathBuf {
 }
 
 fn find_listserver(world: &Path) -> Option<PathBuf> {
-    let name = exe_name("seihai-listserver");
+    find_program(world, "seihai-listserver")
+}
+
+/// A program in the world folder, next to the running tool, or on `PATH`.
+fn find_program(world: &Path, stem: &str) -> Option<PathBuf> {
+    let name = exe_name(stem);
     let mut dirs = vec![world.to_path_buf()];
     if let Some(dir) = env::current_exe()
         .ok()
@@ -162,9 +204,10 @@ pub fn plan(opts: &LabOptions) -> Result<Plan, LabError> {
         .gserver
         .clone()
         .unwrap_or_else(|| world.join(exe_name("gs2emu")));
-    if !gserver.is_file() {
-        return Err(LabError::NoGserver(gserver));
-    }
+    // With Rust worlds and no fork folders named, the fork is optional:
+    // a world may hold only a seihai-gserver world folder.
+    let rust_only = !opts.rust_worlds.is_empty() && opts.servers.is_empty();
+    let mut notes = Vec::new();
 
     let names: Vec<String> = if opts.servers.is_empty() {
         let found: Vec<String> = DEFAULT_SERVERS
@@ -172,16 +215,30 @@ pub fn plan(opts: &LabOptions) -> Result<Plan, LabError> {
             .filter(|n| options_path(world, n).is_file())
             .map(|n| n.to_string())
             .collect();
-        if found.is_empty() {
+        if found.is_empty() && !rust_only {
             return Err(LabError::NoServersFound(world.clone()));
         }
-        found
+        if rust_only && !gserver.is_file() {
+            if !found.is_empty() {
+                notes.push(format!(
+                    "no gserver at {}: starting the seihai-gserver worlds only, not {}",
+                    gserver.display(),
+                    found.join(", ")
+                ));
+            }
+            Vec::new()
+        } else {
+            found
+        }
     } else {
         opts.servers.clone()
     };
+    if !names.is_empty() && !gserver.is_file() {
+        return Err(LabError::NoGserver(gserver));
+    }
 
-    let mut notes = Vec::new();
     let mut gservers = Vec::new();
+    let mut rust_settings: Vec<RustSettings> = Vec::new();
     for name in names {
         let path = options_path(world, &name);
         if !valid_name(&name) || !path.is_file() {
@@ -196,6 +253,7 @@ pub fn plan(opts: &LabOptions) -> Result<Plan, LabError> {
             ));
         }
         gservers.push(GserverPlan {
+            kind: ServerKind::Fork,
             port: options.get("serverport").map(str::to_string),
             interface,
             spec: ProcessSpec {
@@ -211,6 +269,64 @@ pub fn plan(opts: &LabOptions) -> Result<Plan, LabError> {
             },
             name,
         });
+    }
+
+    if !opts.rust_worlds.is_empty() {
+        let program = match &opts.rust_gserver {
+            Some(p) if p.is_file() => p.clone(),
+            Some(p) => return Err(LabError::NoRustGserver(Some(p.clone()))),
+            None => find_program(world, "seihai-gserver").ok_or(LabError::NoRustGserver(None))?,
+        };
+        for dir in &opts.rust_worlds {
+            let dir = if dir.is_absolute() {
+                dir.clone()
+            } else {
+                world.join(dir)
+            };
+            let config = dir.join("config").join("server.txt");
+            if !config.is_file() {
+                return Err(LabError::NoRustWorld(dir));
+            }
+            let settings = RustSettings::load(&config);
+            let name = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "rust".into());
+            if settings.bind != "127.0.0.1" {
+                notes.push(format!(
+                    "{name} (seihai-gserver) binds {}: it may be reachable from other machines",
+                    settings.bind
+                ));
+            }
+            gservers.push(GserverPlan {
+                kind: ServerKind::Rust,
+                interface: Some(settings.bind.clone()),
+                port: Some(settings.port.clone()),
+                spec: ProcessSpec {
+                    label: name.clone(),
+                    program: program.clone(),
+                    args: vec!["--world".into(), dir.display().to_string()],
+                    cwd: world.clone(),
+                    console: world.join("logs").join(format!("{name}-console.txt")),
+                },
+                name,
+            });
+            rust_settings.push(settings);
+        }
+    }
+    // Two servers on one address cannot both start.
+    for (i, a) in gservers.iter().enumerate() {
+        for b in &gservers[i + 1..] {
+            if a.port.is_some() && a.port == b.port && a.interface == b.interface {
+                notes.push(format!(
+                    "{} and {} both listen on {}:{}: the second will not start; change one port",
+                    a.name,
+                    b.name,
+                    a.interface.as_deref().unwrap_or("AUTO"),
+                    a.port.as_deref().unwrap_or("?")
+                ));
+            }
+        }
     }
 
     let program = match &opts.listserver {
@@ -263,6 +379,25 @@ pub fn plan(opts: &LabOptions) -> Result<Plan, LabError> {
         }
     });
 
+    // The Rust gservers register only where their `listserver` points.
+    if let Some(l) = &listserver {
+        let want = format!("127.0.0.1:{}", l.settings.gserver_port);
+        let rust = gservers.iter().filter(|g| g.kind == ServerKind::Rust);
+        for (g, s) in rust.zip(&rust_settings) {
+            if s.listserver != want {
+                let before = if s.listserver.is_empty() {
+                    "no listserver line".to_string()
+                } else {
+                    format!("`listserver = {}`", s.listserver)
+                };
+                notes.push(format!(
+                    "{} (seihai-gserver) will not show in the lab list: its config/server.txt has {before}; change it to `listserver = {want}` (not edited for you)",
+                    g.name
+                ));
+            }
+        }
+    }
+
     Ok(Plan {
         listserver,
         gservers,
@@ -284,9 +419,13 @@ impl fmt::Display for Plan {
             )?;
         }
         for g in &self.gservers {
+            let kind = match g.kind {
+                ServerKind::Fork => "gserver    ",
+                ServerKind::Rust => "rust       ",
+            };
             writeln!(
                 f,
-                "gserver     {} on {}:{}  (console {})",
+                "{kind} {} on {}:{}  (console {})",
                 g.name,
                 g.interface.as_deref().unwrap_or("AUTO"),
                 g.port.as_deref().unwrap_or("?"),
@@ -297,5 +436,44 @@ impl fmt::Display for Plan {
             writeln!(f, "note: {n}")?;
         }
         Ok(())
+    }
+}
+
+/// What the plan reads from a `seihai-gserver` world's `config/server.txt`:
+/// `key = value`, `#` starts a comment, the last line for a key wins, and
+/// a missing key takes seihai-gserver's default.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RustSettings {
+    pub bind: String,
+    pub port: String,
+    /// `host:port`, or empty when it registers with no listserver.
+    pub listserver: String,
+}
+
+impl RustSettings {
+    pub fn parse(text: &str) -> Self {
+        let mut out = RustSettings {
+            bind: "127.0.0.1".into(),
+            port: "14802".into(),
+            listserver: String::new(),
+        };
+        for line in text.lines() {
+            let line = line.split('#').next().unwrap_or("");
+            let Some((k, v)) = line.split_once('=') else {
+                continue;
+            };
+            let v = v.trim().to_string();
+            match k.trim() {
+                "bind" => out.bind = v,
+                "port" => out.port = v,
+                "listserver" => out.listserver = v,
+                _ => {}
+            }
+        }
+        out
+    }
+
+    pub fn load(path: &Path) -> Self {
+        Self::parse(&fs::read_to_string(path).unwrap_or_default())
     }
 }
