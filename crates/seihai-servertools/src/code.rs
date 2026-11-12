@@ -14,11 +14,13 @@ code show FILE [--key HEX16] [--level NAME]
     GWEBL001 (a level cache): host, signature, mod time, level name, body size.
     The level name defaults to the file name (start.nw-14802.code is start.nw).
     GRESCR01: decrypted and stored-body CRC32. Needs --key to decrypt.
+    HEX16 for a script is the two key words from packet 140 or 197, each as a
+    little-endian 32-bit value, first word first.
 code crc FILE [--domain plain|stored] [--key HEX16]
-    Prints only the CRC32. Default plain preserves the decrypted-body result
-    and needs --key. Stored excludes the magic and needs no key: the inspected
-    Windows 6.03 weapon path compares this before transformation. This is not
-    a cache-acceptance check and is not established for every build/caller.
+    Prints only the CRC32. Default stored: the bytes after the magic, before
+    decryption, which is the CRC a 6.113 server sends in packet 197. Needs no
+    key. Plain is the decrypted body and needs --key. Neither is a
+    cache-acceptance check.
 code dump FILE --out PLAIN [--key HEX16] [--level NAME]
     Writes the plain level text, or the plain script body.
 code pack PLAIN --out FILE [--key HEX16]
@@ -138,7 +140,7 @@ fn crc(o: &Opts) -> ExitCode {
     if o.plain.len() != 1 {
         return usage();
     }
-    if o.domain == Some(true) {
+    if o.domain != Some(false) {
         return match read_file(file)
             .and_then(|data| code_cache::stored_script_crc32(&data).map_err(fail))
         {

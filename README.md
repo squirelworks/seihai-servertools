@@ -201,18 +201,20 @@ the counts, and each finding's `level`, `source`, `file`, `key` and `text`).
 
 ```sh
 seihai-servertools code show synthetic.code --key C82CEA9ED93DFB8F
+seihai-servertools code crc synthetic.code
 seihai-servertools code crc synthetic.code --domain plain --key C82CEA9ED93DFB8F
-seihai-servertools code crc synthetic.code --domain stored
 ```
 
-The default CRC domain stays `plain` for compatibility. `stored` needs no
-key and covers on-disk bytes after the `GRESCR01` magic, before transformation.
-`show` labels both CRCs. The inspected Windows 6.03 **weapon** caller compares
-the stored-body CRC; other builds and class callers are not established by
-that finding. Neither CRC calculation nor decrypted output proves accepted
-cache status, a valid GS2 container or script execution. See the
-[format and acceptance audit](docs/design/code-caches.md) for scope and open
-real-client evidence. Commands operate on local files only.
+`code crc` defaults to the `stored` domain: CRC32 of the on-disk bytes after
+the `GRESCR01` magic, before decryption. It needs no key. In a real Windows
+6.113 session this is the CRC the server sends in packet 197, for every
+script checked (see the [audit](docs/design/code-caches.md)). `--domain plain`
+gives the CRC of the decrypted body and needs `--key`. `--key` is the two key
+words from packet 140 or 197, each written as a little-endian 32-bit value,
+first word first; the tool applies the DES key-byte bit reversal itself.
+`show` labels both CRCs. Neither CRC proves the client will accept the cache,
+that the body is a valid GS2 container, or that the script runs. Commands
+operate on local files only.
 
 ## Build
 
