@@ -1,0 +1,5 @@
+Loading server configuration.
+Initializing player listen socket.
+Listening on: 127.0.0.1:14803.
+Initializing listserver socket.
+listserver - Connected to 127.0.0.1:14900.

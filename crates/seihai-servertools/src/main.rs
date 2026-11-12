@@ -18,7 +18,7 @@ Usage:
                                [--gserver PATH] [--rust DIR]... [--rust-gserver PATH]
                                [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
-  seihai-servertools check [--json] [--client-reach] WORLD
+  seihai-servertools check [--json] [--client-reach] [--make-gif] WORLD
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
@@ -51,12 +51,15 @@ counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
 text. --client-reach also inventories level NPC image references (including
 fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
 It flags parsed gani files for fallback review using shared profiles' gani
-support, without claiming use or choosing a built-in animation. It lists
-level NPC and weapon (weapons/*.txt) scripts that are GS2 only or mix GS1
-and GS2, with the shared profiles that do not run GS2 (before 3.153), and levels
-with tiles past column 116 of pics1.png, which the 1856-wide sheet of 1.28b2
-to 2.05 lacks. It does not convert art or certify script, animation, tile or
-gmap compatibility.";
+support, without claiming use or choosing a built-in animation, and lists
+the profiles without gmap support or the level's format. It lists level NPC
+and weapon (weapons/*.txt) scripts that are GS2 only or mix GS1 and GS2, with
+the shared profiles that do not run GS2 (before 3.153), and levels with tiles
+past column 116 of pics1.png, which the 1856-wide sheet of 1.28b2 to 2.05
+lacks. It does not certify script, animation, tile or gmap compatibility.
+--make-gif (opt-in) first writes a GIF copy next to each PNG that
+--client-reach would report, keeping every pixel; it never replaces a file
+and skips art with over 256 colours.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -107,10 +110,12 @@ fn check_args(args: &[&str]) -> ExitCode {
     let mut world = None;
     let mut json = false;
     let mut reach = false;
+    let mut make_gif = false;
     for arg in args {
         match *arg {
             "--json" => json = true,
             "--client-reach" => reach = true,
+            "--make-gif" => make_gif = true,
             value if !value.starts_with('-') && world.is_none() => world = Some(value),
             _ => {
                 eprintln!("{USAGE}");
@@ -122,6 +127,18 @@ fn check_args(args: &[&str]) -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
+    if make_gif && json {
+        eprintln!("check: --make-gif prints what it wrote; run --json without it");
+        return ExitCode::from(2);
+    }
+    if make_gif && Path::new(world).is_dir() {
+        for c in lat_core::gifcopy::make_gifs(Path::new(world)) {
+            match c.result {
+                Ok(()) => println!("wrote {}", c.gif.display()),
+                Err(e) => println!("skipped {}: {e}", c.png.display()),
+            }
+        }
+    }
     check(Path::new(world), json, reach)
 }
 

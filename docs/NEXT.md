@@ -207,16 +207,21 @@ Held until Seihai M4 or M5 asks for it:
       parsed gmap, the shared profiles without `levels.gmap` (linked-level
       fallback review), and per level the profiles that cannot open its
       format (read from the magic: NW, GR-V1, Z3-V1). Inventory only.
+- [x] Issue #38 opt-in GIF copies: `check --make-gif` writes a GIF next
+      to each PNG `--client-reach` reports, pixel for pixel, never replacing
+      a file; art over 256 colours is skipped with the reason. Not drawn by
+      a real pre-2.1 client yet.
 - [x] Issue #38 script-era slice: `--client-reach` lists level NPC and
       weapon scripts that are GS2 only or mix GS1 and GS2, with the shared
       profiles without GS2 (3.153 and later run it, per seihai #430). Read
-      from the script text, not compiled. Switch to `VersionProfile::scripts`
-      once a seihai tag has it.
+      from the script text, not compiled; the client lists come from
+      seihai-core's `VersionProfile::scripts.gs2` (#60).
 - [x] Issue #38 tile slice: levels with tiles past column 116 of
       `pics1.png`, listed with the profiles that ship the 1856-wide sheet
       (1.28b2 to 1.41, 2.00 to 2.05). 1.21 and 2.1x left out (no evidence).
-- [ ] Issue #38 weapon images in the GIF inventory, and opt-in GIF
-      conversion (#57) remain; this is not a fidelity certificate.
+- [x] Issue #38 weapon images: a weapon file's `IMAGE` and fixed script
+      image names join the GIF inventory and `--make-gif`.
+- [ ] Issue #38 dynamic image names. This is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
 - [x] GS1 syntax errors in level NPCs (and the images and sounds those

@@ -531,6 +531,12 @@ fn script_reach_lists_gs2_and_mixed_level_npcs_and_weapons() {
             .map(|p| p.split(']').next().unwrap().split(", ").collect())
             .collect();
         let (no, unknown) = (&lists[0], &lists[1]);
+        // The lists are seihai-core's `scripts.gs2` field.
+        for v in ClientVersion::all_versions() {
+            let gs2 = v.profile().scripts.gs2.as_str();
+            assert_eq!(no.contains(&v.label()), gs2 == "no", "{v:?} {t}");
+            assert_eq!(unknown.contains(&v.label()), gs2 == "unknown", "{v:?} {t}");
+        }
         for v in [
             ClientVersion::V121,
             ClientVersion::V231,
@@ -609,4 +615,40 @@ fn tile_reach_lists_levels_past_the_1856_wide_sheet() {
     ] {
         assert!(!labels.contains(&v.label()), "{v:?}");
     }
+}
+
+#[test]
+fn weapon_images_join_the_gif_inventory_and_copies() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("servers/default/weapons")).unwrap();
+    fs::write(
+        w.join("servers/default/weapons/weapon-Bow.txt"),
+        "GRAWP001\nREALNAME -Bow\nIMAGE bow.png\nSCRIPT\nif (weaponfired) { setimg arrow.png; }\nSCRIPTEND\n",
+    )
+    .unwrap();
+    fs::write(w.join("bow.png"), b"png").unwrap();
+    fs::write(w.join("arrow.png"), b"png").unwrap();
+    fs::write(w.join("unused.png"), b"png").unwrap();
+    let f = lat_core::check::check_image_reach(w);
+    assert_eq!(f.len(), 2, "{f:?}");
+    assert!(f
+        .iter()
+        .all(|f| f.file == "servers/default/weapons/weapon-Bow.txt"));
+    assert!(
+        f[0].text.contains("bow.gif") && f[1].text.contains("arrow.gif"),
+        "{f:?}"
+    );
+    let copies = lat_core::check::gif_copies_wanted(w);
+    assert_eq!(
+        copies,
+        vec![
+            (w.join("arrow.png"), w.join("arrow.gif")),
+            (w.join("bow.png"), w.join("bow.gif")),
+        ]
+    );
+    // A GRAWP001 file outside weapons/ names nothing.
+    fs::remove_dir_all(w.join("servers")).unwrap();
+    fs::write(w.join("weapon-Bow.txt"), "GRAWP001\nIMAGE bow.png\n").unwrap();
+    assert!(lat_core::check::check_image_reach(w).is_empty());
 }

@@ -46,7 +46,7 @@ The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
 
 `seihai-servertools check --client-reach [--json] WORLD` adds warnings for
-level NPC images and fixed GS1 script image names that have PNG art but no
+level NPC and weapon images, and fixed GS1 script image names, that have PNG art but no
 GIF counterpart for pre-2.1 clients. It inventories file names and never
 converts or writes art. A matching GIF name does not certify its contents or
 original-client rendering.
@@ -78,8 +78,7 @@ codes outside strings. GS1-only scripts run on every client and are not
 listed. Which clients run GS2 follows seihai #430's evidence (the binary
 handles packet 131): yes from 3.153 on; no for 1.21 to 2.31 and 3.04;
 unknown for 2.10 to 2.16, 2.30, 6.015 and 6.034, which have no binary. The
-list is copied here until seihai-core's `VersionProfile::scripts` is in a
-tag this repo pins; then the check reads that field.
+check reads seihai-core's `VersionProfile::scripts.gs2` field.
 
 Tiles: each level with tiles past column 116 of the default `pics1.png` is
 listed with the profiles whose shipped sheet is 1856×512 (1.28 beta 2 to
@@ -88,7 +87,14 @@ columns match the left 116 of the 2048-wide 1.42 sheet cell for cell, so
 tile ids map the same way and the old sheet just ends early. 1.21 (a
 1280-wide sheet whose layout is not established) and 2.1x (no sheet in the
 archives) are not listed, and `tiledefs` sheets are not matched. Dynamic
-names and weapon images remain outside these slices of issue #38.
+names remain outside these slices of issue #38.
+
+`check --make-gif WORLD` (opt-in) first writes a GIF copy next to each PNG
+that `--client-reach` reports as having none, then runs the check. A copy
+keeps every pixel's colour; pixels with alpha below 128 become the GIF's
+transparent colour (this tool's choice, not read from a client). It never
+replaces a file, and it skips art with more than 256 colours (255 with
+transparency) and says so, rather than picking a palette for you.
 
 ## Start a lab world
 

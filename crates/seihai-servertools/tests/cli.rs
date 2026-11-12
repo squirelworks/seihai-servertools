@@ -883,3 +883,61 @@ fn client_reach_lists_gs2_level_npcs_and_new_tiles() {
         assert!(text.contains("tiles past column 116"), "{text}");
     }
 }
+
+#[test]
+fn make_gif_writes_only_the_copies_client_reach_asks_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("images")).unwrap();
+    fs::write(
+        w.join("start.nw"),
+        "GLEVNW01\nNPC tree.png 1 1\nNPCEND\nNPC rock.png 2 2\nNPCEND\n",
+    )
+    .unwrap();
+    // A real 1x1 PNG for the tree; the rock already has a GIF; an unused PNG.
+    let mut png_bytes = Vec::new();
+    {
+        let mut e = png::Encoder::new(&mut png_bytes, 1, 1);
+        e.set_color(png::ColorType::Rgb);
+        e.write_header()
+            .unwrap()
+            .write_image_data(&[10, 20, 30])
+            .unwrap();
+    }
+    fs::write(w.join("images/tree.png"), &png_bytes).unwrap();
+    fs::write(w.join("images/rock.png"), &png_bytes).unwrap();
+    fs::write(w.join("images/ROCK.GIF"), b"old").unwrap();
+    fs::write(w.join("images/unused.png"), &png_bytes).unwrap();
+
+    let refused = bin()
+        .args(["check", "--make-gif", "--json"])
+        .arg(w)
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(!w.join("images/tree.gif").exists());
+
+    let out = bin()
+        .args(["check", "--client-reach", "--make-gif"])
+        .arg(w)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(
+        text.contains("wrote ") && text.contains("tree.gif"),
+        "{text}"
+    );
+    // After the copy, the reach report has nothing to say about the tree.
+    assert!(!text.contains("no tree.gif counterpart"), "{text}");
+    assert!(fs::read(w.join("images/tree.gif"))
+        .unwrap()
+        .starts_with(b"GIF8"));
+    assert_eq!(fs::read(w.join("images/ROCK.GIF")).unwrap(), b"old");
+    // Only tree.gif was added: no rock copy, no copy of the unused PNG.
+    assert_eq!(fs::read_dir(w.join("images")).unwrap().count(), 5);
+
+    // A second run has nothing left to write.
+    let again = bin().args(["check", "--make-gif"]).arg(w).output().unwrap();
+    assert!(!String::from_utf8_lossy(&again.stdout).contains("wrote "));
+}

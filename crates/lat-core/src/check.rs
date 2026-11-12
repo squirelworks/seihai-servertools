@@ -332,9 +332,9 @@ fn allows_420(server: &Path) -> Option<String> {
 /// most lines, and one NPC should not bury the report.
 const MAX_SCRIPT_PROBLEMS: usize = 3;
 
-/// Inventory PNG references without GIF counterparts and parsed gani files
-/// needing fallback review for shared profiles without `ui.ganis` (#38).
-/// Presence does not prove use or original-client rendering. Dynamic script
+/// Inventory PNG references without GIF counterparts (level NPCs and
+/// weapon files, see `images_named_by`) and parsed gani files needing
+/// fallback review for shared profiles without `ui.ganis` (#38). Presence does not prove use or original-client rendering. Dynamic script
 /// names are not resolved. This never writes or converts files.
 pub fn check_image_reach(root: &Path) -> Vec<Finding> {
     let mut files = Vec::new();
@@ -354,13 +354,10 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
         .join(", ");
     for path in &files {
         let lower = path.to_string_lossy().to_ascii_lowercase();
-        if !is_level(&lower) && !lower.ends_with(".gani") {
-            continue;
-        }
-        let Ok(bytes) = fs::read(path) else {
-            continue;
-        };
         if lower.ends_with(".gani") {
+            let Ok(bytes) = fs::read(path) else {
+                continue;
+            };
             // Reuse the shared parser. Ordinary check_world reports parse
             // errors and missing literal images/sounds; do not duplicate them.
             if crate::gani::open(&bytes).is_ok() && !without_ganis.is_empty() {
@@ -374,46 +371,15 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
             }
             continue;
         }
-        let Ok(level) = crate::level::open(&bytes) else {
+        let Some(images) = images_named_by(path, &lower) else {
             continue;
         };
-        let mut seen = BTreeSet::new();
-        for npc in &level.npcs {
-            let script = crate::npc::check_script(&npc.script);
-            let images = std::iter::once(npc.image.as_str()).chain(
-                script
-                    .files
-                    .iter()
-                    .filter(|f| f.kind == crate::npc::FileKind::Image)
-                    .map(|f| f.name.as_str()),
-            );
-            for image in images {
-                let image = image.trim();
-                if !picture_file(image) {
-                    continue;
-                }
-                let name = image
-                    .rsplit(['/', '\\'])
-                    .next()
-                    .unwrap_or(image)
-                    .to_ascii_lowercase();
-                let stem = name
-                    .strip_suffix(".png")
-                    .or_else(|| name.strip_suffix(".gif"));
-                let Some(stem) = stem else {
-                    continue;
-                };
-                if names.contains(&format!("{stem}.png"))
-                    && !names.contains(&format!("{stem}.gif"))
-                    && seen.insert(stem.to_string())
-                {
-                    findings.push(Finding {
-                        severity: Severity::Warn,
-                        file: rel(root, path),
-                        text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
-                    });
-                }
-            }
+        for (image, stem) in gif_wanted_in(&images, &names) {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
+            });
         }
     }
     findings
@@ -544,28 +510,20 @@ pub fn read_weapon(path: &Path) -> Option<WeaponFile> {
     Some(weapon)
 }
 
-/// The shared profiles (oldest first) that do not run GS2, and those not
-/// known either way, as labels.
-///
-/// Stopgap until seihai-core's `VersionProfile::scripts` (seihai #430)
-/// is in a tag this repo pins; then this reads that field instead. The
-/// lists copy #430's evidence: GS2 runs on a client whose binary handles
-/// `PLO_NPCBYTECODE` (131), which is 3.153 and every build after it; the
-/// 1.21 to 2.31 classic binaries and 3.04 have no 131 (no); 2.10 to 2.16,
-/// 2.30, 6.015 and 6.034 have no binary to read (unknown).
+/// The shared profiles (oldest first) whose `scripts.gs2` is no, and those
+/// where it is unknown, as labels. seihai-core sets the field from whether
+/// the client's binary handles `PLO_NPCBYTECODE` (131): 3.153 on run GS2;
+/// unknown means there is no binary to read.
 fn profiles_without_gs2() -> (String, String) {
-    use ClientVersion::*;
-    const UNKNOWN: &[ClientVersion] = &[V210, V212, V213, V214, V215, V216, V230, V6015, V6034];
-    let all = ClientVersion::all_versions();
-    let first_gs2 = all.iter().position(|v| *v == V3153).unwrap_or(all.len());
-    let join =
-        |vs: Vec<&ClientVersion>| vs.iter().map(|v| v.label()).collect::<Vec<_>>().join(", ");
-    let no = all[..first_gs2]
-        .iter()
-        .filter(|v| !UNKNOWN.contains(v))
-        .collect();
-    let unknown = all.iter().filter(|v| UNKNOWN.contains(v)).collect();
-    (join(no), join(unknown))
+    let list = |want: &str| {
+        ClientVersion::all_versions()
+            .iter()
+            .filter(|v| v.profile().scripts.gs2.as_str() == want)
+            .map(|v| v.label())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    (list("no"), list("unknown"))
 }
 
 /// Script era reach (#38): every level NPC and weapon whose script is GS2
@@ -732,6 +690,105 @@ pub fn check_tile_reach(root: &Path) -> Vec<Finding> {
         });
     }
     findings
+}
+
+/// The images a file names, for the GIF inventory: a level's NPC pictures
+/// and the fixed names their scripts give `setimg` and friends, or a weapon
+/// file's `IMAGE` and fixed script names. `None` for any other file, or a
+/// level that does not parse.
+fn images_named_by(path: &Path, lower: &str) -> Option<Vec<String>> {
+    let script_images = |script: &str| -> Vec<String> {
+        crate::npc::check_script(script)
+            .files
+            .into_iter()
+            .filter(|f| f.kind == crate::npc::FileKind::Image)
+            .map(|f| f.name)
+            .collect()
+    };
+    if is_level(lower) {
+        let level = crate::level::open(&fs::read(path).ok()?).ok()?;
+        Some(
+            level
+                .npcs
+                .iter()
+                .flat_map(|npc| {
+                    std::iter::once(npc.image.clone()).chain(script_images(&npc.script))
+                })
+                .collect(),
+        )
+    } else {
+        let weapon = read_weapon(path)?;
+        let mut images = vec![weapon.image];
+        if !weapon.script.trim().is_empty() {
+            images.extend(script_images(&weapon.script));
+        }
+        Some(images)
+    }
+}
+
+/// Of `images`, those with PNG art in the world but no GIF of the same
+/// name, which pre-2.1 clients ask for: `(name as written, lower-case
+/// stem)`, each stem once. `names` holds every file name in the world,
+/// lower case.
+fn gif_wanted_in(images: &[String], names: &BTreeSet<String>) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+    for image in images {
+        let image = image.trim();
+        if !picture_file(image) {
+            continue;
+        }
+        let name = image
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(image)
+            .to_ascii_lowercase();
+        let Some(stem) = name
+            .strip_suffix(".png")
+            .or_else(|| name.strip_suffix(".gif"))
+        else {
+            continue;
+        };
+        if names.contains(&format!("{stem}.png"))
+            && !names.contains(&format!("{stem}.gif"))
+            && seen.insert(stem.to_string())
+        {
+            out.push((image.to_string(), stem.to_string()));
+        }
+    }
+    out
+}
+
+/// The PNG files `check --client-reach` reports as missing a GIF copy, and
+/// the GIF path each would get (same folder, same stem, `.gif`), in path
+/// order. Every PNG with a wanted stem is listed, wherever it lies in the
+/// world, since the gserver finds files by name alone.
+pub fn gif_copies_wanted(root: &Path) -> Vec<(PathBuf, PathBuf)> {
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let names: BTreeSet<String> = files
+        .iter()
+        .filter_map(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .collect();
+    let mut stems = BTreeSet::new();
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        if let Some(images) = images_named_by(path, &lower) {
+            stems.extend(gif_wanted_in(&images, &names).into_iter().map(|(_, s)| s));
+        }
+    }
+    files
+        .iter()
+        .filter_map(|p| {
+            let name = p.file_name()?.to_string_lossy().to_ascii_lowercase();
+            let stem = name.strip_suffix(".png")?;
+            stems
+                .contains(stem)
+                .then(|| (p.clone(), p.with_file_name(format!("{stem}.gif"))))
+        })
+        .collect()
 }
 
 fn check_npc_script(
