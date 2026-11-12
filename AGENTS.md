@@ -91,3 +91,11 @@ to do next. In short:
   warnings` and `cargo test` on Linux, Windows and macOS. Chiaki merges once
   Linux is green; keep Windows and macOS green too.
 - **No tags or releases** without Squirrel's go-ahead.
+
+## macOS builds
+
+macOS is not built on GitHub's macOS runners. It is built and tested on the
+lab's Sequoia (macOS 15) VM on GwenTea2 (`start-macos.sh`, then `ssh builder@`),
+with the same build and test commands the Linux job runs. GitHub CI covers
+Linux and Windows. Each VM run's log is kept as `~/Claude/sequoia-ci/<repo>.log`
+on GwenTea2.
