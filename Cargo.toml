@@ -38,6 +38,10 @@ toml_edit = "0.22"
 # This machine's addresses for the "Listen on" lists (MIT OR BSD-3-Clause).
 if-addrs = "0.15"
 tempfile = "3"
+# check --make-gif: read PNG art, write GIF copies for pre-2.1 clients
+# (both MIT OR Apache-2.0, pure Rust).
+png = "0.18"
+gif = "0.13"
 # Resource packages (.gpak/.gpake, lat-core::gpak): the ZIP container, the
 # DES the encrypted entries use, and a random key. All MIT or MIT/Apache.
 zip = { version = "9", default-features = false, features = ["deflate"] }

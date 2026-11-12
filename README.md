@@ -69,6 +69,13 @@ format comes from the level's magic (`GLEVNW01`, `GR-V1`, `Z3-V1`), not its
 extension. Dynamic names, weapons, scripts' era and tiles remain outside
 these slices of issue #38.
 
+`check --make-gif WORLD` (opt-in) first writes a GIF copy next to each PNG
+that `--client-reach` reports as having none, then runs the check. A copy
+keeps every pixel's colour; pixels with alpha below 128 become the GIF's
+transparent colour (this tool's choice, not read from a client). It never
+replaces a file, and it skips art with more than 256 colours (255 with
+transparency) and says so, rather than picking a palette for you.
+
 ## Start a lab world
 
 A lab world is an unpacked `seihai-gserver-v2` release: `gs2emu` and a
