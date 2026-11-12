@@ -17,7 +17,7 @@ use lat_core::gani::GaniDoc;
 use lat_core::level::LevelDoc;
 use lat_core::remote::{put_if_unchanged, Entry, LocalFolder, RcFiles, RemoteFiles, Upload};
 use seihai_core::protocol::{read_gint3, split_messages, zlib_decompress};
-use seihai_rc::files::{self, parse_file_body};
+use seihai_rc::files;
 use seihai_rc::link::Codec;
 use seihai_rc::rc::PLO_SIGNATURE;
 use seihai_rc::wire::{self, message, text};
@@ -54,20 +54,38 @@ fn with_nl(mut msg: Vec<u8>) -> Vec<u8> {
     msg
 }
 
-fn dir_list(names: &[String]) -> Vec<u8> {
+/// `Folder changed to` (id 67), then the directory (id 66): a `GSTRING`
+/// folder and one record per name (space, `GCHAR` length, `GSTRING` name,
+/// `GSTRING` rights, `GINT5` size, `GINT5` time), as `seihai-rc` reads it.
+fn dir_reply(folder: &str, names: &[String]) -> Vec<u8> {
+    let mut out = with_nl(message(
+        files::plo::RC_FILEBROWSER_MESSAGE,
+        format!("Folder changed to {folder}").as_bytes(),
+    ));
     let mut payload = Vec::new();
-    wire::push_gshort(&mut payload, names.len() as u16);
+    wire::push_gstring(&mut payload, folder.as_bytes());
     for name in names {
-        wire::push_gstring(&mut payload, name.as_bytes());
+        let mut rec = Vec::new();
+        wire::push_gstring(&mut rec, name.as_bytes());
+        wire::push_gstring(&mut rec, b"rw");
+        wire::push_gint5(&mut rec, 0);
+        wire::push_gint5(&mut rec, 0);
+        payload.push(b' ');
+        payload.push(wire::gchar(rec.len() as u8));
+        payload.extend_from_slice(&rec);
     }
-    with_nl(message(files::plo::RC_FILEBROWSER_DIRLIST, &payload))
+    out.extend(with_nl(message(files::plo::RC_FILEBROWSER_DIR, &payload)));
+    out
 }
 
+/// Raw block (id 100) holding id 102: `GINT5` time, `GSTRING` name, the
+/// bytes, and the line feed the raw length counts.
 fn file_reply(name: &str, data: &[u8]) -> Vec<u8> {
-    let mut inner = vec![wire::gchar(files::plo::RC_FILEBROWSER_DIR)];
+    let mut inner = vec![wire::gchar(files::PLO_FILE)];
+    wire::push_gint5(&mut inner, 0);
     wire::push_gstring(&mut inner, name.as_bytes());
-    wire::push_gint3(&mut inner, data.len() as u32);
     inner.extend_from_slice(data);
+    inner.push(b'\n');
     let mut body = vec![wire::gchar(files::PLO_RAWDATA)];
     wire::push_gint3(&mut body, inner.len() as u32);
     body.push(b'\n');
@@ -75,21 +93,16 @@ fn file_reply(name: &str, data: &[u8]) -> Vec<u8> {
     body
 }
 
-fn refusal(words: &str) -> Vec<u8> {
+fn notice(words: &str) -> Vec<u8> {
     with_nl(message(
         files::plo::RC_FILEBROWSER_MESSAGE,
         words.as_bytes(),
     ))
 }
 
-fn gstring_text(payload: &[u8]) -> String {
-    let mut i = 0;
-    text(&wire::read_gstring(payload, &mut i).expect("gstring"))
-}
-
 /// A put is an outbound raw block (id 50). `split_messages` does not treat
-/// that id as raw, so the file bytes are taken from the block directly,
-/// with `seihai-rc`'s `parse_file_body`.
+/// that id as raw, so the block is read here: id 93, a `GSTRING` name, then
+/// the file bytes.
 fn take_put(body: &[u8]) -> Option<(String, Vec<u8>)> {
     if body.first().map(|b| b.wrapping_sub(0x20)) != Some(files::PLI_RAWDATA) {
         return None;
@@ -102,8 +115,9 @@ fn take_put(body: &[u8]) -> Option<(String, Vec<u8>)> {
     if inner.first().map(|b| b.wrapping_sub(0x20)) != Some(files::pli::RC_FILEBROWSER_UP) {
         return None;
     }
-    let (name, bytes) = parse_file_body(&inner[1..]).ok()?;
-    Some((name, bytes))
+    let mut i = 1;
+    let name = wire::read_gstring(inner, &mut i)?;
+    Some((text(&name), inner[i..].to_vec()))
 }
 
 fn list_names(files: &BTreeMap<String, Vec<u8>>, dir: &str) -> Vec<String> {
@@ -163,20 +177,22 @@ fn serve(listener: TcpListener, mut files: BTreeMap<String, Vec<u8>>) {
             break;
         };
         if let Some((name, bytes)) = take_put(&body) {
+            let reply = notice(&format!("Uploaded file {name}"));
             files.insert(name, bytes);
+            write_frame(&mut stream, &mut codec, &reply);
             continue;
         }
         for msg in split_messages(&body) {
             let reply = match msg.id {
                 files::pli::RC_FILEBROWSER_CD => {
-                    let dir = gstring_text(&msg.payload);
-                    Some(dir_list(&list_names(&files, &dir)))
+                    let dir = text(&msg.payload);
+                    Some(dir_reply(&dir, &list_names(&files, &dir)))
                 }
                 files::pli::RC_FILEBROWSER_DOWN => {
-                    let path = gstring_text(&msg.payload);
+                    let path = text(&msg.payload);
                     Some(match files.get(&path) {
                         Some(data) => file_reply(&path, data),
-                        None => refusal("no such file"),
+                        None => notice("no such file"),
                     })
                 }
                 _ => None,

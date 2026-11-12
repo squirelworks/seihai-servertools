@@ -147,6 +147,7 @@ impl RcFiles {
             password: password.into(),
             key: 0x35,
             nickname: None,
+            identity: None,
         };
         let session = Session::login(addr, &params, RC_TIMEOUT).map_err(io_login)?;
         Ok(RcFiles { session })
@@ -172,7 +173,9 @@ impl RemoteFiles for RcFiles {
     }
 
     fn put(&mut self, path: &str, data: &[u8]) -> io::Result<()> {
-        self.session.put_file(path, data).map_err(io_file)
+        self.session
+            .put_file(path, data, RC_TIMEOUT)
+            .map_err(io_file)
     }
 }
 
