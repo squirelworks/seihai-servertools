@@ -2,7 +2,8 @@
 //! stop it from the window. The processes run on a worker thread
 //! (`setup_core::lab_run::LabRun`, the same order as
 //! `seihai-servertools lab start`); this page shows each one's state and
-//! the tail of its console. Leaving the window stops them.
+//! the tail of its console. Leaving the window stops them. An optional
+//! `seihai-gserver` world folder starts next to the fork's server folders.
 
 use std::time::Duration;
 
@@ -17,6 +18,9 @@ const TAIL_LINES: usize = 12;
 pub struct Page {
     world: String,
     picker: super::picker::Picker,
+    /// A `seihai-gserver` world folder to start too; empty for none.
+    rust_world: String,
+    rust_picker: super::picker::Picker,
     result: Option<String>,
     run: Option<LabRun>,
 }
@@ -27,8 +31,14 @@ impl Page {
     }
 
     fn options(&self) -> LabOptions {
+        let rust = self.rust_world.trim();
         LabOptions {
             world: self.world.clone().into(),
+            rust_worlds: if rust.is_empty() {
+                Vec::new()
+            } else {
+                vec![rust.into()]
+            },
             ..Default::default()
         }
     }
@@ -69,7 +79,14 @@ impl Page {
                 }
             }
         });
-        ui.label("Or from a terminal: seihai-servertools lab start --world <folder>");
+        ui.horizontal(|ui| {
+            ui.label("seihai-gserver world (optional):");
+            ui.add_enabled(!busy, egui::TextEdit::singleline(&mut self.rust_world));
+            self.rust_picker.button(ui, !busy, &mut self.rust_world);
+        });
+        ui.label(
+            "Or from a terminal: seihai-servertools lab start --world <folder> [--rust <folder>]",
+        );
 
         if let Some(run) = &self.run {
             let s = run.status();
@@ -125,5 +142,19 @@ impl Page {
             ui.separator();
             ui.monospace(text);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rust_world_field_becomes_an_option() {
+        let mut p = Page::default();
+        p.set_world("w");
+        assert!(p.options().rust_worlds.is_empty());
+        p.rust_world = "  rw ".into();
+        assert_eq!(p.options().rust_worlds, [std::path::PathBuf::from("rw")]);
     }
 }

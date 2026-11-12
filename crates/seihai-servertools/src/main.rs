@@ -15,7 +15,8 @@ seihai-servertools: Seihai server tools
 
 Usage:
   seihai-servertools lab start [--world DIR] [--listserver PATH | --no-listserver]
-                               [--gserver PATH] [SERVER...]
+                               [--gserver PATH] [--rust DIR]... [--rust-gserver PATH]
+                               [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
   seihai-servertools check [--json] [--client-reach] WORLD
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
@@ -33,6 +34,10 @@ Usage:
 lab start: starts the listserver (if one is found) and then the gservers of a
 lab world (default: servers/default, classic and modern, those that exist), each console in a
 log file, and stops them all on Ctrl+C. --world defaults to the current folder.
+--rust DIR also starts seihai-gserver on that world folder (config/server.txt;
+relative to --world), found beside the world, this tool or on PATH unless
+--rust-gserver is given. With --rust and no SERVER named, the fork's folders
+start too when gs2emu is there.
 
 check: reads every level, gmap and gani under WORLD and reports parse errors,
 links or gmap cells that point at missing levels, and images or sounds a

@@ -27,6 +27,8 @@ fn parse(args: &[&str]) -> Result<LabOptions, String> {
             "--listserver" => opts.listserver = ListserverChoice::Path(value(a)?.into()),
             "--no-listserver" => opts.listserver = ListserverChoice::Off,
             "--gserver" => opts.gserver = Some(value(a)?.into()),
+            "--rust" => opts.rust_worlds.push(value(a)?.into()),
+            "--rust-gserver" => opts.rust_gserver = Some(value(a)?.into()),
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s => opts.servers.push(s.to_string()),
         }
@@ -148,6 +150,13 @@ mod tests {
         assert_eq!(o.listserver, ListserverChoice::Off);
         assert_eq!(o.servers, ["classic"]);
         assert!(parse(&["--world"]).is_err());
+        let o = parse(&["--rust", "rw", "--rust", "/abs/rw2", "--rust-gserver", "sg"]).unwrap();
+        assert_eq!(
+            o.rust_worlds,
+            [PathBuf::from("rw"), PathBuf::from("/abs/rw2")]
+        );
+        assert_eq!(o.rust_gserver, Some(PathBuf::from("sg")));
+        assert!(o.servers.is_empty());
         assert!(parse(&["--bogus"]).is_err());
     }
 }

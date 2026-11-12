@@ -146,8 +146,13 @@ window wizard, the `setup` command line, and Host a listserver.
 - [x] Lab page in the window: start and stop the plan on a worker thread
       (`setup_core::lab_run::LabRun`), show each console's tail. Lab run:
       `docs/lab/2026-11-04-lab-page.md`.
-- [ ] Rust gserver: a gserver kind in `LabOptions` once `seihai-gserver` can
-      run a world folder.
+- [x] Issue #48: Rust gserver as a `lab start` kind (`--rust DIR`,
+      `--rust-gserver PATH`, the Lab page's optional field). Its
+      `config/server.txt` is read, never edited; a `listserver` line that
+      misses the lab listserver gets a note naming the change. Run:
+      `docs/lab/2026-11-12-lab-start-rust.md`.
+- [ ] The same with a listserver and Seihai `--list-only` seeing the Rust
+      world (needs the lab machine; this run was gserver only).
 - [ ] Lab run with a real `gs2emu` from a fork release (same run as the
       real-fork lab run at the top; today's run used a stand-in,
       `docs/lab/2026-10-31-lab-start.md`).

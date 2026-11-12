@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use setup_core::lab::{GserverPlan, Plan};
+use setup_core::lab::{GserverPlan, Plan, ServerKind};
 use setup_core::lab_run::{LabRun, Phase};
 use setup_core::run::ProcessSpec;
 
@@ -15,6 +15,7 @@ fn shell(label: &str, script: &str, dir: &std::path::Path) -> GserverPlan {
     };
     GserverPlan {
         name: label.into(),
+        kind: ServerKind::Fork,
         interface: None,
         port: None,
         spec: ProcessSpec {
@@ -52,6 +53,11 @@ fn starts_runs_shows_consoles_and_stops() {
         gservers: vec![
             shell("default", LONG, dir.path()),
             shell("classic", LONG, dir.path()),
+            // A seihai-gserver world runs in the same group and stops with it.
+            GserverPlan {
+                kind: ServerKind::Rust,
+                ..shell("rust", LONG, dir.path())
+            },
         ],
         notes: vec!["a note".into()],
     };
@@ -59,10 +65,11 @@ fn starts_runs_shows_consoles_and_stops() {
     let phase = wait_for(&run, Duration::from_secs(15), |p| *p != Phase::Starting);
     assert_eq!(phase, Phase::Running);
     let s = run.status();
-    assert_eq!(s.procs.len(), 2);
+    assert_eq!(s.procs.len(), 3);
     assert!(s.procs.iter().all(|p| p.exited.is_none()));
     assert_eq!(s.log[0], "note: a note");
     assert!(s.log.iter().any(|l| l.starts_with("started classic, pid ")));
+    assert!(s.log.iter().any(|l| l.starts_with("started rust, pid ")));
     let tails = run.tails(5);
     assert_eq!(tails[0].0, "default");
     assert!(tails.iter().all(|(_, t)| t.contains("up")), "{tails:?}");
