@@ -334,8 +334,14 @@ const MAX_SCRIPT_PROBLEMS: usize = 3;
 
 /// Inventory PNG references without GIF counterparts (level NPCs and
 /// weapon files, see `images_named_by`) and parsed gani files needing
-/// fallback review for shared profiles without `ui.ganis` (#38). Presence does not prove use or original-client rendering. Dynamic script
-/// names are not resolved. This never writes or converts files.
+/// fallback review for shared profiles without `ui.ganis` (#38). Presence does not prove use or original-client rendering.
+///
+/// An image name a script builds at run time (`bomb#v(this.n).png`) is
+/// matched against the PNG and GIF names in the world (see
+/// [`crate::npc::RunTimeName`]); each PNG it could be is checked like a
+/// fixed name. A run-time name that matches no file, or says too little to
+/// match, is reported so the owner checks it by hand. This never writes or
+/// converts files.
 pub fn check_image_reach(root: &Path) -> Vec<Finding> {
     let mut files = Vec::new();
     walk(root, &mut files);
@@ -371,14 +377,25 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
             }
             continue;
         }
-        let Some(images) = images_named_by(path, &lower) else {
+        let Some(images) = images_named_by(path, &lower, &names) else {
             continue;
         };
-        for (image, stem) in gif_wanted_in(&images, &names) {
+        for (image, stem) in gif_wanted_in(&images.fixed, &names) {
+            let via = match images.via.get(&image) {
+                Some(template) => format!(" (a run-time name, {template}, can be this file)"),
+                None => String::new(),
+            };
             findings.push(Finding {
                 severity: Severity::Warn,
                 file: rel(root, path),
-                text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
+                text: format!("client reach: image {image}{via} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
+            });
+        }
+        for (template, why) in images.unresolved {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text: format!("client reach: image name {template} is built at run time and {why}; check by hand that pre-2.1 clients have a GIF for it"),
             });
         }
     }
@@ -692,38 +709,76 @@ pub fn check_tile_reach(root: &Path) -> Vec<Finding> {
     findings
 }
 
+/// The images one file names, for the GIF inventory.
+#[derive(Default)]
+struct NamedImages {
+    /// Fixed names, then the world files that run-time names can be.
+    fixed: Vec<String>,
+    /// For a file name in `fixed` that came from a run-time name: that name
+    /// as written. A file two run-time names can be keeps the first.
+    via: std::collections::BTreeMap<String, String>,
+    /// Run-time names that could not be matched to a file, with why.
+    unresolved: Vec<(String, &'static str)>,
+}
+
+impl NamedImages {
+    fn add_script(&mut self, script: &str, names: &BTreeSet<String>) {
+        let check = crate::npc::check_script(script);
+        let images = |f: &crate::npc::NamedFile| f.kind == crate::npc::FileKind::Image;
+        self.fixed.extend(
+            check
+                .files
+                .iter()
+                .filter(|f| images(f))
+                .map(|f| f.name.clone()),
+        );
+        for named in check.run_time.iter().filter(|f| images(f)) {
+            let pattern = crate::npc::RunTimeName::parse(&named.name);
+            if !pattern.is_specific() {
+                self.unresolved
+                    .push((named.name.clone(), "says too little to match to files"));
+                continue;
+            }
+            let mut found = false;
+            for name in names {
+                let picture = name.ends_with(".png") || name.ends_with(".gif");
+                if picture && pattern.matches(name) {
+                    found = true;
+                    if !self.via.contains_key(name) {
+                        self.via.insert(name.clone(), named.name.clone());
+                        self.fixed.push(name.clone());
+                    }
+                }
+            }
+            if !found {
+                self.unresolved
+                    .push((named.name.clone(), "matches no PNG or GIF in the world"));
+            }
+        }
+    }
+}
+
 /// The images a file names, for the GIF inventory: a level's NPC pictures
-/// and the fixed names their scripts give `setimg` and friends, or a weapon
-/// file's `IMAGE` and fixed script names. `None` for any other file, or a
-/// level that does not parse.
-fn images_named_by(path: &Path, lower: &str) -> Option<Vec<String>> {
-    let script_images = |script: &str| -> Vec<String> {
-        crate::npc::check_script(script)
-            .files
-            .into_iter()
-            .filter(|f| f.kind == crate::npc::FileKind::Image)
-            .map(|f| f.name)
-            .collect()
-    };
+/// and the names their scripts give `setimg` and friends, or a weapon
+/// file's `IMAGE` and script names. Run-time script names are matched
+/// against `names` (every file name in the world, lower case). `None` for
+/// any other file, or a level that does not parse.
+fn images_named_by(path: &Path, lower: &str, names: &BTreeSet<String>) -> Option<NamedImages> {
+    let mut out = NamedImages::default();
     if is_level(lower) {
         let level = crate::level::open(&fs::read(path).ok()?).ok()?;
-        Some(
-            level
-                .npcs
-                .iter()
-                .flat_map(|npc| {
-                    std::iter::once(npc.image.clone()).chain(script_images(&npc.script))
-                })
-                .collect(),
-        )
+        for npc in &level.npcs {
+            out.fixed.push(npc.image.clone());
+            out.add_script(&npc.script, names);
+        }
     } else {
         let weapon = read_weapon(path)?;
-        let mut images = vec![weapon.image];
+        out.fixed.push(weapon.image);
         if !weapon.script.trim().is_empty() {
-            images.extend(script_images(&weapon.script));
+            out.add_script(&weapon.script, names);
         }
-        Some(images)
     }
+    Some(out)
 }
 
 /// Of `images`, those with PNG art in the world but no GIF of the same
@@ -775,8 +830,12 @@ pub fn gif_copies_wanted(root: &Path) -> Vec<(PathBuf, PathBuf)> {
     let mut stems = BTreeSet::new();
     for path in &files {
         let lower = path.to_string_lossy().to_ascii_lowercase();
-        if let Some(images) = images_named_by(path, &lower) {
-            stems.extend(gif_wanted_in(&images, &names).into_iter().map(|(_, s)| s));
+        if let Some(images) = images_named_by(path, &lower, &names) {
+            stems.extend(
+                gif_wanted_in(&images.fixed, &names)
+                    .into_iter()
+                    .map(|(_, s)| s),
+            );
         }
     }
     files

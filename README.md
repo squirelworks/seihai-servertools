@@ -86,8 +86,16 @@ listed with the profiles whose shipped sheet is 1856×512 (1.28 beta 2 to
 columns match the left 116 of the 2048-wide 1.42 sheet cell for cell, so
 tile ids map the same way and the old sheet just ends early. 1.21 (a
 1280-wide sheet whose layout is not established) and 2.1x (no sheet in the
-archives) are not listed, and `tiledefs` sheets are not matched. Dynamic
-names remain outside these slices of issue #38.
+archives) are not listed, and `tiledefs` sheets are not matched.
+
+Run-time image names: a script image name built with `#` codes, such as
+`setimg bomb#v(this.n).png`, is read as a pattern where each code can be
+any text, and matched (ignoring case and any folder) against the PNG and
+GIF names in the world. Each PNG it could be joins the GIF inventory and
+`--make-gif`, and the finding names the pattern it came from. A pattern
+that matches no file, or is only codes and an extension (`#s(this.pic)`,
+`#v(n).png`), is listed to check by hand. A match says which files the
+name could be, not which ones the script shows.
 
 `check --make-gif WORLD` (opt-in) first writes a GIF copy next to each PNG
 that `--client-reach` reports as having none, then runs the check. A copy
