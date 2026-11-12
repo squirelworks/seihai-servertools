@@ -48,8 +48,9 @@ tag is preferred when one contains the crate. The parsers are in
 `seihai-core`, which has its own repo (`squirelworks/seihai-core`); the
 drawing is `seihai-draw` in the `seihai` repo. `seihai-core` is pinned to the
 same commit that seihai's own root `Cargo.toml` pins, so the types match
-what `seihai-draw` paints; bump them together. `seihai-rc`'s file link is on its `main` (`294f2c1`)
-and has no tag, so it is pinned to that commit too. Do not follow a branch.
+what `seihai-draw` paints; bump them together. `seihai-rc`'s file link is on its `main` (`921b2ae`)
+and has no tag, so it is pinned to that commit too; it pins the same
+`seihai-core` tag as this workspace. Bump all three together. Do not follow a branch.
 
 | What | Where today | Used here through |
 |---|---|---|
@@ -57,7 +58,7 @@ and has no tag, so it is pinned to that commit too. Do not follow a branch.
 | GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (the world check uses the GS1 parser; the NPC editor will too) |
 | Tile and one gani frame, into an RGBA buffer | `seihai-draw` | `seihai-draw` tag `v0.0.6` |
 | Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
-| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `294f2c1` |
+| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `921b2ae` |
 
 Do not depend on `seihai-mae`: it pulls in the game window and sound. The
 client's offline level editor stays in the Seihai repo.

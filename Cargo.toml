@@ -26,9 +26,10 @@ publish = false
 # the parser is the same type seihai-draw paints. Bump both together.
 seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.0.8", default-features = false }
 seihai-draw = { git = "https://github.com/squirelworks/seihai", rev = "d9e5600f8040bccb95ea41cd1af35bbdbecb1643" }
-# RC file link: list_dir, get_file, put_file. Those methods are on
-# seihai-rc main (294f2c1, file link in #5, NPC commands in #6). No tag yet.
-seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "294f2c119e0d2f00a6241cc64eefef535ca166f5" }
+# RC file link: list_dir, get_file, put_file. seihai-rc main at 921b2ae
+# (rc#38), which pins seihai-core v0.0.8 like this workspace, so the build
+# has one core. No rc tag yet.
+seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "921b2ae82692d771ef3fcd9b470a6f535630258c" }
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
 egui = "0.29"
