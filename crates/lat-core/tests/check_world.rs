@@ -472,3 +472,119 @@ fn level_reach_lists_profiles_without_gmaps_or_the_level_format() {
     // Inventory only: nothing written.
     assert_eq!(fs::read_dir(w.join("levels")).unwrap().count(), 5);
 }
+
+#[test]
+fn script_reach_lists_gs2_and_mixed_level_npcs_and_weapons() {
+    use seihai_core::protocol::ClientVersion;
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::write(
+        w.join("start.nw"),
+        "GLEVNW01\n\
+         NPC - 1 1\nif (playerenters) { message hi; }\nNPCEND\n\
+         NPC - 2 2\nfunction onCreated() { this.x = 1; }\nNPCEND\n\
+         NPC - 3 3\nif (created) { message hi; }\nfunction onPlayerChats() { temp.a = 1; }\nNPCEND\n",
+    )
+    .unwrap();
+    fs::create_dir_all(w.join("servers/default/weapons")).unwrap();
+    fs::write(
+        w.join("servers/default/weapons/weapon-Bow.txt"),
+        "GRAWP001\nREALNAME -Bow\nIMAGE bow.png\nSCRIPT\nfunction onActionServerSide() { player.chat = \"x\"; }\nSCRIPTEND\n",
+    )
+    .unwrap();
+    fs::write(
+        w.join("servers/default/weapons/weapon-Old.txt"),
+        "GRAWP001\nREALNAME -Old\nIMAGE old.gif\nSCRIPT\nif (weaponfired) { message #c; }\nSCRIPTEND\n",
+    )
+    .unwrap();
+    // Not a weapon file: wrong folder.
+    fs::write(
+        w.join("notes.txt"),
+        "GRAWP001\nSCRIPT\nfunction onCreated() {}\nSCRIPTEND\n",
+    )
+    .unwrap();
+    let f = lat_core::check::check_script_reach(w);
+    let texts: Vec<String> = f
+        .iter()
+        .map(|f| format!("{}: {}", f.file, f.text))
+        .collect();
+    assert_eq!(f.len(), 3, "{texts:#?}");
+    assert!(f.iter().all(|f| f.severity == Severity::Warn));
+    assert!(
+        texts[0].starts_with(
+            "servers/default/weapons/weapon-Bow.txt: client reach: weapon -Bow script is GS2 only"
+        ),
+        "{texts:#?}"
+    );
+    assert!(
+        texts[1].starts_with("start.nw: client reach: NPC at 2,2 script is GS2 only"),
+        "{texts:#?}"
+    );
+    assert!(
+        texts[2].starts_with("start.nw: client reach: NPC at 3,3 script is both GS1 and GS2"),
+        "{texts:#?}"
+    );
+    for t in &texts {
+        assert!(t.contains(ClientVersion::V3153.label()), "{t}");
+        assert!(t.contains(ClientVersion::V121.label()), "{t}");
+        assert!(!t.contains(ClientVersion::V404R2.label()), "{t}");
+    }
+    // The weapon's PNG with no GIF is a pre-2.1 image finding too.
+    fs::write(w.join("bow.png"), b"png").unwrap();
+    let wants = lat_core::check::png_without_gif(w);
+    assert_eq!(wants.len(), 1, "{wants:?}");
+    assert_eq!(wants[0].file, "servers/default/weapons/weapon-Bow.txt");
+    assert_eq!(wants[0].stem, "bow");
+}
+
+#[test]
+fn make_gif_writes_once_beside_the_png_and_only_for_named_art() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("images")).unwrap();
+    fs::write(
+        w.join("start.nw"),
+        "GLEVNW01\nNPC Tree.png 1 1\nsetimg shop.png;\nNPCEND\nNPC broken.png 2 2\nNPCEND\nNPC has.png 3 3\nNPCEND\n",
+    )
+    .unwrap();
+    let mut png = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut png, 1, 1);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header()
+            .unwrap()
+            .write_image_data(&[1, 2, 3, 255])
+            .unwrap();
+    }
+    fs::write(w.join("images/Tree.png"), &png).unwrap();
+    fs::write(w.join("images/shop.png"), &png).unwrap();
+    fs::write(w.join("images/unused.png"), &png).unwrap();
+    fs::write(w.join("images/broken.png"), b"not a png").unwrap();
+    fs::write(w.join("images/has.png"), &png).unwrap();
+    fs::write(w.join("images/has.gif"), b"keep").unwrap();
+    let made = lat_core::gif::make_gifs(w);
+    assert_eq!(made.len(), 3, "{made:?}");
+    assert!(made.contains(&lat_core::gif::Made::Wrote {
+        gif: w.join("images/Tree.gif"),
+        exact: true
+    }));
+    assert!(made.contains(&lat_core::gif::Made::Wrote {
+        gif: w.join("images/shop.gif"),
+        exact: true
+    }));
+    assert!(made.iter().any(|m| matches!(m,
+        lat_core::gif::Made::Failed { png, .. } if *png == w.join("images/broken.png"))));
+    assert!(fs::read(w.join("images/Tree.gif"))
+        .unwrap()
+        .starts_with(b"GIF8"));
+    assert!(!w.join("images/unused.gif").exists());
+    assert!(!w.join("images/broken.gif").exists());
+    assert_eq!(fs::read(w.join("images/has.gif")).unwrap(), b"keep");
+    // Nothing left to do the second time, except the PNG it cannot read.
+    let again = lat_core::gif::make_gifs(w);
+    assert_eq!(again.len(), 1, "{again:?}");
+    assert!(lat_core::check::check_image_reach(w)
+        .iter()
+        .all(|f| f.text.contains("broken")));
+}

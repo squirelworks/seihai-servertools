@@ -136,6 +136,199 @@ fn note_files(name: &str, args: &[Arg], line: u32, out: &mut ScriptCheck) {
     }
 }
 
+/// Which script language a script's text is written in (#38). GS1 is the
+/// language every client runs; GS2 is the newer one, which only 4.x and
+/// later clients run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptEra {
+    /// Nothing in it is GS2: every client can run it.
+    Gs1,
+    /// GS2 code and no GS1 event flags.
+    Gs2,
+    /// GS1 event flags and GS2 code in the same script. A client before 4.x
+    /// runs only the GS1 part; the GS2 lines trip its parser and are skipped.
+    Both,
+}
+
+impl ScriptEra {
+    pub fn label(self) -> &'static str {
+        match self {
+            ScriptEra::Gs1 => "GS1 only",
+            ScriptEra::Gs2 => "GS2 only",
+            ScriptEra::Both => "both GS1 and GS2",
+        }
+    }
+}
+
+/// GS1 event flags: in GS1 a script tests these in `if (...)`. GS2 has
+/// event functions (`function onCreated()`) instead.
+const GS1_EVENT_FLAGS: &[&str] = &[
+    "created",
+    "playerenters",
+    "playertouchsme",
+    "playerchats",
+    "weaponfired",
+    "actionserverside",
+    "playerhurt",
+    "wasshot",
+    "washit",
+    "wasthrown",
+    "exploded",
+    "playerdies",
+    "playerendsreading",
+    "playerlogin",
+];
+
+/// The script language of a script's text, from markers each language has
+/// and the other does not. `None` for an empty script.
+///
+/// - **GS2**: an event function (`function on` + capital letter, such as
+///   `function onCreated()`), `temp.` variables, `new Name(` objects,
+///   `player.` properties and `params[`.
+/// - **GS1**: event flags used as words (`if (playerenters)`) and message
+///   codes outside strings (`#c`, `#p(0)`).
+///
+/// A script with neither is GS1: plain commands run on every client.
+/// Comments and string literals are ignored. This reads the text only; it
+/// does not compile anything, so a script that only calls GS2 functions
+/// through GS1-looking commands counts as GS1.
+pub fn script_era(src: &str) -> Option<ScriptEra> {
+    let code = strip_comments_and_strings(src);
+    if code.trim().is_empty() {
+        return None;
+    }
+    let words = words(&code);
+    let mut gs1 = false;
+    let mut gs2 = false;
+    for (i, &(start, word)) in words.iter().enumerate() {
+        let before = code[..start].chars().next_back();
+        let after_at = start + word.len();
+        let after = code[after_at..].trim_start();
+        let next = words.get(i + 1).map(|&(_, w)| w);
+        let lower = word.to_ascii_lowercase();
+        if before == Some('.') {
+            continue;
+        }
+        if before == Some('#') {
+            // `#c`, `#p(0)`: a GS1 message code outside a string.
+            gs1 = true;
+            continue;
+        }
+        match lower.as_str() {
+            "function" => {
+                if let Some(name) = next {
+                    let mut c = name.chars();
+                    if c.next() == Some('o')
+                        && c.next() == Some('n')
+                        && c.next().is_some_and(|c| c.is_ascii_uppercase())
+                    {
+                        gs2 = true;
+                    }
+                }
+            }
+            "temp" | "player" if after.starts_with('.') => gs2 = true,
+            "params" if after.starts_with('[') => gs2 = true,
+            "new" => {
+                if let Some(&(nstart, name)) = words.get(i + 1) {
+                    let between = &code[after_at..nstart];
+                    if between.trim().is_empty()
+                        && code[nstart + name.len()..].trim_start().starts_with('(')
+                    {
+                        gs2 = true;
+                    }
+                }
+            }
+            flag if GS1_EVENT_FLAGS.contains(&flag)
+                && !after.starts_with('(')
+                && !after.starts_with('=') =>
+            {
+                gs1 = true;
+            }
+            _ => {}
+        }
+    }
+    Some(match (gs1, gs2) {
+        (true, true) => ScriptEra::Both,
+        (false, true) => ScriptEra::Gs2,
+        _ => ScriptEra::Gs1,
+    })
+}
+
+/// The script with `//` and `/* */` comments and the insides of string
+/// literals blanked out (same byte length, so offsets still line up).
+fn strip_comments_and_strings(src: &str) -> String {
+    let bytes = src.as_bytes();
+    let mut out = String::with_capacity(src.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b'/' && bytes.get(i + 1) == Some(&b'/') {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                out.push(' ');
+                i += 1;
+            }
+        } else if c == b'/' && bytes.get(i + 1) == Some(&b'*') {
+            out.push_str("  ");
+            i += 2;
+            while i < bytes.len() && !(bytes[i] == b'*' && bytes.get(i + 1) == Some(&b'/')) {
+                out.push(if bytes[i] == b'\n' { '\n' } else { ' ' });
+                i += 1;
+            }
+            if i < bytes.len() {
+                out.push_str("  ");
+                i += 2;
+            }
+        } else if c == b'"' {
+            out.push('"');
+            i += 1;
+            while i < bytes.len() && bytes[i] != b'"' && bytes[i] != b'\n' {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    out.push(' ');
+                    i += 1;
+                }
+                out.push(' ');
+                i += 1;
+            }
+            if i < bytes.len() && bytes[i] == b'"' {
+                out.push('"');
+                i += 1;
+            }
+        } else if c.is_ascii() {
+            out.push(c as char);
+            i += 1;
+        } else {
+            // Non-ASCII: keep the byte count with spaces.
+            let len = src[i..].chars().next().map_or(1, char::len_utf8);
+            for _ in 0..len {
+                out.push(' ');
+            }
+            i += len;
+        }
+    }
+    out
+}
+
+/// Identifier-like words and their byte offsets.
+fn words(code: &str) -> Vec<(usize, &str)> {
+    let mut out = Vec::new();
+    let mut start = None;
+    for (i, c) in code.char_indices() {
+        let word_char = c.is_ascii_alphanumeric() || c == '_';
+        match (word_char, start) {
+            (true, None) => start = Some(i),
+            (false, Some(s)) => {
+                out.push((s, &code[s..i]));
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(s) = start {
+        out.push((s, &code[s..]));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +388,46 @@ mod tests {
         let c = check_script("//#CLIENTSIDE\nif (playertouchsme) { message hi; }\n");
         assert!(c.problems.is_empty(), "{:?}", c.problems);
         assert!(c.unknown.is_empty(), "{:?}", c.unknown);
+    }
+
+    #[test]
+    fn script_era_reads_markers_outside_comments_and_strings() {
+        use super::{script_era, ScriptEra::*};
+        assert_eq!(script_era(""), None);
+        assert_eq!(script_era("// only a comment\n"), None);
+        assert_eq!(script_era("if (playerenters) { message #c; }"), Some(Gs1));
+        assert_eq!(script_era("setimg tree.png;"), Some(Gs1));
+        assert_eq!(script_era("this.count = 1; client.flag = 1;"), Some(Gs1));
+        assert_eq!(
+            script_era("function onCreated() { this.x = 1; }"),
+            Some(Gs2)
+        );
+        assert_eq!(
+            script_era("function onPlayerEnters() {\n  player.chat = \"hi\";\n}"),
+            Some(Gs2)
+        );
+        assert_eq!(script_era("temp.a = 1;"), Some(Gs2));
+        assert_eq!(script_era("x = new TStaticVar();"), Some(Gs2));
+        assert_eq!(script_era("echo(params[0]);"), Some(Gs2));
+        // A GS1 function with a plain name is still GS1.
+        assert_eq!(
+            script_era("function walk() { x += 1; }\nif (created) walk();"),
+            Some(Gs1)
+        );
+        assert_eq!(
+            script_era("if (created) { message hi; }\nfunction onPlayerChats() { echo(1); }"),
+            Some(Both)
+        );
+        // Markers inside comments and strings do not count.
+        assert_eq!(
+            script_era("// function onCreated()\nmessage \"temp.a #c\";"),
+            Some(Gs1)
+        );
+        assert_eq!(
+            script_era("/* if (created) */ function onCreated() {}"),
+            Some(Gs2)
+        );
+        // An event function's name is not a GS1 flag; neither is a call.
+        assert_eq!(script_era("function onCreated() { created(); }"), Some(Gs2));
     }
 }

@@ -25,6 +25,7 @@ pub mod check;
 pub mod code_cache;
 pub mod diff;
 pub mod gani;
+pub mod gif;
 pub mod gpak;
 pub mod level;
 pub mod npc;

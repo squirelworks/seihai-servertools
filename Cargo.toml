@@ -43,6 +43,10 @@ tempfile = "3"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 des = "0.8"
 getrandom = "0.2"
+# check --make-gif (lat-core::gif): read PNG art, write palette GIFs for
+# pre-2.1 clients. Both MIT OR Apache-2.0.
+png = "0.18"
+gif = "0.14"
 
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }

@@ -18,7 +18,7 @@ Usage:
                                [--gserver PATH] [--rust DIR]... [--rust-gserver PATH]
                                [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
-  seihai-servertools check [--json] [--client-reach] WORLD
+  seihai-servertools check [--json] [--client-reach] [--make-gif] WORLD
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
@@ -48,11 +48,17 @@ to save is an error. Exit code 1 on errors (a missing image or sound is a
 warning). --json prints one JSON object instead, for CI: format (1), the
 counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
 (error, warning, note), source (world or settings), file, key (or null) and
-text. --client-reach also inventories level NPC image references (including
-fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
-It flags parsed gani files for fallback review using shared profiles' gani
-support, without claiming use or choosing a built-in animation. It does not
-convert art or certify script, animation, tile or gmap compatibility.";
+text. --client-reach adds warnings for what older clients will miss: level
+NPC and weapon images with PNG art but no GIF copy (clients before 2.1 ask
+for .gif names), level NPC and weapon (weapons/*.txt) scripts that are GS2
+only or mix GS1 and GS2 (clients before 4.x run only GS1), parsed ganis
+(clients without gani support), gmaps (clients without gmaps need linked
+single levels) and level formats some clients cannot open. It is an
+inventory: it does not prove players reach a file, and tiles are not
+checked. --make-gif first writes a palette GIF beside each PNG that the
+PNG-without-GIF warning would list, and nothing else; existing files are
+never replaced. Each GIF written is a note, and a PNG it cannot read is a
+warning.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -103,10 +109,12 @@ fn check_args(args: &[&str]) -> ExitCode {
     let mut world = None;
     let mut json = false;
     let mut reach = false;
+    let mut make_gif = false;
     for arg in args {
         match *arg {
             "--json" => json = true,
             "--client-reach" => reach = true,
+            "--make-gif" => make_gif = true,
             value if !value.starts_with('-') && world.is_none() => world = Some(value),
             _ => {
                 eprintln!("{USAGE}");
@@ -118,14 +126,20 @@ fn check_args(args: &[&str]) -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
-    check(Path::new(world), json, reach)
+    check(Path::new(world), json, reach, make_gif)
 }
 
-fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
+fn check(world: &Path, json: bool, reach: bool, make_gif: bool) -> ExitCode {
     if !world.is_dir() {
         eprintln!("check: no folder {}", world.display());
         return ExitCode::from(2);
     }
+    // Before the check, so the report sees the new GIFs.
+    let made = if make_gif {
+        lat_core::gif::make_gifs(world)
+    } else {
+        Vec::new()
+    };
     let mut report = lat_core::check::check_world(world);
     if reach {
         report
@@ -134,21 +148,47 @@ fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
         report
             .findings
             .extend(lat_core::check::check_level_reach(world));
+        report
+            .findings
+            .extend(lat_core::check::check_script_reach(world));
     }
-    let mut lines: Vec<Line> = report
-        .findings
-        .iter()
-        .map(|f| Line {
-            level: match f.severity {
-                lat_core::check::Severity::Error => "error",
-                lat_core::check::Severity::Warn => "warning",
-            },
+    let rel = |p: &Path| {
+        p.strip_prefix(world)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
+    let made_lines = made.iter().map(|m| match m {
+        lat_core::gif::Made::Wrote { gif, exact } => Line {
+            level: "note",
             source: "world",
-            file: f.file.clone(),
+            file: rel(gif),
             key: None,
-            text: f.text.clone(),
-        })
-        .collect();
+            text: if *exact {
+                "make-gif: wrote this GIF from the PNG, colours kept".into()
+            } else {
+                "make-gif: wrote this GIF from the PNG, reduced to 256 colours".into()
+            },
+        },
+        lat_core::gif::Made::Failed { png, reason } => Line {
+            level: "warning",
+            source: "world",
+            file: rel(png),
+            key: None,
+            text: format!("make-gif: could not convert this PNG: {reason}"),
+        },
+    });
+    let mut lines: Vec<Line> = made_lines.collect();
+    lines.extend(report.findings.iter().map(|f| Line {
+        level: match f.severity {
+            lat_core::check::Severity::Error => "error",
+            lat_core::check::Severity::Warn => "warning",
+        },
+        source: "world",
+        file: f.file.clone(),
+        key: None,
+        text: f.text.clone(),
+    }));
     // The setup checks: a setting `setup` would refuse to save is an error.
     for c in setup_core::folder::check_world_config(world) {
         lines.push(Line {

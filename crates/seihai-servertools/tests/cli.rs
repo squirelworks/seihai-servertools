@@ -859,3 +859,59 @@ fn code_crc_selects_an_explicit_domain_on_known_bytes() {
     }
     assert_eq!(fs::read(path).unwrap(), file);
 }
+
+#[test]
+fn client_reach_lists_gs2_scripts_and_make_gif_writes_the_copies() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("start.nw"),
+        "GLEVNW01\nNPC tree.png 1 1\nfunction onCreated() { this.x = 1; }\nNPCEND\n",
+    )
+    .unwrap();
+    let mut png = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut png, 1, 1);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header()
+            .unwrap()
+            .write_image_data(&[9, 9, 9, 255])
+            .unwrap();
+    }
+    fs::write(dir.path().join("tree.png"), &png).unwrap();
+    let out = bin()
+        .args(["check", "--client-reach"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("NPC at 1,1 script is GS2 only"), "{text}");
+    assert!(text.contains("no tree.gif counterpart"), "{text}");
+    assert!(!dir.path().join("tree.gif").exists());
+
+    let out = bin()
+        .args(["check", "--client-reach", "--make-gif", "--json"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert_eq!(text.lines().count(), 1);
+    assert!(
+        text.contains("\"level\":\"note\",\"source\":\"world\",\"file\":\"tree.gif\""),
+        "{text}"
+    );
+    assert!(!text.contains("no tree.gif counterpart"), "{text}");
+    assert!(fs::read(dir.path().join("tree.gif"))
+        .unwrap()
+        .starts_with(b"GIF8"));
+
+    // A second run writes nothing.
+    let out = bin()
+        .args(["check", "--make-gif"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("make-gif"));
+}

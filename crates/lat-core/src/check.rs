@@ -334,17 +334,15 @@ const MAX_SCRIPT_PROBLEMS: usize = 3;
 
 /// Inventory PNG references without GIF counterparts and parsed gani files
 /// needing fallback review for shared profiles without `ui.ganis` (#38).
-/// Presence does not prove use or original-client rendering. Dynamic script
-/// names are not resolved. This never writes or converts files.
+/// The PNG references are a level NPC's image and the fixed names its
+/// script gives `setimg` and friends, and a weapon file's `IMAGE` and fixed
+/// script names. Presence does not prove use or original-client rendering.
+/// Dynamic script names are not resolved. This never writes or converts
+/// files; [`crate::gif::make_gifs`] does, on request.
 pub fn check_image_reach(root: &Path) -> Vec<Finding> {
     let mut files = Vec::new();
     walk(root, &mut files);
     files.sort();
-    let names: BTreeSet<String> = files
-        .iter()
-        .filter_map(|p| p.file_name())
-        .map(|n| n.to_string_lossy().to_ascii_lowercase())
-        .collect();
     let mut findings = Vec::new();
     let without_ganis = ClientVersion::all_versions()
         .iter()
@@ -354,66 +352,263 @@ pub fn check_image_reach(root: &Path) -> Vec<Finding> {
         .join(", ");
     for path in &files {
         let lower = path.to_string_lossy().to_ascii_lowercase();
-        if !is_level(&lower) && !lower.ends_with(".gani") {
+        if !lower.ends_with(".gani") {
             continue;
         }
         let Ok(bytes) = fs::read(path) else {
             continue;
         };
-        if lower.ends_with(".gani") {
-            // Reuse the shared parser. Ordinary check_world reports parse
-            // errors and missing literal images/sounds; do not duplicate them.
-            if crate::gani::open(&bytes).is_ok() && !without_ganis.is_empty() {
-                findings.push(Finding {
-                    severity: Severity::Warn,
-                    file: rel(root, path),
-                    text: format!(
-                        "client reach: gani file present; shared profiles without gani support [{without_ganis}] need server animation fallback review if it is used; file presence does not prove use, and no nearest built-in animation is inferred"
-                    ),
-                });
-            }
-            continue;
+        // Reuse the shared parser. Ordinary check_world reports parse
+        // errors and missing literal images/sounds; do not duplicate them.
+        if crate::gani::open(&bytes).is_ok() && !without_ganis.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text: format!(
+                    "client reach: gani file present; shared profiles without gani support [{without_ganis}] need server animation fallback review if it is used; file presence does not prove use, and no nearest built-in animation is inferred"
+                ),
+            });
         }
-        let Ok(level) = crate::level::open(&bytes) else {
+    }
+    for want in png_without_gif(root) {
+        findings.push(Finding {
+            severity: Severity::Warn,
+            file: want.file,
+            text: format!(
+                "client reach: image {} has PNG art but no {}.gif counterpart for pre-2.1 clients",
+                want.image, want.stem
+            ),
+        });
+    }
+    findings.sort_by(|a, b| a.file.cmp(&b.file));
+    findings
+}
+
+/// A PNG that a level or weapon names, with no GIF of the same name in the
+/// world: what a pre-2.1 client would ask for and not get.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PngWithoutGif {
+    /// The level or weapon file that names it, relative to the world root.
+    pub file: String,
+    /// The name as written.
+    pub image: String,
+    /// The file name without `.png`/`.gif`, lower case.
+    pub stem: String,
+    /// The PNG in the world (the first one, in path order, with that name).
+    pub png: PathBuf,
+}
+
+/// Every PNG reference without a GIF counterpart, once per referring file
+/// and name. Names are matched without case and without folders, the way
+/// the gserver finds a file. Levels that do not parse are skipped.
+pub fn png_without_gif(root: &Path) -> Vec<PngWithoutGif> {
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let mut by_name: std::collections::BTreeMap<String, &PathBuf> = Default::default();
+    for p in &files {
+        if let Some(n) = p.file_name() {
+            by_name
+                .entry(n.to_string_lossy().to_ascii_lowercase())
+                .or_insert(p);
+        }
+    }
+    let mut out = Vec::new();
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        let images: Vec<String> = if is_level(&lower) {
+            let Ok(bytes) = fs::read(path) else {
+                continue;
+            };
+            let Ok(level) = crate::level::open(&bytes) else {
+                continue;
+            };
+            level
+                .npcs
+                .iter()
+                .flat_map(|npc| {
+                    std::iter::once(npc.image.clone()).chain(script_images(&npc.script))
+                })
+                .collect()
+        } else if let Some(weapon) = read_weapon(path) {
+            std::iter::once(weapon.image)
+                .chain(script_images(&weapon.script))
+                .collect()
+        } else {
             continue;
         };
         let mut seen = BTreeSet::new();
-        for npc in &level.npcs {
-            let script = crate::npc::check_script(&npc.script);
-            let images = std::iter::once(npc.image.as_str()).chain(
-                script
-                    .files
-                    .iter()
-                    .filter(|f| f.kind == crate::npc::FileKind::Image)
-                    .map(|f| f.name.as_str()),
-            );
-            for image in images {
-                let image = image.trim();
-                if !picture_file(image) {
-                    continue;
-                }
-                let name = image
-                    .rsplit(['/', '\\'])
-                    .next()
-                    .unwrap_or(image)
-                    .to_ascii_lowercase();
-                let stem = name
-                    .strip_suffix(".png")
-                    .or_else(|| name.strip_suffix(".gif"));
-                let Some(stem) = stem else {
-                    continue;
-                };
-                if names.contains(&format!("{stem}.png"))
-                    && !names.contains(&format!("{stem}.gif"))
-                    && seen.insert(stem.to_string())
-                {
-                    findings.push(Finding {
-                        severity: Severity::Warn,
-                        file: rel(root, path),
-                        text: format!("client reach: image {image} has PNG art but no {stem}.gif counterpart for pre-2.1 clients"),
-                    });
+        for image in images {
+            let image = image.trim();
+            if !picture_file(image) {
+                continue;
+            }
+            let name = image
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap_or(image)
+                .to_ascii_lowercase();
+            let Some(stem) = name
+                .strip_suffix(".png")
+                .or_else(|| name.strip_suffix(".gif"))
+            else {
+                continue;
+            };
+            let Some(png) = by_name.get(&format!("{stem}.png")) else {
+                continue;
+            };
+            if by_name.contains_key(&format!("{stem}.gif")) || !seen.insert(stem.to_string()) {
+                continue;
+            }
+            out.push(PngWithoutGif {
+                file: rel(root, path),
+                image: image.to_string(),
+                stem: stem.to_string(),
+                png: (*png).clone(),
+            });
+        }
+    }
+    out
+}
+
+/// The fixed image names a script gives `setimg` and the other image commands.
+fn script_images(script: &str) -> Vec<String> {
+    if script.trim().is_empty() {
+        return Vec::new();
+    }
+    crate::npc::check_script(script)
+        .files
+        .into_iter()
+        .filter(|f| f.kind == crate::npc::FileKind::Image)
+        .map(|f| f.name)
+        .collect()
+}
+
+/// A gserver weapon file (`weapons/*.txt`, first line `GRAWP001`): its
+/// name, `IMAGE` and the script between `SCRIPT` and `SCRIPTEND`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WeaponFile {
+    pub name: String,
+    pub image: String,
+    pub script: String,
+}
+
+/// Read a weapon file, or `None` when `path` is not a `.txt` file in a
+/// `weapons` folder that starts with `GRAWP001`.
+pub fn read_weapon(path: &Path) -> Option<WeaponFile> {
+    let in_weapons = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .is_some_and(|n| n.eq_ignore_ascii_case("weapons"));
+    let txt = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("txt"));
+    if !in_weapons || !txt {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&fs::read(path).ok()?).into_owned();
+    let mut lines = text.lines();
+    if lines.next()?.trim() != "GRAWP001" {
+        return None;
+    }
+    let mut weapon = WeaponFile::default();
+    let mut in_script = false;
+    for line in lines {
+        let trimmed = line.trim_end_matches('\r');
+        if in_script {
+            if trimmed.trim() == "SCRIPTEND" {
+                in_script = false;
+            } else {
+                weapon.script.push_str(trimmed);
+                weapon.script.push('\n');
+            }
+            continue;
+        }
+        let (key, value) = trimmed
+            .split_once(' ')
+            .map_or((trimmed.trim(), ""), |(k, v)| (k.trim(), v.trim()));
+        match key {
+            "REALNAME" => weapon.name = value.to_string(),
+            "IMAGE" => weapon.image = value.to_string(),
+            "SCRIPT" => in_script = true,
+            _ => {}
+        }
+    }
+    Some(weapon)
+}
+
+/// The shared profiles (oldest first) before 4.x, as labels: the clients
+/// that do not run GS2. seihai-core's profiles have no GS2 flag, so this
+/// is the cut in its version order at 4.04r2, the first 4.x row (#38: "GS2
+/// only (4.x and later)").
+fn profiles_without_gs2() -> String {
+    let all = ClientVersion::all_versions();
+    let cut = all
+        .iter()
+        .position(|v| *v == ClientVersion::V404R2)
+        .unwrap_or(all.len());
+    all[..cut]
+        .iter()
+        .map(|v| v.label())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Script era reach (#38): every level NPC and weapon whose script is GS2
+/// only, or mixes GS1 and GS2 ([`crate::npc::script_era`]), with the
+/// shared profiles before 4.x that do not run GS2. GS1-only scripts run on
+/// every client and are not listed. An inventory from the script text:
+/// presence does not prove a player reaches the level or gets the weapon,
+/// and nothing is compiled or written.
+pub fn check_script_reach(root: &Path) -> Vec<Finding> {
+    use crate::npc::{script_era, ScriptEra};
+    let mut files = Vec::new();
+    walk(root, &mut files);
+    files.sort();
+    let old = profiles_without_gs2();
+    let mut findings = Vec::new();
+    let note = |what: &str, era: ScriptEra| {
+        match era {
+        ScriptEra::Gs1 => None,
+        ScriptEra::Gs2 => Some(format!(
+            "client reach: {what} script is GS2 only; shared profiles before 4.x [{old}] do not run it"
+        )),
+        ScriptEra::Both => Some(format!(
+            "client reach: {what} script is both GS1 and GS2; shared profiles before 4.x [{old}] run only the GS1 part and skip the GS2 lines"
+        )),
+    }
+    };
+    for path in &files {
+        let lower = path.to_string_lossy().to_ascii_lowercase();
+        let mut texts = Vec::new();
+        if is_level(&lower) {
+            let Ok(bytes) = fs::read(path) else {
+                continue;
+            };
+            let Ok(level) = crate::level::open(&bytes) else {
+                continue;
+            };
+            for npc in &level.npcs {
+                if let Some(era) = script_era(&npc.script) {
+                    texts.extend(note(&format!("NPC at {},{}", npc.x, npc.y), era));
                 }
             }
+        } else if let Some(weapon) = read_weapon(path) {
+            if let Some(era) = script_era(&weapon.script) {
+                let what = if weapon.name.is_empty() {
+                    "weapon".to_string()
+                } else {
+                    format!("weapon {}", weapon.name)
+                };
+                texts.extend(note(&what, era));
+            }
+        }
+        for text in texts {
+            findings.push(Finding {
+                severity: Severity::Warn,
+                file: rel(root, path),
+                text,
+            });
         }
     }
     findings

@@ -46,10 +46,17 @@ The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
 
 `seihai-servertools check --client-reach [--json] WORLD` adds warnings for
-level NPC images and fixed GS1 script image names that have PNG art but no
-GIF counterpart for pre-2.1 clients. It inventories file names and never
-converts or writes art. A matching GIF name does not certify its contents or
-original-client rendering.
+level NPC and weapon images (and the fixed image names their scripts use)
+that have PNG art but no GIF counterpart for pre-2.1 clients. It inventories
+file names and never converts or writes art on its own. A matching GIF name
+does not certify its contents or original-client rendering.
+
+`check --make-gif WORLD` writes those GIF copies: a palette GIF beside each
+PNG that warning would list, with the PNG's name. Colours are kept exactly
+when there are at most 255 (plus one transparent index); otherwise they are
+reduced to 256. Alpha is cut at half, since GIF has one transparent colour.
+An existing file is never replaced, and nothing else is written. Each GIF
+written is a `note` in the report; a PNG it cannot read is a warning.
 
 The same option reports parsed gani files and lists the pinned shared client
 profiles whose `ui.ganis` field is false. Those profiles need server animation
@@ -66,8 +73,17 @@ It also lists, for each parsed gmap, the shared profiles whose
 `levels.gmap` is false (they need linked single levels if players reach
 it), and for each level the profiles that cannot open its format. The
 format comes from the level's magic (`GLEVNW01`, `GR-V1`, `Z3-V1`), not its
-extension. Dynamic names, weapons, scripts' era and tiles remain outside
-these slices of issue #38.
+extension.
+
+Scripts: each level NPC and weapon (`weapons/*.txt` files starting
+`GRAWP001`) whose script is GS2 only, or mixes GS1 and GS2, is listed with
+the shared profiles before 4.x, which run only GS1. The era is read from the
+text: GS2 event functions (`function onCreated()`), `temp.`, `player.`,
+`params[` and `new Name(`; GS1 event flags (`if (playerenters)`) and `#`
+codes outside strings. GS1-only scripts run on every client and are not
+listed. seihai-core's profiles have no GS2 flag, so the cut is 4.04r2, the
+first 4.x row. Dynamic names and tiles remain outside these slices of
+issue #38.
 
 ## Start a lab world
 

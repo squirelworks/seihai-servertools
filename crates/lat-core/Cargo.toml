@@ -22,6 +22,10 @@ seihai-rc.workspace = true
 zip.workspace = true
 des.workspace = true
 getrandom.workspace = true
+# check --make-gif (gif.rs).
+png.workspace = true
+gif.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+png.workspace = true
