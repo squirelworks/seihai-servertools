@@ -652,3 +652,66 @@ fn weapon_images_join_the_gif_inventory_and_copies() {
     fs::write(w.join("weapon-Bow.txt"), "GRAWP001\nIMAGE bow.png\n").unwrap();
     assert!(lat_core::check::check_image_reach(w).is_empty());
 }
+
+#[test]
+fn run_time_image_names_are_matched_to_world_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("levels/images")).unwrap();
+    let level = "GLEVNW01\nNPC - 1 1\nif (created) {\n  setimg bomb#v(this.n).png;\n  showimg 1,#s(this.pic),1,1;\n  showimg 2,ghost#v(this.n).png,1,1;\n}\nNPCEND\n";
+    fs::write(w.join("levels/start.nw"), level).unwrap();
+    // bomb1 has its GIF, bomb2 does not, and Bomb3.PNG checks case. tree.png
+    // is not named at all.
+    for name in [
+        "bomb1.png",
+        "bomb1.gif",
+        "bomb2.png",
+        "Bomb3.PNG",
+        "tree.png",
+    ] {
+        fs::write(w.join("levels/images").join(name), b"art").unwrap();
+    }
+    let f = lat_core::check::check_image_reach(w);
+    let texts: Vec<&str> = f.iter().map(|f| f.text.as_str()).collect();
+    assert_eq!(f.len(), 4, "{texts:#?}");
+    assert!(f
+        .iter()
+        .all(|f| f.file == "levels/start.nw" && f.severity == Severity::Warn));
+    for stem in ["bomb2", "bomb3"] {
+        assert!(
+            texts.iter().any(|t| t.contains(&format!("no {stem}.gif"))
+                && t.contains("a run-time name, bomb#v(this.n).png, can be this file")),
+            "{stem}: {texts:#?}"
+        );
+    }
+    assert!(!texts.iter().any(|t| t.contains("bomb1.gif")));
+    assert!(!texts.iter().any(|t| t.contains("tree.gif")));
+    assert!(texts
+        .iter()
+        .any(|t| t.contains("#s(this.pic)") && t.contains("says too little")));
+    assert!(texts
+        .iter()
+        .any(|t| t.contains("ghost#v(this.n).png") && t.contains("matches no PNG or GIF")));
+
+    // --make-gif covers what the run-time name can be, and nothing else.
+    let copies = lat_core::check::gif_copies_wanted(w);
+    assert_eq!(
+        copies,
+        vec![
+            (
+                w.join("levels/images/Bomb3.PNG"),
+                w.join("levels/images/bomb3.gif")
+            ),
+            (
+                w.join("levels/images/bomb2.png"),
+                w.join("levels/images/bomb2.gif")
+            ),
+        ]
+    );
+    // The ordinary check does not report run-time names as missing files.
+    assert!(
+        check_world(w).findings.is_empty(),
+        "{:?}",
+        check_world(w).findings
+    );
+}

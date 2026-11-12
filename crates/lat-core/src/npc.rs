@@ -50,8 +50,12 @@ pub struct ScriptCheck {
     /// world checker does not report these.
     pub unknown: Vec<String>,
     /// Images and sounds named with a fixed name. Names built at run time
-    /// (`#` codes such as `#v(...)`) are left out.
+    /// (`#` codes such as `#v(...)`) are in [`Self::run_time`] instead.
     pub files: Vec<NamedFile>,
+    /// Images and sounds whose name is built at run time: the name is the
+    /// text as written, `#` codes and all (`bomb#v(this.n).png`). See
+    /// [`RunTimeName`] for matching one to the files in a world.
+    pub run_time: Vec<NamedFile>,
 }
 
 /// The file kind each file-naming command's file is. Commands not listed
@@ -124,15 +128,114 @@ fn note_files(name: &str, args: &[Arg], line: u32, out: &mut ScriptCheck) {
             continue;
         };
         let text = text.trim();
-        if text.is_empty() || text.contains('#') {
+        if text.is_empty() {
             continue;
         }
-        out.files.push(NamedFile {
+        let list = if text.contains('#') {
+            &mut out.run_time
+        } else {
+            &mut out.files
+        };
+        list.push(NamedFile {
             kind,
             name: text.to_string(),
             command: name.to_string(),
             line,
         });
+    }
+}
+
+/// A file name built at run time, as a pattern over file names (#38).
+///
+/// Each GS1 `#` code (`#v(...)`, `#s(...)`, `#c`, `#p(0)`, `#1`, ...) can
+/// become any text, so it is a wildcard; the rest must match as written,
+/// ignoring case. Only the file name is matched: a folder in front of it is
+/// dropped, as the gserver finds files by name alone.
+///
+/// This says which files the name *could* be, not which ones the script
+/// picks: a matched file may never be shown, and a value the script builds
+/// from scratch can name a file the pattern misses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunTimeName {
+    /// Lower-case literal text between the codes. There is one more part
+    /// than there are codes; a part may be empty.
+    parts: Vec<String>,
+}
+
+impl RunTimeName {
+    /// The pattern for `name`. A `#` at the very end is literal text.
+    pub fn parse(name: &str) -> Self {
+        let mut parts = vec![String::new()];
+        let mut chars = name.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c != '#' || chars.peek().is_none() {
+                parts.last_mut().unwrap().extend(c.to_lowercase());
+                continue;
+            }
+            chars.next();
+            if chars.peek() == Some(&'(') {
+                let mut depth = 0usize;
+                for c in chars.by_ref() {
+                    match c {
+                        '(' => depth += 1,
+                        ')' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            parts.push(String::new());
+        }
+        // Keep only what follows the last folder separator in literal text.
+        if let Some(i) = parts.iter().rposition(|p| p.contains(['/', '\\'])) {
+            let tail = parts[i]
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap_or("")
+                .to_string();
+            parts.drain(..i);
+            parts[0] = tail;
+        }
+        RunTimeName { parts }
+    }
+
+    /// True if the literal text, less a trailing file extension, says
+    /// anything: `bomb#v(n).png` can be matched, `#s(pic)` and
+    /// `#v(n).png` would match every picture and cannot.
+    pub fn is_specific(&self) -> bool {
+        let mut parts = self.parts.clone();
+        if let Some(last) = parts.last_mut() {
+            if let Some(dot) = last.rfind('.') {
+                if last[dot + 1..].chars().all(|c| c.is_ascii_alphanumeric()) {
+                    last.truncate(dot);
+                }
+            }
+        }
+        parts.iter().any(|p| !p.is_empty())
+    }
+
+    /// True if `file_name` (a name with no folder) could be this name.
+    pub fn matches(&self, file_name: &str) -> bool {
+        let name = file_name.to_lowercase();
+        let (first, rest) = self.parts.split_first().expect("at least one part");
+        let Some(mut left) = name.strip_prefix(first.as_str()) else {
+            return false;
+        };
+        let Some((last, middle)) = rest.split_last() else {
+            // No code at all: the whole name must match.
+            return left.is_empty();
+        };
+        for part in middle {
+            match left.find(part.as_str()) {
+                Some(i) => left = &left[i + part.len()..],
+                None => return false,
+            }
+        }
+        left.ends_with(last.as_str())
     }
 }
 
@@ -356,9 +459,51 @@ mod tests {
     }
 
     #[test]
-    fn run_time_names_are_left_out() {
-        let c = check_script("setimg #s(this.pic);\nplay #v(this.n).wav;\n");
-        assert!(c.files.is_empty(), "{:?}", c.files);
+    fn run_time_names_are_kept_apart() {
+        let c = check_script("setimg #s(this.pic);\nplay #v(this.n).wav;\nsetimg a.png;\n");
+        assert_eq!(names(&c), [(FileKind::Image, "a.png")]);
+        let run_time: Vec<_> = c
+            .run_time
+            .iter()
+            .map(|f| (f.kind, f.name.as_str(), f.line))
+            .collect();
+        assert_eq!(
+            run_time,
+            [
+                (FileKind::Image, "#s(this.pic)", 1),
+                (FileKind::Sound, "#v(this.n).wav", 2),
+            ]
+        );
+    }
+
+    #[test]
+    fn run_time_names_match_as_patterns() {
+        let bomb = RunTimeName::parse("bomb#v(this.n).png");
+        assert!(bomb.is_specific());
+        assert!(bomb.matches("bomb3.png"));
+        assert!(bomb.matches("BOMB12.PNG"));
+        assert!(bomb.matches("bomb.png"));
+        assert!(!bomb.matches("bomb3.gif"));
+        assert!(!bomb.matches("xbomb3.png"));
+
+        // Two codes, nested brackets, and a folder in front.
+        let door = RunTimeName::parse("levels/door_#s(client.c)_#v((a+1)*2).png");
+        assert!(door.is_specific());
+        assert!(door.matches("door_red_4.png"));
+        assert!(!door.matches("door4.png"));
+
+        // A folder inside a code is not a folder in the name.
+        let sub = RunTimeName::parse("#s(dir)/tree#v(n).gif");
+        assert!(sub.matches("tree2.gif"));
+        assert!(!sub.matches("bush2.gif"));
+
+        // Codes without brackets: #c, #1.
+        assert!(RunTimeName::parse("head#1.png").matches("head19.png"));
+
+        // Nothing but codes and an extension says nothing.
+        assert!(!RunTimeName::parse("#s(this.pic)").is_specific());
+        assert!(!RunTimeName::parse("#v(n).png").is_specific());
+        assert!(RunTimeName::parse("#v(n)_hat.png").is_specific());
     }
 
     #[test]

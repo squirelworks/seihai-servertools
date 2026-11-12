@@ -223,7 +223,11 @@ Held until Seihai M4 or M5 asks for it:
       (1.28b2 to 1.41, 2.00 to 2.05). 1.21 and 2.1x left out (no evidence).
 - [x] Issue #38 weapon images: a weapon file's `IMAGE` and fixed script
       image names join the GIF inventory and `--make-gif`.
-- [ ] Issue #38 dynamic image names. This is not a fidelity certificate.
+- [x] Issue #38 run-time image names: script image names with `#` codes
+      are matched as patterns against the world's PNG and GIF names; the
+      PNGs they can be join the GIF inventory and `--make-gif`, and names
+      that match nothing or say too little are listed to check by hand.
+      This is not a fidelity certificate.
 
 - [x] Missing images and sounds named by levels, NPCs and ganis.
 - [x] GS1 syntax errors in level NPCs (and the images and sounds those
