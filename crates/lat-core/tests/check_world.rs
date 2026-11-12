@@ -525,9 +525,39 @@ fn script_reach_lists_gs2_and_mixed_level_npcs_and_weapons() {
         "{texts:#?}"
     );
     for t in &texts {
-        assert!(t.contains(ClientVersion::V3153.label()), "{t}");
-        assert!(t.contains(ClientVersion::V121.label()), "{t}");
-        assert!(!t.contains(ClientVersion::V404R2.label()), "{t}");
+        let lists: Vec<Vec<&str>> = t
+            .split('[')
+            .skip(1)
+            .map(|p| p.split(']').next().unwrap().split(", ").collect())
+            .collect();
+        let (no, unknown) = (&lists[0], &lists[1]);
+        for v in [
+            ClientVersion::V121,
+            ClientVersion::V231,
+            ClientVersion::V304,
+        ] {
+            assert!(no.contains(&v.label()), "{v:?} {t}");
+        }
+        for v in [
+            ClientVersion::V3153,
+            ClientVersion::V404R2,
+            ClientVersion::V603R7,
+        ] {
+            assert!(
+                !no.contains(&v.label()) && !unknown.contains(&v.label()),
+                "{v:?} {t}"
+            );
+        }
+        for v in [
+            ClientVersion::V210,
+            ClientVersion::V230,
+            ClientVersion::V6015,
+        ] {
+            assert!(
+                unknown.contains(&v.label()) && !no.contains(&v.label()),
+                "{v:?} {t}"
+            );
+        }
     }
     let weapon =
         lat_core::check::read_weapon(&w.join("servers/default/weapons/weapon-Bow.txt")).unwrap();

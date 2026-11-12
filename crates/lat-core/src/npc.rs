@@ -137,16 +137,16 @@ fn note_files(name: &str, args: &[Arg], line: u32, out: &mut ScriptCheck) {
 }
 
 /// Which script language a script's text is written in (#38). GS1 is the
-/// language every client runs; GS2 is the newer one, which only 4.x and
-/// later clients run.
+/// language every client runs; GS2 is the newer one, which only 3.153 and
+/// later clients run (seihai #430).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScriptEra {
     /// Nothing in it is GS2: every client can run it.
     Gs1,
     /// GS2 code and no GS1 event flags.
     Gs2,
-    /// GS1 event flags and GS2 code in the same script. A client before 4.x
-    /// runs only the GS1 part; the GS2 lines trip its parser and are skipped.
+    /// GS1 event flags and GS2 code in the same script. A client without
+    /// GS2 runs only the GS1 part; the GS2 lines trip its parser and are skipped.
     Both,
 }
 

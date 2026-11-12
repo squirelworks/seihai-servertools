@@ -544,26 +544,34 @@ pub fn read_weapon(path: &Path) -> Option<WeaponFile> {
     Some(weapon)
 }
 
-/// The shared profiles (oldest first) before 4.x, as labels: the clients
-/// that do not run GS2. seihai-core's profiles have no GS2 flag, so this
-/// is the cut in its version order at 4.04r2, the first 4.x row (#38: "GS2
-/// only (4.x and later)").
-fn profiles_without_gs2() -> String {
+/// The shared profiles (oldest first) that do not run GS2, and those not
+/// known either way, as labels.
+///
+/// Stopgap until seihai-core's `VersionProfile::scripts` (seihai #430)
+/// is in a tag this repo pins; then this reads that field instead. The
+/// lists copy #430's evidence: GS2 runs on a client whose binary handles
+/// `PLO_NPCBYTECODE` (131), which is 3.153 and every build after it; the
+/// 1.21 to 2.31 classic binaries and 3.04 have no 131 (no); 2.10 to 2.16,
+/// 2.30, 6.015 and 6.034 have no binary to read (unknown).
+fn profiles_without_gs2() -> (String, String) {
+    use ClientVersion::*;
+    const UNKNOWN: &[ClientVersion] = &[V210, V212, V213, V214, V215, V216, V230, V6015, V6034];
     let all = ClientVersion::all_versions();
-    let cut = all
+    let first_gs2 = all.iter().position(|v| *v == V3153).unwrap_or(all.len());
+    let join =
+        |vs: Vec<&ClientVersion>| vs.iter().map(|v| v.label()).collect::<Vec<_>>().join(", ");
+    let no = all[..first_gs2]
         .iter()
-        .position(|v| *v == ClientVersion::V404R2)
-        .unwrap_or(all.len());
-    all[..cut]
-        .iter()
-        .map(|v| v.label())
-        .collect::<Vec<_>>()
-        .join(", ")
+        .filter(|v| !UNKNOWN.contains(v))
+        .collect();
+    let unknown = all.iter().filter(|v| UNKNOWN.contains(v)).collect();
+    (join(no), join(unknown))
 }
 
 /// Script era reach (#38): every level NPC and weapon whose script is GS2
 /// only, or mixes GS1 and GS2 ([`crate::npc::script_era`]), with the
-/// shared profiles before 4.x that do not run GS2. GS1-only scripts run on
+/// shared profiles that do not run GS2 (and those not known either way;
+/// see [`profiles_without_gs2`]). GS1-only scripts run on
 /// every client and are not listed. An inventory from the script text:
 /// presence does not prove a player reaches the level or gets the weapon,
 /// and nothing is compiled or written.
@@ -572,16 +580,16 @@ pub fn check_script_reach(root: &Path) -> Vec<Finding> {
     let mut files = Vec::new();
     walk(root, &mut files);
     files.sort();
-    let old = profiles_without_gs2();
+    let (old, unknown) = profiles_without_gs2();
     let mut findings = Vec::new();
     let note = |what: &str, era: ScriptEra| {
         match era {
         ScriptEra::Gs1 => None,
         ScriptEra::Gs2 => Some(format!(
-            "client reach: {what} script is GS2 only; shared profiles before 4.x [{old}] do not run it"
+            "client reach: {what} script is GS2 only; shared profiles without GS2 [{old}] do not run it (not known for [{unknown}])"
         )),
         ScriptEra::Both => Some(format!(
-            "client reach: {what} script is both GS1 and GS2; shared profiles before 4.x [{old}] run only the GS1 part and skip the GS2 lines"
+            "client reach: {what} script is both GS1 and GS2; shared profiles without GS2 [{old}] run only the GS1 part and skip the GS2 lines (not known for [{unknown}])"
         )),
     }
     };

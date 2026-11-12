@@ -70,12 +70,16 @@ extension.
 
 Scripts: each level NPC and weapon (`weapons/*.txt` files starting
 `GRAWP001`) whose script is GS2 only, or mixes GS1 and GS2, is listed with
-the shared profiles before 4.x, which run only GS1. The era is read from the
+the shared profiles that do not run GS2, and those not known either way.
+The era is read from the
 text: GS2 event functions (`function onCreated()`), `temp.`, `player.`,
 `params[` and `new Name(`; GS1 event flags (`if (playerenters)`) and `#`
 codes outside strings. GS1-only scripts run on every client and are not
-listed. seihai-core's profiles have no GS2 flag, so the cut is 4.04r2, the
-first 4.x row.
+listed. Which clients run GS2 follows seihai #430's evidence (the binary
+handles packet 131): yes from 3.153 on; no for 1.21 to 2.31 and 3.04;
+unknown for 2.10 to 2.16, 2.30, 6.015 and 6.034, which have no binary. The
+list is copied here until seihai-core's `VersionProfile::scripts` is in a
+tag this repo pins; then the check reads that field.
 
 Tiles: each level with tiles past column 116 of the default `pics1.png` is
 listed with the profiles whose shipped sheet is 1856×512 (1.28 beta 2 to

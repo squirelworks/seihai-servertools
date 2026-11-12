@@ -53,7 +53,7 @@ fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
 It flags parsed gani files for fallback review using shared profiles' gani
 support, without claiming use or choosing a built-in animation. It lists
 level NPC and weapon (weapons/*.txt) scripts that are GS2 only or mix GS1
-and GS2, with the shared profiles before 4.x, which run only GS1, and levels
+and GS2, with the shared profiles that do not run GS2 (before 3.153), and levels
 with tiles past column 116 of pics1.png, which the 1856-wide sheet of 1.28b2
 to 2.05 lacks. It does not convert art or certify script, animation, tile or
 gmap compatibility.";
