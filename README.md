@@ -60,8 +60,14 @@ and standard ganis are included too. A GIF copy
 of a sprite sheet does not give a client gani support, and no nearest built-in
 animation is inferred. Symbolic sheets such as `BODY` and `HEAD` are not
 treated as literal image filenames; ordinary checks still handle parse errors
-and missing images/sounds. Dynamic names, weapons, scripts' era, gmaps and
-tiles remain outside this slice of issue #38.
+and missing images/sounds.
+
+It also lists, for each parsed gmap, the shared profiles whose
+`levels.gmap` is false (they need linked single levels if players reach
+it), and for each level the profiles that cannot open its format. The
+format comes from the level's magic (`GLEVNW01`, `GR-V1`, `Z3-V1`), not its
+extension. Dynamic names, weapons, scripts' era and tiles remain outside
+these slices of issue #38.
 
 ## Start a lab world
 

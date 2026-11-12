@@ -418,3 +418,57 @@ fn plain_gpak_warns_only_when_420_may_log_in() {
     fs::remove_file(&allowed).unwrap();
     assert!(package_findings(w).is_empty());
 }
+
+#[test]
+fn level_reach_lists_profiles_without_gmaps_or_the_level_format() {
+    use seihai_core::protocol::ClientVersion;
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::create_dir_all(w.join("levels")).unwrap();
+    fs::write(w.join("levels/start.nw"), "GLEVNW01\n").unwrap();
+    // The magic decides, not the extension.
+    fs::write(w.join("levels/odd.graal"), "GLEVNW01\n").unwrap();
+    fs::write(w.join("levels/broken.nw"), "not a level\n").unwrap();
+    fs::write(
+        w.join("levels/world.gmap"),
+        "GRMAP001\nWIDTH 1\nHEIGHT 1\nLEVELNAMES\n\"start.nw\"\nLEVELNAMESEND\n",
+    )
+    .unwrap();
+    fs::write(w.join("levels/bad.gmap"), "nope\n").unwrap();
+
+    let labels = |lacks: fn(&seihai_core::protocol::Levels) -> bool| -> Vec<&str> {
+        ClientVersion::all_versions()
+            .iter()
+            .filter(|v| lacks(&v.profile().levels))
+            .map(|v| v.label())
+            .collect()
+    };
+    let no_nw = labels(|l| !l.nw);
+    let no_gmap = labels(|l| !l.gmap);
+    // The pinned profiles have both kinds, or this test checks nothing.
+    assert!(!no_nw.is_empty() && !no_gmap.is_empty());
+    assert!(!no_gmap.contains(&ClientVersion::V222.label()));
+
+    let f = lat_core::check::check_level_reach(w);
+    let files: Vec<&str> = f.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(
+        files,
+        ["levels/odd.graal", "levels/start.nw", "levels/world.gmap"],
+        "{f:?}"
+    );
+    assert!(f.iter().all(|f| f.severity == Severity::Warn));
+    assert!(f[0].text.contains("NW level"), "{}", f[0].text);
+    assert!(
+        f[1].text.contains(&format!("[{}]", no_nw.join(", "))),
+        "{}",
+        f[1].text
+    );
+    assert!(
+        f[2].text.contains(&format!("[{}]", no_gmap.join(", "))),
+        "{}",
+        f[2].text
+    );
+    assert!(f[2].text.contains("linked single levels"));
+    // Inventory only: nothing written.
+    assert_eq!(fs::read_dir(w.join("levels")).unwrap().count(), 5);
+}
