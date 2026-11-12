@@ -32,16 +32,17 @@ pub fn png_to_gif(png_bytes: &[u8]) -> Result<Vec<u8>, String> {
     let height = u16::try_from(h).map_err(|_| format!("{h} pixels high; a GIF holds 65535"))?;
     let data = &buf[..info.buffer_size()];
     let rgba: Vec<[u8; 4]> = match info.color_type {
-        png::ColorType::Rgba => data
-            .chunks_exact(4)
-            .map(|p| [p[0], p[1], p[2], p[3]])
-            .collect(),
+        png::ColorType::Rgba => data.as_chunks::<4>().0.to_vec(),
         png::ColorType::Rgb => data
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|p| [p[0], p[1], p[2], 255])
             .collect(),
         png::ColorType::GrayscaleAlpha => data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|p| [p[0], p[0], p[0], p[1]])
             .collect(),
         png::ColorType::Grayscale => data.iter().map(|&g| [g, g, g, 255]).collect(),
@@ -157,11 +158,7 @@ mod tests {
         opts.set_color_output(gif::ColorOutput::RGBA);
         let mut d = opts.read_info(gif_bytes).unwrap();
         let f = d.read_next_frame().unwrap().unwrap().clone();
-        let px = f
-            .buffer
-            .chunks_exact(4)
-            .map(|p| [p[0], p[1], p[2], p[3]])
-            .collect();
+        let px = f.buffer.as_chunks::<4>().0.to_vec();
         (f.width, f.height, px)
     }
 
