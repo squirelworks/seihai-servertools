@@ -88,7 +88,10 @@ pub fn check_gserver(options: &OptionsTxt, target: Profile) -> Vec<Finding> {
             out.push(finding(
                 Block,
                 "serverinterface",
-                "A public server must listen on AUTO or a real interface, not 127.0.0.1.",
+                format!(
+                    "A public server must listen on AUTO or a real interface, not the loopback address {}.",
+                    interface.unwrap_or("").trim()
+                ),
             ));
         }
         let staff = options.get("staff").unwrap_or("");
@@ -618,6 +621,25 @@ mod tests {
 
         let f = check_gserver(&opts(PUBLIC), Profile::Public);
         assert_eq!(keys(&f, Severity::Block), ["listip"], "placeholder address");
+    }
+
+    #[test]
+    fn the_loopback_block_names_the_address_it_saw() {
+        // Lab run 2026-11-12 (#47): 127.0.0.2 is loopback too, and the message
+        // used to say 127.0.0.1 whatever the address was.
+        let text = PUBLIC
+            .replace("<listserver-host>", "127.0.0.1")
+            .replace("serverinterface = AUTO", "serverinterface = 127.0.0.2");
+        let f = check_gserver(&opts(&text), Profile::Public);
+        let block = f
+            .iter()
+            .find(|f| f.key.as_deref() == Some("serverinterface"))
+            .expect("127.0.0.2 is refused for a public server");
+        assert!(
+            block.text.contains("loopback address 127.0.0.2"),
+            "{}",
+            block.text
+        );
     }
 
     #[test]

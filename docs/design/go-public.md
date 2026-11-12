@@ -184,8 +184,10 @@ done.
 - Unit: round-trip `serveroptions.txt` (comments and unknown keys survive),
   every refused combination, Back to lab restores the exact lab values.
 - End to end, loopback only: lab listserver on `127.0.0.1`, run the wizard with
-  `127.0.0.1` typed as the listserver and a second loopback address (for
-  example `127.0.0.2` on Linux) as the "outside" interface, check the gserver
+  `127.0.0.1` typed as the listserver and a non-loopback lab address as the
+  "outside" interface (the wizard refuses all of 127/8 for a public server; a
+  dummy interface with `192.0.2.2` in a network namespace works, see
+  `docs/lab/2026-11-12-real-fork-lab-run.md`), check the gserver
   registers and a Seihai client gets it in the list. Never against a public
   listserver.
 
