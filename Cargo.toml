@@ -20,16 +20,15 @@ publish = false
 # the Seihai client. Pinned on purpose; never follow a branch.
 # See docs/ARCHITECTURE.md, "Code shared with Seihai".
 #
-# seihai-core lives in its own repo (squirelworks/seihai-core). seihai-draw
-# still comes from seihai, and seihai pins one seihai-core rev in its root
-# Cargo.toml. Pin seihai-core here to that same rev, so a Level or Gani from
-# the parser is the same type seihai-draw paints. Bump both together.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.0.9", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai", rev = "dea3f1de984cfc2442bfdb9fedde8b89176c4adb" }
-# RC file link: list_dir, get_file, put_file. seihai-rc main at 2430ee3
-# (rc#39), which pins seihai-core v0.0.9 like this workspace, so the build
-# has one core. No rc tag yet.
-seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "2430ee31cc4cb1f691fd9413deef1d6183012a8b" }
+# seihai-core and seihai-draw both live in squirelworks/seihai-core and are
+# tagged together, so one tag pins both and a Level or Gani from the parser
+# is the same type seihai-draw paints.
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.0.11", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.0.11" }
+# RC file link: list_dir, get_file, put_file. seihai-rc main at 443415d (rc#41),
+# which pins seihai-core v0.0.11 like this workspace, so the build has one
+# core. No rc tag yet.
+seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "443415d3f374685cf78816956e5ebcd9b9a2eb24" }
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
 egui = "0.29"

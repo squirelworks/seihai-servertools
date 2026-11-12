@@ -2887,8 +2887,8 @@ dependencies = [
 
 [[package]]
 name = "seihai-core"
-version = "0.0.9"
-source = "git+https://github.com/squirelworks/seihai-core?tag=v0.0.9#cf62c87781af979b2e17af0c4e0a8e2898b55f55"
+version = "0.0.11"
+source = "git+https://github.com/squirelworks/seihai-core?tag=v0.0.11#d76d2bb11044c04372b77aead99780926ff8292e"
 dependencies = [
  "base64",
  "bzip2",
@@ -2903,8 +2903,8 @@ dependencies = [
 
 [[package]]
 name = "seihai-draw"
-version = "0.0.7"
-source = "git+https://github.com/squirelworks/seihai?rev=dea3f1de984cfc2442bfdb9fedde8b89176c4adb#dea3f1de984cfc2442bfdb9fedde8b89176c4adb"
+version = "0.0.11"
+source = "git+https://github.com/squirelworks/seihai-core?tag=v0.0.11#d76d2bb11044c04372b77aead99780926ff8292e"
 dependencies = [
  "seihai-core",
 ]
@@ -2912,7 +2912,7 @@ dependencies = [
 [[package]]
 name = "seihai-rc"
 version = "0.1.0"
-source = "git+https://github.com/squirelworks/seihai-rc?rev=2430ee31cc4cb1f691fd9413deef1d6183012a8b#2430ee31cc4cb1f691fd9413deef1d6183012a8b"
+source = "git+https://github.com/squirelworks/seihai-rc?rev=443415d3f374685cf78816956e5ebcd9b9a2eb24#443415d3f374685cf78816956e5ebcd9b9a2eb24"
 dependencies = [
  "seihai-core",
 ]
