@@ -3,10 +3,10 @@
 //! A level cache is DES-ECB with a fresh key on every 8-byte block. The key
 //! stream is seeded from the level name, so the file needs no key beside it.
 //! A script cache is one DES key (the two words a server sends with the
-//! script). Plain and stored-body CRCs are distinct: the inspected Windows
-//! 6.03 weapon caller checks the stored bytes before transformation; do not
-//! generalize that to every build/caller. DES key bytes are bit-reversed, as [`crate::gpak`]
-//! encrypts a package.
+//! script, as little-endian 32-bit words). Plain and stored-body CRCs are
+//! distinct: the CRC a real 6.113 server sends in packet 197 is the stored
+//! one, matching the inspected Windows 6.03 weapon caller. DES key bytes are
+//! bit-reversed, as [`crate::gpak`] encrypts a package.
 //!
 //! Nothing here talks to a server. Tests build the bytes themselves.
 

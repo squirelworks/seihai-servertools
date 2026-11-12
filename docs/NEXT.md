@@ -62,8 +62,10 @@ session that built the setup did not do them:
 - [x] Issue #37 tool audit: explicit stored/decrypted CRC domains, full GCHAR
       level-header lengths and independent known-byte regression fixtures
       (#43). See `docs/design/code-caches.md`; no native-cache acceptance claim.
-- [ ] Issue #37 original evidence: real GRESCR01 file plus matching key and
-      qualified body classification. Synthetic round trips do not close it.
+- [x] Issue #37 original evidence: real 6.113 GRESCR01 weapon caches decrypted
+      with keys read from packet 197; the 197 CRC is the stored-body CRC and
+      the body is GS2 bytecode. `code crc` now defaults to `stored`.
+- [ ] Class caches and packet 140 on a real client (not seen yet).
 
 ## Done
 
