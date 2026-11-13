@@ -13,7 +13,7 @@ crates/setup-core           lab start, process runner, serveroptions.txt,
    │                        listserver TOML, profiles, safety checks, network
 crates/lat-core             LAT: remote file link, levels, ganis, NPCs, world check
    │
-seihai-core                 squirelworks/seihai-core, tag v0.0.11: level/gmap/gani
+seihai-core                 squirelworks/seihai-core, tag v0.0.16: level/gmap/gani
                             parsers, GS1, protocol, framing
 seihai-draw                 squirelworks/seihai-core, same tag: tile and gani
                             RGBA. The level document is still the client's
@@ -54,11 +54,11 @@ prints nothing). Bump all three together. Do not follow a branch.
 
 | What | Where today | Used here through |
 |---|---|---|
-| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` tag `v0.0.11` |
+| Level (`.nw`, `.graal`), gmap, gani, object set, tile types parsers | `seihai-core` | `seihai-core` tag `v0.0.16` |
 | GS1 parser and engine, protocol framing, version profiles | `seihai-core` | `seihai-core` (the world check uses the GS1 parser; the NPC editor will too) |
-| Tile and one gani frame, into an RGBA buffer | `seihai-draw` (seihai-core repo) | `seihai-draw` tag `v0.0.11` |
+| Tile and one gani frame, into an RGBA buffer | `seihai-draw` (seihai-core repo) | `seihai-draw` tag `v0.0.16` |
 | Level editor document (line-preserving edit and save, objects, NPC pane) | `tools/level-editor` (a binary tool) | **not yet**: the LAT editor writes `GLEVNW01` text from the parsed level |
-| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `443415d` (core `v0.0.11`) |
+| RC session and file link (list, get, put) | `seihai-rc` | `seihai-rc` commit `9d04c56` (core `v0.0.16`) |
 
 Do not depend on `seihai-mae`: it pulls in the game window and sound. The
 client's offline level editor stays in the Seihai repo.
