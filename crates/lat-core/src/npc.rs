@@ -72,7 +72,7 @@ fn file_kind(command: &str) -> Option<FileKind> {
 /// Parse a level NPC's script and list what is wrong with it and the files
 /// it names.
 pub fn check_script(src: &str) -> ScriptCheck {
-    let script = engine::parse(src, Era::V21);
+    let script = engine::parse(src, Era::V217);
     let mut out = ScriptCheck {
         problems: script.diagnostics.iter().map(|d| d.to_string()).collect(),
         ..ScriptCheck::default()
