@@ -23,12 +23,11 @@ publish = false
 # seihai-core and seihai-draw both live in squirelworks/seihai-core and are
 # tagged together, so one tag pins both and a Level or Gani from the parser
 # is the same type seihai-draw paints.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.0.26", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.0.26" }
-# RC file link: list_dir, get_file, put_file. seihai-rc 60a5d99, its seihai-core
-# v0.0.26 bump (branch claude/project-thread-h95r7h until it merges), so the
-# build has one core. No rc tag yet.
-seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "60a5d99290f4d993be013a5fece74702e4a71a28" }
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.1.0", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.1.0" }
+# RC file link: list_dir, get_file, put_file. seihai-rc c0cee74, its seihai-core
+# v0.1.0 bump, so the build has one core. No rc tag yet.
+seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "c0cee74ea60583324c85f152d226ad5b57cb1668" }
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
 egui = "0.29"
