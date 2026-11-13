@@ -102,7 +102,8 @@ fn notice(words: &str) -> Vec<u8> {
 
 /// A put is an outbound raw block (id 50). `split_messages` does not treat
 /// that id as raw, so the block is read here: id 93, a `GSTRING` name, then
-/// the file bytes.
+/// the file bytes. The raw length counts a closing line feed, which the
+/// server drops (seihai-rc #45, as real RCs send it).
 fn take_put(body: &[u8]) -> Option<(String, Vec<u8>)> {
     if body.first().map(|b| b.wrapping_sub(0x20)) != Some(files::PLI_RAWDATA) {
         return None;
@@ -112,6 +113,7 @@ fn take_put(body: &[u8]) -> Option<(String, Vec<u8>)> {
         return None;
     }
     let inner = &body[5..5 + n];
+    let inner = inner.strip_suffix(b"\n")?;
     if inner.first().map(|b| b.wrapping_sub(0x20)) != Some(files::pli::RC_FILEBROWSER_UP) {
         return None;
     }
