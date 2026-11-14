@@ -2959,7 +2959,7 @@ dependencies = [
 [[package]]
 name = "seihai-core"
 version = "0.2.9"
-source = "git+https://github.com/squirelworks/seihai-core?rev=551b096#551b096214687163204925971e4f7b120a915380"
+source = "git+https://github.com/squirelworks/seihai-core?tag=v0.2.9#551b096214687163204925971e4f7b120a915380"
 dependencies = [
  "base64",
  "bzip2",
@@ -2977,7 +2977,7 @@ dependencies = [
 [[package]]
 name = "seihai-draw"
 version = "0.2.9"
-source = "git+https://github.com/squirelworks/seihai-core?rev=551b096#551b096214687163204925971e4f7b120a915380"
+source = "git+https://github.com/squirelworks/seihai-core?tag=v0.2.9#551b096214687163204925971e4f7b120a915380"
 dependencies = [
  "seihai-core 0.2.9",
 ]

@@ -310,3 +310,68 @@ fn render_draws_npc_images_with_npcs() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("missing image: gone.png"));
 }
+
+#[test]
+fn level_fill_scatters_a_theme_and_theme_make_writes_one() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(
+        d.path().join("t.nwt"),
+        "[theme]\nname=t\n[rules]\nbase=AA\nflower=20\n[objects]\n<flower>\nAB\n",
+    )
+    .unwrap();
+    fs::write(
+        d.path().join("a.nw"),
+        "GLEVNW01\nLINK b.nw 0 0 1 64 61 playery\n",
+    )
+    .unwrap();
+    let out = run(
+        &[
+            "level", "fill", "t.nwt", "a.nw", "--out", "o", "--seed", "5", "--log", "l.txt",
+        ],
+        d.path(),
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("objects placed"));
+    let filled = fs::read_to_string(d.path().join("o/a.nw")).unwrap();
+    assert!(filled.contains("AB") && filled.ends_with("LINK b.nw 0 0 1 64 61 playery\n"));
+    assert!(fs::read_to_string(d.path().join("l.txt"))
+        .unwrap()
+        .contains("flower:"));
+    // The same seed gives the same level.
+    run(
+        &[
+            "level", "fill", "t.nwt", "a.nw", "--out", "p", "--seed", "5",
+        ],
+        d.path(),
+    );
+    assert_eq!(filled, fs::read_to_string(d.path().join("p/a.nw")).unwrap());
+
+    let mut tm = String::from("[Tiles]\n");
+    for i in 0..16 {
+        tm.push_str(&format!("Tile{i:02}=B{}\n", (b'A' + i) as char));
+    }
+    tm.push_str("[Objects]\nWidthMin=3\nWidthMax=5\nHeightMin=3\nHeightMax=5\nDensityMin=40\nDensityMax=80\nBaseObjectName=patch\n[Theme]\n#ofObjects=2\nQtyPerObject=c(50%,2)\nDescription=Patches\n");
+    fs::write(d.path().join("p.tm"), tm).unwrap();
+    run(&["theme", "make", "p.tm", "p.nwt"], d.path());
+    let nwt = fs::read_to_string(d.path().join("p.nwt")).unwrap();
+    assert!(nwt.contains("patch1=c(50%,2)|BA"), "{nwt}");
+    run(&["level", "fill", "p.nwt", "a.nw", "--in-place"], d.path());
+}
+
+#[test]
+fn level_fill_runs_complex_objects() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(
+        d.path().join("c.nwt"),
+        "[theme]\nname=c\n[rules]\nbase=AA\npatch=3\n[objects]\n<rock>\nAC\n<patch>*\nsetsize(3,3);\nfor (i=0,2) { add(<rock>,i,i); }\nmsg('built');\n",
+    )
+    .unwrap();
+    fs::write(d.path().join("a.nw"), "GLEVNW01\n").unwrap();
+    let out = run(&["level", "fill", "c.nwt", "a.nw", "--out", "o"], d.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("3 objects placed") && stdout.contains("script: built"),
+        "{stdout}"
+    );
+    let filled = fs::read_to_string(d.path().join("o/a.nw")).unwrap();
+    assert_eq!(filled.matches("AC").count(), 9, "three diagonals of three");
+}

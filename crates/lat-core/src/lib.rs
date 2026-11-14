@@ -19,7 +19,9 @@
 //! | [`worldmap`] | Build a `.gmap` from a level list, generator-style names, or a linked world's edge links | working |
 //! | [`generate`] | Terrain, image-to-levels and dungeon worlds (TerrainGenerator, GraalLevelGen, the NW Dungeon Generator) | working |
 //! | [`anim`] | gif2mng: a GIF as a PNG (one frame) or an MNG animation | working |
-//! | [`movie`] | GraalShop movie mode (`GANI0002`): actors at a frame, SPRITE actors painted | SPRITE and CHAR actors; TEXT not yet |
+//! | [`levelfill`] | LevelFiller: scatter a `.nwt` theme's objects over levels; LFThemeMaker's patch themes | working; no border objects |
+//! | [`lfscript`] | LevelFiller's object language for complex theme objects | working |
+//! | [`movie`] | GraalShop movie mode (`GANI0002`): actors at a frame, SPRITE and CHAR actors painted | TEXT not yet |
 //! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job) | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
@@ -36,6 +38,8 @@ pub mod generate;
 pub mod gifcopy;
 pub mod gpak;
 pub mod level;
+pub mod levelfill;
+pub mod lfscript;
 pub mod movie;
 pub mod npc;
 pub mod preview;
