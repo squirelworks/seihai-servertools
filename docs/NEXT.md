@@ -92,6 +92,9 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       copy runs, and adjust the rule.
 - [ ] gif2mng `-b`'s seven body colour slots (RGB not described yet; `-b`
       only makes index 2 transparent), and Assimilator's batch modes.
+- [x] `level convert` to and from Tiled `.tmx` (`lat-core::tmx`, NW2TMX
+      and nw-converter's job): CSV tile layers per board layer, objects
+      carrying their level lines.
 - [x] `render --npcs`: level NPC images (PNG, GIF, first MNG frame) on
       the board, found by name in any letter case.
 - [ ] Draw signs, chests and NPCs shown as a gani in `render`.

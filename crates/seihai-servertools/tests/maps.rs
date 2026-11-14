@@ -418,3 +418,20 @@ fn level_fill_runs_across_a_gmap() {
     });
     assert!(crossed, "a log runs across the edge");
 }
+
+#[test]
+fn level_convert_goes_to_tiled_and_back() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(
+        d.path().join("a.nw"),
+        "GLEVNW01\nBOARD 0 0 2 0 ABAC\nLINK b.nw 0 0 1 64 61 playery\n",
+    )
+    .unwrap();
+    run(&["level", "convert", "a.nw", "a.tmx"], d.path());
+    let tmx = fs::read_to_string(d.path().join("a.tmx")).unwrap();
+    assert!(tmx.contains("<image source=\"pics1.png\""), "{tmx}");
+    run(&["level", "convert", "a.tmx", "b.nw"], d.path());
+    let back = fs::read_to_string(d.path().join("b.nw")).unwrap();
+    assert!(back.contains("LINK b.nw 0 0 1 64 61 playery"), "{back}");
+    assert!(back.contains("BOARD 0 0 64 0 ABAC"), "{back}");
+}
