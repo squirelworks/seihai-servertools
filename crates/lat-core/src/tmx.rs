@@ -15,7 +15,10 @@
 //! `nw` text for that. Reading accepts what Tiled writes for such a map:
 //! CSV layer data and one inline tileset (any positive `firstgid`);
 //! other encodings and multiple/external tilesets are refused with a
-//! message. TMX is Tiled's format, not Graal's, so it lives
+//! message. The sheet must keep its 128 columns of 16-pixel tiles and
+//! 2048 by 512 image, without spacing or margins. Nonzero layer/group
+//! positions and offsets are refused rather than silently discarded.
+//! TMX is Tiled's format, not Graal's, so it lives
 //! here and not in seihai-core.
 
 use seihai_core::assets::{tile_code, BoardRun, Level};
@@ -385,6 +388,19 @@ fn attr<'a>(attrs: &'a [(&str, String)], key: &str) -> Option<&'a str> {
         .map(|(_, v)| v.as_str())
 }
 
+fn zero_attrs(attrs: &[(&str, String)], keys: &[&str], element: &str) -> Result<(), String> {
+    for key in keys {
+        if let Some(value) = attr(attrs, key) {
+            if value.parse::<f64>().ok() != Some(0.0) {
+                return Err(format!(
+                    "<{element}>: nonzero or invalid {key} is not supported"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// A level from a `.tmx` map written by [`to_tmx`] or by Tiled after
 /// editing one. The warnings name what was skipped.
 pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
@@ -393,14 +409,35 @@ pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
     // could save over an existing file.
     let mut stack = Vec::new();
     let mut maps = 0;
+    let mut sheet_images = 0;
     for piece in &pieces {
         match piece {
-            Piece::Open { name, closed, .. } => {
+            Piece::Open {
+                name,
+                attrs,
+                closed,
+            } => {
                 if stack.is_empty() {
                     if *name != "map" || maps != 0 {
                         return Err("expected one map root".into());
                     }
                     maps += 1;
+                }
+                if matches!(*name, "layer" | "group" | "objectgroup") {
+                    zero_attrs(attrs, &["x", "y", "offsetx", "offsety"], name)?;
+                }
+                if *name == "tileoffset" {
+                    zero_attrs(attrs, &["x", "y"], name)?;
+                }
+                if *name == "image" && stack.last() == Some(&"tileset") {
+                    sheet_images += 1;
+                    if attr(attrs, "width").and_then(|v| v.parse::<u32>().ok())
+                        != Some(SHEET_COLS * TILE_PX)
+                        || attr(attrs, "height").and_then(|v| v.parse::<u32>().ok())
+                            != Some(SHEET_ROWS * TILE_PX)
+                    {
+                        return Err("the tileset image must be 2048 by 512 pixels".into());
+                    }
                 }
                 if !closed {
                     stack.push(*name);
@@ -419,6 +456,9 @@ pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
     }
     if maps != 1 || !stack.is_empty() {
         return Err("missing or unclosed map".into());
+    }
+    if sheet_images != 1 {
+        return Err("use one tileset image with explicit dimensions".into());
     }
     let mut warnings = Vec::new();
     let mut firstgid: Option<u32> = None;
@@ -461,6 +501,17 @@ pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
                     if gid == 0 || attr(attrs, "source").is_some() {
                         return Err("use one inline tileset with a positive firstgid".into());
                     }
+                    for (key, expected) in [
+                        ("tilewidth", TILE_PX),
+                        ("tileheight", TILE_PX),
+                        ("columns", SHEET_COLS),
+                        ("tilecount", SHEET_COLS * SHEET_ROWS),
+                    ] {
+                        if attr(attrs, key).and_then(|v| v.parse::<u32>().ok()) != Some(expected) {
+                            return Err(format!("tileset {key} must be {expected}"));
+                        }
+                    }
+                    zero_attrs(attrs, &["spacing", "margin"], "tileset")?;
                     firstgid = Some(gid);
                 }
                 "layer" => {
@@ -635,6 +686,54 @@ NPCEND
         ] {
             assert!(from_tmx(&bad).is_err(), "unsupported map was accepted");
         }
+    }
+
+    #[test]
+    fn refuses_sheet_layout_changes_and_layer_transforms() {
+        let tmx = to_tmx(&Level::parse(LEVEL).unwrap(), "pics1.png");
+        for (old, new) in [
+            ("columns=\"128\"", "columns=\"64\""),
+            ("tilecount=\"4096\"", "tilecount=\"2048\""),
+            (
+                "name=\"pics1\" tilewidth=\"16\"",
+                "name=\"pics1\" tilewidth=\"32\"",
+            ),
+            (
+                "name=\"pics1\" tilewidth=\"16\"",
+                "name=\"pics1\" tilewidth=\"16\" margin=\"1\"",
+            ),
+            (
+                "name=\"pics1\" tilewidth=\"16\"",
+                "name=\"pics1\" tilewidth=\"16\" spacing=\"2\"",
+            ),
+            ("width=\"2048\"", "width=\"1024\""),
+            ("height=\"512\"", "height=\"1024\""),
+            ("</tileset>", "<tileoffset x=\"1\" y=\"0\"/></tileset>"),
+        ] {
+            assert!(tmx.contains(old), "fixture must exercise {old}");
+            assert!(from_tmx(&tmx.replace(old, new)).is_err(), "accepted {new}");
+        }
+        for element in ["layer", "objectgroup", "group"] {
+            for key in ["x", "y", "offsetx", "offsety"] {
+                let changed = if element == "group" {
+                    tmx.replace("</map>", &format!("<group {key}=\"1\"/></map>"))
+                } else {
+                    tmx.replace(&format!("<{element} "), &format!("<{element} {key}=\"1\" "))
+                };
+                assert!(from_tmx(&changed).is_err(), "accepted {element} {key}");
+            }
+        }
+        let zero = tmx
+            .replace(
+                "name=\"pics1\"",
+                "name=\"pics1\" spacing=\"0\" margin=\"0\"",
+            )
+            .replace(
+                "<layer ",
+                "<layer x=\"0\" y=\"0\" offsetx=\"0.0\" offsety=\"-0\" ",
+            )
+            .replace("</map>", "<group offsetx=\"0\"/></map>");
+        assert!(from_tmx(&zero).is_ok());
     }
 
     #[test]

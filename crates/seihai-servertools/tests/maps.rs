@@ -450,3 +450,26 @@ fn invalid_tmx_does_not_replace_an_existing_level() {
     assert!(!out.status.success());
     assert_eq!(fs::read(d.path().join("keep.nw")).unwrap(), original);
 }
+
+#[test]
+fn unsupported_tmx_layout_does_not_replace_an_existing_level() {
+    let d = tempfile::tempdir().unwrap();
+    let original = b"GLEVNW01\nBOARD 0 0 1 0 AB\n";
+    fs::write(d.path().join("keep.nw"), original).unwrap();
+    run(&["level", "convert", "keep.nw", "valid.tmx"], d.path());
+    let valid = fs::read_to_string(d.path().join("valid.tmx")).unwrap();
+    for bad in [
+        valid.replace("columns=\"128\"", "columns=\"64\""),
+        valid.replace("<layer ", "<layer offsetx=\"16\" "),
+        valid.replace("</map>", "<group offsety=\"16\"/></map>"),
+    ] {
+        fs::write(d.path().join("bad.tmx"), bad).unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_seihai-servertools"))
+            .args(["level", "convert", "bad.tmx", "keep.nw"])
+            .current_dir(d.path())
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        assert_eq!(fs::read(d.path().join("keep.nw")).unwrap(), original);
+    }
+}
