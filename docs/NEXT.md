@@ -78,6 +78,14 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       water, mountain and sand edge pieces (not described yet).
 - [x] `gif2mng [-b] GIF...` (`lat-core::anim`): one frame to PNG, more to
       MNG, through seihai-core 0.2.5's frame reader and MNG writer.
+- [x] `level fill` and `theme make` (`lat-core::levelfill`, #77):
+      LevelFiller's `.nwt` themes, quantities and placement on the
+      layer-0 board with every other line kept, and LFThemeMaker's `.tm`
+      patch themes.
+- [x] LevelFiller complex objects: the object language in
+      `lat-core::lfscript` (#77).
+- [ ] LevelFiller border objects and filling across neighbouring levels
+      (#77; the teardown did not trace either tile by tile).
 - [ ] gif2mng `-b`'s seven body colour slots (RGB not described yet; `-b`
       only makes index 2 transparent), and Assimilator's batch modes.
 - [x] `render --npcs`: level NPC images (PNG, GIF, first MNG frame) on
