@@ -19,7 +19,7 @@
 //! | [`worldmap`] | Build a `.gmap` from a level list, generator-style names, or a linked world's edge links | working |
 //! | [`generate`] | Terrain, image-to-levels and dungeon worlds (TerrainGenerator, GraalLevelGen, the NW Dungeon Generator) | working |
 //! | [`anim`] | gif2mng: a GIF as a PNG (one frame) or an MNG animation | working |
-//! | [`movie`] | GraalShop movie mode (`GANI0002`): actors at a frame, SPRITE actors painted | sprites only |
+//! | [`movie`] | GraalShop movie mode (`GANI0002`): actors at a frame, SPRITE actors painted | SPRITE and CHAR actors; TEXT not yet |
 //! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job) | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
