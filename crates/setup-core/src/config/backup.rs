@@ -10,6 +10,7 @@
 
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::stamp::Stamp;
@@ -68,11 +69,13 @@ pub fn backups(path: &Path) -> io::Result<Vec<PathBuf>> {
 
 /// Write `text` atomically: a temporary file in the same folder, then a rename.
 pub fn write_atomic(path: &Path, text: &[u8]) -> io::Result<()> {
-    let tmp = folder(path).join(format!(".{}.servertools-tmp", file_name(path)?));
-    fs::write(&tmp, text)?;
-    fs::rename(&tmp, path).inspect_err(|_| {
-        let _ = fs::remove_file(&tmp);
-    })
+    file_name(path)?;
+    let mut tmp = tempfile::Builder::new()
+        .prefix(".servertools-")
+        .suffix(".tmp")
+        .tempfile_in(folder(path))?;
+    tmp.write_all(text)?;
+    tmp.persist(path).map(|_| ()).map_err(|e| e.error)
 }
 
 /// Back up `path` (if it exists) and write `text` to it. Returns the backup's
@@ -165,5 +168,25 @@ mod tests {
         let f = dir.path().join("o.txt");
         fs::write(&f, "x").unwrap();
         assert_eq!(undo(&f, at(0)).unwrap_err().kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn atomic_write_preserves_unrelated_temp_and_old_target_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("o.txt");
+        let unrelated = dir.path().join(".o.txt.servertools-tmp");
+        fs::write(&target, b"old").unwrap();
+        fs::write(&unrelated, b"unrelated").unwrap();
+        write_atomic(&target, b"complete replacement").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"complete replacement");
+        assert_eq!(fs::read(&unrelated).unwrap(), b"unrelated");
+        let blocked = dir.path().join("blocked");
+        fs::create_dir(&blocked).unwrap();
+        fs::write(blocked.join("keep.txt"), b"keep").unwrap();
+        let before = fs::read_dir(dir.path()).unwrap().count();
+        assert!(write_atomic(&blocked, b"replacement").is_err());
+        assert_eq!(fs::read(blocked.join("keep.txt")).unwrap(), b"keep");
+        assert_eq!(fs::read(&unrelated).unwrap(), b"unrelated");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), before);
     }
 }

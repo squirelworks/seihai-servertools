@@ -10,14 +10,17 @@
 //!   prompt or an environment variable), never from a built-in login.
 //!
 //! Paths are always `/`-separated and relative to the world root, as the RC
-//! file browser shows them. `..` and absolute paths are refused, so a tool
-//! can never reach outside the world.
+//! file browser shows them. `..` and absolute paths are refused. Local
+//! paths also resolve existing links and must remain inside the world.
+//! This check assumes the folder is not concurrently modified by an
+//! adversary: checking a path and opening it are separate operations.
 //!
 //! The file link's directory reply is names only: no size and no folder
 //! flag. [`RcFiles::list`] therefore reports `size` 0 and `is_dir` false.
 
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
@@ -75,7 +78,31 @@ impl LocalFolder {
     }
 
     fn resolve(&self, path: &str) -> io::Result<PathBuf> {
-        Ok(self.root.join(safe_relative(path)?))
+        let relative = safe_relative(path)?;
+        let root = fs::canonicalize(&self.root)?;
+        let mut existing = root.join(relative);
+        let mut missing = Vec::new();
+        loop {
+            match fs::symlink_metadata(&existing) {
+                Ok(_) => break,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    missing.push(existing.file_name().ok_or(e)?.to_owned());
+                    existing.pop();
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        let mut resolved = fs::canonicalize(existing)?;
+        if !resolved.starts_with(&root) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "path outside the world",
+            ));
+        }
+        for part in missing.into_iter().rev() {
+            resolved.push(part);
+        }
+        Ok(resolved)
     }
 }
 
@@ -100,16 +127,17 @@ impl RemoteFiles for LocalFolder {
     }
 
     fn put(&mut self, path: &str, data: &[u8]) -> io::Result<()> {
+        safe_relative(path)?;
+        fs::create_dir_all(&self.root)?;
         let target = self.resolve(path)?;
         let dir = target.parent().unwrap_or(&self.root).to_path_buf();
         fs::create_dir_all(&dir)?;
-        let name = target
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let tmp = dir.join(format!(".{name}.servertools-tmp"));
-        fs::write(&tmp, data)?;
-        fs::rename(&tmp, &target)
+        let mut tmp = tempfile::Builder::new()
+            .prefix(".servertools-")
+            .suffix(".tmp")
+            .tempfile_in(&dir)?;
+        tmp.write_all(data)?;
+        tmp.persist(&target).map(|_| ()).map_err(|e| e.error)
     }
 }
 
@@ -344,5 +372,113 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut f = LocalFolder::new(dir.path());
         assert!(put_if_unchanged(&mut f, "levels/gone.nw", b"x", b"y").is_err());
+    }
+
+    #[test]
+    fn saves_preserve_unrelated_temp_names_and_clean_up_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut f = LocalFolder::new(dir.path());
+        let unrelated = dir.path().join(".victim.txt.servertools-tmp");
+        fs::write(&unrelated, b"unrelated").unwrap();
+        fs::write(dir.path().join("victim.txt"), b"old").unwrap();
+        f.put("victim.txt", b"complete replacement").unwrap();
+        assert_eq!(fs::read(&unrelated).unwrap(), b"unrelated");
+        assert_eq!(f.get("victim.txt").unwrap(), b"complete replacement");
+        let blocked = dir.path().join("blocked");
+        fs::create_dir(&blocked).unwrap();
+        fs::write(blocked.join("keep.txt"), b"old target").unwrap();
+        let before = fs::read_dir(dir.path()).unwrap().count();
+        assert!(f.put("blocked", b"cannot replace a directory").is_err());
+        assert_eq!(fs::read(blocked.join("keep.txt")).unwrap(), b"old target");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), before);
+        assert_eq!(fs::read(&unrelated).unwrap(), b"unrelated");
+    }
+
+    #[test]
+    fn concurrent_saves_use_independent_temporary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let jobs: Vec<_> = (*b"ab")
+            .into_iter()
+            .map(|byte| {
+                let root = dir.path().to_path_buf();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    let mut f = LocalFolder::new(root);
+                    let data = vec![byte; 65536];
+                    barrier.wait();
+                    f.put("same.txt", &data).unwrap();
+                })
+            })
+            .collect();
+        for job in jobs {
+            job.join().unwrap();
+        }
+        let saved = fs::read(dir.path().join("same.txt")).unwrap();
+        assert!(saved == vec![b'a'; 65536] || saved == vec![b'b'; 65536]);
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(any(unix, windows))]
+    fn directory_link(target: &Path, link: &Path) {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+        #[cfg(windows)]
+        {
+            // Directory junctions do not require symlink privileges.
+            let out = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(target)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "junction creation failed: {:?}", out);
+        }
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn existing_links_cannot_escape_the_world_for_reads_or_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = dir.path().join("world");
+        let outside = dir.path().join("outside");
+        fs::create_dir(&world).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("sentinel.txt"), b"outside").unwrap();
+        let link = world.join("escape");
+        directory_link(&outside, &link);
+        let mut f = LocalFolder::new(&world);
+        assert_eq!(
+            f.get("escape/sentinel.txt").unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        assert!(f.list("escape").is_err());
+        assert!(f.put("escape/sentinel.txt", b"overwritten").is_err());
+        assert!(f.put("escape/missing/nested.txt", b"created").is_err());
+        assert_eq!(fs::read(outside.join("sentinel.txt")).unwrap(), b"outside");
+        assert!(!outside.join("missing").exists());
+        // Remove the link itself before the temporary fixture is dropped.
+        #[cfg(unix)]
+        fs::remove_file(&link).unwrap();
+        #[cfg(windows)]
+        fs::remove_dir(&link).unwrap();
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn links_within_the_world_still_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let actual = dir.path().join("actual");
+        fs::create_dir(&actual).unwrap();
+        let link = dir.path().join("alias");
+        directory_link(&actual, &link);
+        let mut f = LocalFolder::new(dir.path());
+        f.put("alias/new/sub.txt", b"inside").unwrap();
+        assert_eq!(f.get("alias/new/sub.txt").unwrap(), b"inside");
+        assert_eq!(fs::read(actual.join("new/sub.txt")).unwrap(), b"inside");
+        #[cfg(unix)]
+        fs::remove_file(&link).unwrap();
+        #[cfg(windows)]
+        fs::remove_dir(&link).unwrap();
     }
 }

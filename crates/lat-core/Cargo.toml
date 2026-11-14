@@ -27,6 +27,5 @@ getrandom.workspace = true
 # GIF copies of PNG art (gifcopy.rs).
 png.workspace = true
 gif.workspace = true
-
-[dev-dependencies]
+# Exclusively created same-directory temporary files for atomic saves.
 tempfile.workspace = true
