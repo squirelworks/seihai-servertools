@@ -15,7 +15,7 @@ use seihai_core::assets::{tile_code, BoardRun, Npc};
 
 use crate::preview::{paint_level, BoardView, Rgba, Sheet};
 
-pub use seihai_core::assets::Level;
+pub use seihai_core::assets::{BinaryLevel, Level};
 
 /// Parse a `.nw` (`GLEVNW01`) or `.graal` level.
 pub fn open(bytes: &[u8]) -> Result<Level, String> {
@@ -123,6 +123,14 @@ pub fn set_tile(level: &mut Level, x: i32, y: i32, id: u16) -> Result<(), String
         tiles: vec![tile_code(id)],
     });
     Ok(())
+}
+
+/// Write `level` as a `GR-V1.03` `.graal` or `Z3-V1.04` `.zelda` level
+/// (seihai-core's writer). The warnings name what the format could not
+/// keep: upper layers, NPCs in a `.zelda`, link arrivals it cannot hold.
+pub fn encode_binary(level: &Level, format: BinaryLevel) -> (Vec<u8>, Vec<String>) {
+    let w = seihai_core::assets::encode_binary(level, format);
+    (w.bytes, w.warnings)
 }
 
 /// Write `level` as `GLEVNW01` text that [`open`] can read back.

@@ -9,11 +9,13 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub const LEVEL_USAGE: &str = "\
-level convert IN OUT.nw
+level convert IN OUT.nw|OUT.graal|OUT.zelda
     Reads a .nw (GLEVNW01), .graal (GR-V1) or .zelda (Z3-V1) level, chosen
-    by the file's first bytes, and writes GLEVNW01 text. Board, links,
-    signs, baddies, NPCs and chests are kept; comments and a GR-V1.04
-    HEIGHTS block are not. Writing .graal or .zelda is not done yet.
+    by the file's first bytes, and writes the format OUT's extension names:
+    GLEVNW01 text, GR-V1.03 or Z3-V1.04. Board, links, signs, baddies, NPCs
+    and chests are kept; comments and a GR-V1.04 HEIGHTS block are not.
+    A binary level has one layer, and a .zelda has no NPCs or chests and
+    numbered link arrivals; what is dropped is printed as a warning.
 level render IN OUT.png [--sheet PNG] [--scale N]
     Paints the level's board (every layer) to a PNG, 1024 pixels a side at
     --scale 1 (default), or 1024/N with N = 2, 4, 8 or 16. --sheet is the
@@ -138,19 +140,30 @@ fn extension(path: &Path) -> String {
 }
 
 fn convert(src: &Path, dst: &Path) -> Result<(), String> {
-    match extension(dst).as_str() {
-        "nw" => {}
-        "graal" | "zelda" => {
+    use lat_core::level::BinaryLevel;
+    let format = match extension(dst).as_str() {
+        "nw" => None,
+        "graal" => Some(BinaryLevel::Graal),
+        "zelda" => Some(BinaryLevel::Zelda),
+        _ => {
             return Err(format!(
-                "{}: writing .{} is not done yet (it needs a binary level writer in seihai-core); write .nw",
-                dst.display(),
-                extension(dst)
+                "{}: the output must end in .nw, .graal or .zelda",
+                dst.display()
             ))
         }
-        _ => return Err(format!("{}: the output must end in .nw", dst.display())),
-    }
+    };
     let level = read_level(src)?;
-    write(dst, &lat_core::level::encode(&level))?;
+    let bytes = match format {
+        None => lat_core::level::encode(&level),
+        Some(f) => {
+            let (bytes, warnings) = lat_core::level::encode_binary(&level, f);
+            for w in warnings {
+                eprintln!("level: {}: {w}", dst.display());
+            }
+            bytes
+        }
+    };
+    write(dst, &bytes)?;
     println!(
         "{} -> {}: {} board runs, {} links, {} signs, {} baddies, {} NPCs, {} chests",
         src.display(),
