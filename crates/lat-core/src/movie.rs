@@ -13,13 +13,18 @@
 //! pictures (classic defaults `head0.png`, `body.png`, `sword1.png`,
 //! `shield1.png`), on the same layers as sprites. Colours, `chat`,
 //! `horse`, params and `playerlook` are not drawn yet.
-//! Not painted yet: TEXT actors (fonts); SOUND actors have nothing to
-//! draw. They are listed in [`MovieFrame::skipped`].
+//! TEXT actors are painted with seihai-draw's text renderer: `text` in
+//! `font` (a font file found by name, else Ubuntu Light), `fontsize`
+//! pixels times `zoom`, `color` (hex), and the style flags. GraalShop used
+//! Windows fonts by face name and point size; neither is known for a saved
+//! file, so the size is taken as pixels. SOUND actors have nothing to draw.
+//! Actors that could not be drawn are listed in [`MovieFrame::skipped`].
 
 use crate::preview::Rgba;
 use seihai_core::assets::gani_movie::truthy;
 use seihai_core::assets::{ActorKind, Gani, GaniMovie};
-use seihai_draw::{Image, PixelBuffer, SpriteSheets};
+use seihai_draw::ab_glyph::FontVec;
+use seihai_draw::{Align, Image, PixelBuffer, SpriteSheets, TextStyle};
 
 /// One painted timeline frame.
 #[derive(Debug, Clone)]
@@ -27,7 +32,7 @@ pub struct MovieFrame {
     pub image: Rgba,
     /// Sprite sheets `load` did not return, once each.
     pub missing: Vec<String>,
-    /// Actors not drawn, with why: `"name (CHAR): not drawn yet"`.
+    /// Actors not drawn, with why: `"name (CHAR): gani walk.gani not found"`.
     pub skipped: Vec<String>,
 }
 
@@ -49,16 +54,30 @@ fn num(state: &[(String, String)], name: &str) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Pictures and ganis by name, loaded once each.
-struct Cache<'l> {
-    load_image: &'l mut dyn FnMut(&str) -> Option<Rgba>,
-    load_gani: &'l mut dyn FnMut(&str) -> Option<Gani>,
+/// Where [`paint_frame`] finds what a movie names.
+pub trait MovieFiles {
+    /// A picture by file name: sprite sheets, and a CHAR actor's head,
+    /// body, sword, shield and attrs.
+    fn image(&mut self, name: &str) -> Option<Rgba>;
+    /// A gani by file name (a CHAR actor's `ani`, `.gani` added).
+    fn gani(&mut self, name: &str) -> Option<Gani>;
+    /// A font file's bytes by a TEXT actor's `font` name; `None` uses the
+    /// default font (Ubuntu Light).
+    fn font(&mut self, _name: &str) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+/// Pictures, ganis and fonts by name, loaded once each.
+struct Cache<'l, M: MovieFiles> {
+    files: &'l mut M,
     images: Vec<(String, Option<Rgba>)>,
     ganis: Vec<(String, Option<Gani>)>,
+    fonts: Vec<(String, FontVec)>,
     missing: Vec<String>,
 }
 
-impl Cache<'_> {
+impl<M: MovieFiles> Cache<'_, M> {
     fn image(&mut self, name: &str) -> Option<usize> {
         let at = match self
             .images
@@ -67,7 +86,7 @@ impl Cache<'_> {
         {
             Some(p) => p,
             None => {
-                let pic = (self.load_image)(name);
+                let pic = self.files.image(name);
                 if pic.is_none() {
                     self.missing.push(name.to_string());
                 }
@@ -86,7 +105,7 @@ impl Cache<'_> {
         {
             Some(p) => p,
             None => {
-                let g = (self.load_gani)(name);
+                let g = self.files.gani(name);
                 if g.is_none() {
                     self.missing.push(name.to_string());
                 }
@@ -95,6 +114,36 @@ impl Cache<'_> {
             }
         };
         self.ganis[at].1.is_some().then_some(at)
+    }
+
+    /// The font `name` names, or the default when it is empty or not
+    /// found (reported once as missing).
+    fn font(&mut self, name: &str) -> usize {
+        if let Some(p) = self
+            .fonts
+            .iter()
+            .position(|(n, _)| n.eq_ignore_ascii_case(name))
+        {
+            return p;
+        }
+        let loaded = if name.is_empty() {
+            None
+        } else {
+            let f = self
+                .files
+                .font(name)
+                .and_then(|b| FontVec::try_from_vec(b).ok());
+            if f.is_none() {
+                self.missing.push(format!("font {name}"));
+            }
+            f
+        };
+        let font = loaded.unwrap_or_else(|| {
+            FontVec::try_from_vec(epaint_default_fonts::UBUNTU_LIGHT.to_vec())
+                .expect("the bundled font parses")
+        });
+        self.fonts.push((name.to_string(), font));
+        self.fonts.len() - 1
     }
 
     fn rgba(&self, at: Option<usize>) -> Option<Image<'_>> {
@@ -112,25 +161,22 @@ const CHAR_SHEETS: [(&str, &str); 5] = [
     ("sprites", "sprites.png"),
 ];
 
-/// Paint timeline frame `t` on a `width` by `height` picture.
-/// `load_image` returns a picture by file name (sprite sheets, and a CHAR
-/// actor's head, body, sword, shield and attrs); `load_gani` returns a
-/// gani by file name (a CHAR actor's `ani`, `.gani` added when missing).
+/// Paint timeline frame `t` on a `width` by `height` picture, with what
+/// the movie names found through `files`.
 pub fn paint_frame(
     gani: &Gani,
     movie: &GaniMovie,
     t: u32,
     (width, height): (u32, u32),
-    mut load_image: impl FnMut(&str) -> Option<Rgba>,
-    mut load_gani: impl FnMut(&str) -> Option<Gani>,
+    files: &mut impl MovieFiles,
 ) -> MovieFrame {
     let mut buf = PixelBuffer::new(width, height);
     let mut skipped = Vec::new();
     let mut cache = Cache {
-        load_image: &mut load_image,
-        load_gani: &mut load_gani,
+        files,
         images: Vec::new(),
         ganis: Vec::new(),
+        fonts: Vec::new(),
         missing: Vec::new(),
     };
     let mut drawn: Vec<(f64, usize, State)> = Vec::new();
@@ -143,9 +189,8 @@ pub fn paint_frame(
             continue;
         }
         match actor.kind {
-            ActorKind::Sprite | ActorKind::Char => drawn.push((num(&state, "layer"), i, state)),
             ActorKind::Sound => {}
-            kind => skipped.push(format!("{} ({}): not drawn yet", actor.name, kind.word())),
+            _ => drawn.push((num(&state, "layer"), i, state)),
         }
     }
     drawn.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
@@ -157,6 +202,7 @@ pub fn paint_frame(
         );
         let result = match actor.kind {
             ActorKind::Char => paint_char(&mut buf, &mut cache, &state, t, at),
+            ActorKind::Text => paint_text(&mut buf, &mut cache, &state, at),
             _ => paint_sprite(&mut buf, &mut cache, gani, &state, at),
         };
         if let Err(why) = result {
@@ -176,7 +222,7 @@ pub fn paint_frame(
 
 fn paint_sprite(
     buf: &mut PixelBuffer,
-    cache: &mut Cache<'_>,
+    cache: &mut Cache<'_, impl MovieFiles>,
     gani: &Gani,
     state: &[(String, String)],
     (x, y): (i32, i32),
@@ -201,7 +247,7 @@ fn paint_sprite(
 /// step `t` (wrapping), with the pictures its keys name.
 fn paint_char(
     buf: &mut PixelBuffer,
-    cache: &mut Cache<'_>,
+    cache: &mut Cache<'_, impl MovieFiles>,
     state: &[(String, String)],
     t: u32,
     (x, y): (i32, i32),
@@ -250,6 +296,79 @@ fn paint_char(
     Ok(())
 }
 
+/// `#rrggbb`, `rrggbb`, `#rrggbbaa` or a whole number `0xRRGGBB` / decimal.
+fn colour(value: &str) -> Option<[u8; 4]> {
+    let v = value.trim();
+    let hex = v
+        .strip_prefix('#')
+        .or_else(|| v.strip_prefix("0x"))
+        .or_else(|| v.strip_prefix("0X"));
+    let (n, digits) = match hex {
+        Some(h) => (u32::from_str_radix(h, 16).ok()?, h.len()),
+        None if v.len() == 6 && v.chars().all(|c| c.is_ascii_hexdigit()) => {
+            (u32::from_str_radix(v, 16).ok()?, 6)
+        }
+        None => (v.parse().ok()?, 6),
+    };
+    Some(if digits == 8 {
+        n.to_be_bytes()
+    } else {
+        let [_, r, g, b] = n.to_be_bytes();
+        [r, g, b, 255]
+    })
+}
+
+/// A TEXT actor: `text` in `font` (a font file the files give, else Ubuntu
+/// Light) at `fontsize` pixels (default 12) times `zoom`, in `color`
+/// (default black), with `bold`, `italic`, `underline`, `strikeout`,
+/// `shaded`, `centered` / `rightaligned` and `wordwrap` (wrapping at the
+/// picture's right edge).
+fn paint_text(
+    buf: &mut PixelBuffer,
+    cache: &mut Cache<'_, impl MovieFiles>,
+    state: &[(String, String)],
+    (x, y): (i32, i32),
+) -> Result<(), String> {
+    let text = key(state, &["text"]).unwrap_or("");
+    if text.is_empty() {
+        return Ok(());
+    }
+    let flag = |k: &str| key(state, &[k]).is_some_and(truthy);
+    let size = key(state, &["fontsize", "font size"])
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|s| *s > 0.0)
+        .unwrap_or(12.0);
+    let zoom = key(state, &["zoom"])
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|z| *z > 0.0)
+        .unwrap_or(1.0);
+    let color = match key(state, &["color"]) {
+        Some(v) => colour(v).ok_or_else(|| format!("color {v} is not a colour"))?,
+        None => [0, 0, 0, 255],
+    };
+    let align = if flag("centered") {
+        Align::Center
+    } else if flag("rightaligned") {
+        Align::Right
+    } else {
+        Align::Left
+    };
+    let style = TextStyle {
+        size: (size * zoom).min(512.0),
+        color,
+        bold: flag("bold"),
+        italic: flag("italic"),
+        underline: flag("underline"),
+        strikeout: flag("strikeout"),
+        shaded: flag("shaded"),
+        align,
+        wrap: flag("wordwrap").then(|| (buf.width as i32 - x).max(1) as u32),
+    };
+    let font = cache.font(key(state, &["font"]).map(str::trim).unwrap_or(""));
+    seihai_draw::draw_text(buf, &cache.fonts[font].1, text, x, y, &style);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,6 +398,26 @@ MOVIEEND
 ";
 
     /// A 4 x 2 sheet: red on the left half, blue on the right.
+    /// Files from two closures.
+    struct Files<I, G>(I, G);
+
+    impl<I, G> MovieFiles for Files<I, G>
+    where
+        I: FnMut(&str) -> Option<Rgba>,
+        G: FnMut(&str) -> Option<Gani>,
+    {
+        fn image(&mut self, name: &str) -> Option<Rgba> {
+            (self.0)(name)
+        }
+        fn gani(&mut self, name: &str) -> Option<Gani> {
+            (self.1)(name)
+        }
+    }
+
+    fn none(_: &str) -> Option<Gani> {
+        None
+    }
+
     fn rocks(name: &str) -> Option<Rgba> {
         (name == "rocks.png").then(|| {
             let mut pixels = Vec::new();
@@ -303,7 +442,7 @@ MOVIEEND
     fn paints_sprite_actors_in_layer_order_and_moves_them() {
         let gani = Gani::parse(FILE).unwrap();
         let movie = GaniMovie::parse(FILE).unwrap().unwrap();
-        let f = paint_frame(&gani, &movie, 0, (12, 4), rocks, |_| None);
+        let f = paint_frame(&gani, &movie, 0, (12, 4), &mut Files(rocks, none));
         // b (blue, layer 0) at x 1..3, a (red, layer 1) over it at 0..2.
         assert_eq!(f.image.pixel(0, 0), Some([255, 0, 0, 255]));
         assert_eq!(f.image.pixel(1, 0), Some([255, 0, 0, 255]));
@@ -312,9 +451,9 @@ MOVIEEND
         assert_eq!(f.skipped, ["hero (CHAR): gani idle.gani not found"]);
         assert_eq!(f.missing, ["idle.gani"]);
         // Half way to frame 4, a has moved 4 pixels.
-        let f = paint_frame(&gani, &movie, 2, (12, 4), rocks, |_| None);
+        let f = paint_frame(&gani, &movie, 2, (12, 4), &mut Files(rocks, none));
         assert_eq!(f.image.pixel(4, 0), Some([255, 0, 0, 255]));
-        let f = paint_frame(&gani, &movie, 0, (12, 4), |_| None, |_| None);
+        let f = paint_frame(&gani, &movie, 0, (12, 4), &mut Files(|_: &str| None, none));
         assert_eq!(f.missing, ["rocks.png", "idle.gani"]);
     }
 
@@ -358,15 +497,51 @@ MOVIEEND
             asked.push(name.to_string());
             (name == "walk.gani").then(|| walk.clone())
         };
-        let f = paint_frame(&gani, &movie, 0, (6, 3), green, &mut ganis);
+        let f = paint_frame(&gani, &movie, 0, (6, 3), &mut Files(green, &mut ganis));
         assert!(f.skipped.is_empty(), "{:?}", f.skipped);
         assert_eq!(f.image.pixel(2, 1), Some([0, 255, 0, 255]));
         // The defaults that are not there are reported, once each.
         assert!(f.missing.contains(&"head0.png".to_string()));
-        let f = paint_frame(&gani, &movie, 1, (6, 3), green, &mut ganis);
+        let f = paint_frame(&gani, &movie, 1, (6, 3), &mut Files(green, &mut ganis));
         assert_eq!(f.image.pixel(3, 1), Some([0, 255, 0, 255]), "step 1");
-        let f = paint_frame(&gani, &movie, 2, (6, 3), green, &mut ganis);
+        let f = paint_frame(&gani, &movie, 2, (6, 3), &mut Files(green, &mut ganis));
         assert_eq!(f.image.pixel(2, 1), Some([0, 255, 0, 255]), "wraps");
         assert_eq!(asked, ["walk.gani"; 3]);
+    }
+
+    #[test]
+    fn paints_text_actors_in_the_default_font() {
+        const MOVIE: &str = "GANI0002
+FRAMES 2
+MOVIE
+  ACTOR TEXT title
+    FRAME 0 text=Hello,fontsize=20,color=#ff0000,bold=1,dx=2,dy=2
+    FRAME 1 visible=0
+  ACTOREND
+
+  ACTOR TEXT other
+    FRAME 0 text=x,font=Fancy,color=pink
+  ACTOREND
+MOVIEEND
+";
+        let gani = Gani::parse(MOVIE).unwrap();
+        let movie = GaniMovie::parse(MOVIE).unwrap().unwrap();
+        let f = paint_frame(&gani, &movie, 0, (80, 30), &mut Files(|_: &str| None, none));
+        let red = (0..80)
+            .flat_map(|x| (0..30).map(move |y| (x, y)))
+            .filter(|&(x, y)| {
+                f.image
+                    .pixel(x, y)
+                    .is_some_and(|p| p[0] > 150 && p[1] < 80 && p[3] > 150)
+            })
+            .count();
+        assert!(red > 40, "Hello is drawn in red ({red} pixels)");
+        assert!(f.image.pixel(0, 0).is_some_and(|p| p[3] == 0));
+        assert_eq!(f.skipped, ["other (TEXT): color pink is not a colour"]);
+        let f = paint_frame(&gani, &movie, 1, (80, 30), &mut Files(|_: &str| None, none));
+        assert!(f.image.pixels.chunks(4).all(|p| p[3] == 0), "hidden");
+        assert_eq!(colour("#00ff00"), Some([0, 255, 0, 255]));
+        assert_eq!(colour("0000ff"), Some([0, 0, 255, 255]));
+        assert_eq!(colour("#11223344"), Some([0x11, 0x22, 0x33, 0x44]));
     }
 }

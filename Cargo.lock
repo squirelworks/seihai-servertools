@@ -1905,10 +1905,11 @@ name = "lat-core"
 version = "0.0.1"
 dependencies = [
  "des",
+ "epaint_default_fonts",
  "getrandom 0.2.17",
  "gif",
  "png",
- "seihai-core 0.2.9",
+ "seihai-core 0.2.11",
  "seihai-draw",
  "seihai-rc",
  "tempfile",
@@ -2958,12 +2959,13 @@ dependencies = [
 
 [[package]]
 name = "seihai-core"
-version = "0.2.9"
-source = "git+https://github.com/squirelworks/seihai-core?tag=v0.2.9#551b096214687163204925971e4f7b120a915380"
+version = "0.2.11"
+source = "git+https://github.com/squirelworks/seihai-core?rev=9e529ed#9e529ed6cd25e031ece5d798cb5f8715d810f7c5"
 dependencies = [
  "base64",
  "bzip2",
  "chacha20poly1305",
+ "des",
  "ed25519-dalek",
  "flate2",
  "hkdf",
@@ -2976,10 +2978,11 @@ dependencies = [
 
 [[package]]
 name = "seihai-draw"
-version = "0.2.9"
-source = "git+https://github.com/squirelworks/seihai-core?tag=v0.2.9#551b096214687163204925971e4f7b120a915380"
+version = "0.2.11"
+source = "git+https://github.com/squirelworks/seihai-core?rev=9e529ed#9e529ed6cd25e031ece5d798cb5f8715d810f7c5"
 dependencies = [
- "seihai-core 0.2.9",
+ "ab_glyph",
+ "seihai-core 0.2.11",
 ]
 
 [[package]]
@@ -3280,7 +3283,7 @@ name = "suite-stress"
 version = "0.0.1"
 dependencies = [
  "ctrlc",
- "seihai-core 0.2.9",
+ "seihai-core 0.2.11",
  "tempfile",
 ]
 

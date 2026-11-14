@@ -2,8 +2,11 @@
 //! (`GANI0002`), read through `lat_core::gani` and painted by
 //! `lat_core::movie`.
 
-use lat_core::gani::GaniDoc;
+use lat_core::gani::{Gani, GaniDoc};
+use lat_core::movie::MovieFiles;
+use lat_core::preview::Rgba;
 use lat_core::render;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -20,7 +23,9 @@ gani movie render FILE OUT.png [--frame N] [--size WxH] [--images DIR]
     with the head, body, sword, shield and attr pictures their keys name),
     at dx, dy in pixels, lower layer first. Pictures and ganis are found by
     name in --images DIR (default: the gani's folder and below), any letter
-    case. TEXT actors, and a CHAR's colours and chat, are not drawn yet.";
+    case. TEXT actors are drawn in the font file their font key names
+    (Arial finds arial.ttf or .otf there), else Ubuntu Light, at fontsize
+    pixels. A CHAR's colours and chat are not drawn yet.";
 
 #[derive(Default)]
 struct Opts {
@@ -151,20 +156,17 @@ fn render_frame(path: &Path, out: &Path, o: &Opts) -> Result<(), String> {
         _ => Path::new("."),
     };
     let root = o.images.as_deref().unwrap_or(folder);
-    let index = crate::maps::file_index(root, &["png", "gif", "mng"]);
-    let ganis = crate::maps::file_index(root, &["gani"]);
-    let load_gani = |name: &str| {
-        let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
-        let bytes = std::fs::read(ganis.get(&base.to_ascii_lowercase())?).ok()?;
-        GaniDoc::open(&bytes).ok().map(|d| d.gani().clone())
+    let mut files = Folder {
+        images: crate::maps::file_index(root, &["png", "gif", "mng"]),
+        ganis: crate::maps::file_index(root, &["gani"]),
+        fonts: crate::maps::file_index(root, &["ttf", "otf"]),
     };
     let frame = lat_core::movie::paint_frame(
         doc.gani(),
         movie,
         t,
         o.size.unwrap_or((640, 480)),
-        crate::maps::image_loader(&index),
-        load_gani,
+        &mut files,
     );
     let png = render::png_bytes(&frame.image)?;
     std::fs::write(out, png).map_err(|e| format!("{}: {e}", out.display()))?;
@@ -176,4 +178,39 @@ fn render_frame(path: &Path, out: &Path, o: &Opts) -> Result<(), String> {
     }
     println!("frame {t} of {}: wrote {}", movie.frames, out.display());
     Ok(())
+}
+
+/// A movie's files under one folder, by lower-case file name.
+struct Folder {
+    images: HashMap<String, PathBuf>,
+    ganis: HashMap<String, PathBuf>,
+    fonts: HashMap<String, PathBuf>,
+}
+
+fn base(name: &str) -> String {
+    name.rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(name)
+        .to_ascii_lowercase()
+}
+
+impl MovieFiles for Folder {
+    fn image(&mut self, name: &str) -> Option<Rgba> {
+        render::decode_image(&std::fs::read(self.images.get(&base(name))?).ok()?)
+    }
+
+    fn gani(&mut self, name: &str) -> Option<Gani> {
+        let bytes = std::fs::read(self.ganis.get(&base(name))?).ok()?;
+        GaniDoc::open(&bytes).ok().map(|d| d.gani().clone())
+    }
+
+    /// `Arial` finds `arial.ttf` or `arial.otf`; a name with its extension
+    /// finds that file.
+    fn font(&mut self, name: &str) -> Option<Vec<u8>> {
+        let b = base(name);
+        let path = [b.clone(), format!("{b}.ttf"), format!("{b}.otf")]
+            .iter()
+            .find_map(|n| self.fonts.get(n))?;
+        std::fs::read(path).ok()
+    }
 }

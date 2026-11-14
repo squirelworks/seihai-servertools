@@ -102,8 +102,10 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
 - [x] Movie mode: CHAR actors painted as a player through their `ani`
       gani, facing `dir`, with the head, body, sword, shield and attr
       pictures their keys name.
-- [ ] Movie mode: TEXT actors (fonts), a CHAR's colours, chat, horse and
-      params; confirm GraalShop's dx/dy unit from a saved `GANI0002` file;
+- [x] Movie mode: TEXT actors through seihai-draw 0.2.11's text renderer
+      (a font file by the `font` key, else Ubuntu Light; size in pixels).
+- [ ] Movie mode: a CHAR's colours, chat, horse and params; confirm
+      GraalShop's dx/dy and font size units from a saved `GANI0002` file;
       a movie page in the gani editor.
 - [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
       pages from seihai-gserver accounts, gserverstat's modes that the

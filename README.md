@@ -42,7 +42,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts, packages |
 | Level convert: `.graal` / `.zelda` / `.nw`, either way | `seihai-servertools level convert` | working |
 | gif2mng: GIF to PNG or MNG animation | `seihai-servertools gif2mng` | working (`-b` partial) |
-| GraalShop movie mode (`GANI0002`): list actors, paint a timeline frame; movies survive a gani save | `seihai-servertools gani movie show\|render` | working (SPRITE and CHAR actors drawn; TEXT not yet) |
+| GraalShop movie mode (`GANI0002`): list actors, paint a timeline frame; movies survive a gani save | `seihai-servertools gani movie show\|render` | working (SPRITE, CHAR and TEXT actors drawn) |
 | Level and gmap pictures (NW2PNG's job) | `seihai-servertools level render`, `gmap render` | working (board and NPC images with `--npcs`) |
 | LevelFiller and LFThemeMaker: theme fills, patch themes | `seihai-servertools level fill`, `theme make` | working (borders and `--across GMAP`) |
 | Gmap from levels: a list, generator names, or a linked world's edge links | `seihai-servertools gmap make` | working |
