@@ -196,8 +196,11 @@ window wizard, the `setup` command line, and Host a listserver.
       `config/server.txt` is read, never edited; a `listserver` line that
       misses the lab listserver gets a note naming the change. Run:
       `docs/lab/2026-11-12-lab-start-rust.md`.
-- [ ] The same with a listserver and Seihai `--list-only` seeing the Rust
-      world (needs the lab machine; this run was gserver only).
+- [x] The same with a listserver and Seihai `--list-only` seeing the Rust
+      world (2026-11-14: 2.22 login and the 1.41 silent list both list it;
+      `docs/lab/2026-11-14-lab-start-rust-listserver.md`).
+- [ ] A real client under Wine against that run, and logging in to the
+      Rust gserver after the list.
 - [x] Lab run with a real `gs2emu` from a fork release (2026-11-12,
       `v4.0.0-seihai.1`, `docs/lab/2026-11-12-real-fork-lab-run.md`; the earlier run used a stand-in,
       `docs/lab/2026-10-31-lab-start.md`).
