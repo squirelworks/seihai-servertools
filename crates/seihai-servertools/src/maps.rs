@@ -2,6 +2,8 @@
 //! offline LAT jobs of the classic converters, map makers and NW2PNG
 //! (`lat_core::level`, `lat_core::worldmap`, `lat_core::render`).
 
+use lat_core::gani::Gani;
+use lat_core::preview::GaniPics;
 use lat_core::render::{self, OwnedSheet};
 use lat_core::worldmap::{self, Built, Gmap};
 use std::collections::HashMap;
@@ -23,11 +25,18 @@ level convert IN OUT.nw|OUT.graal|OUT.zelda|OUT.tmx [--sheet PNG]
 level render IN OUT.png [--sheet PNG] [--scale N] [--npcs] [--images DIR]
     Paints the level's board (every layer) to a PNG, 1024 pixels a side at
     --scale 1 (default), or 1024/N with N = 2, 4, 8 or 16. --sheet is the
-    tile sheet (default: Seihai's built-in pics1.png). --npcs also draws
-    each visible level NPC's image (.png, .gif or .mng, first frame) at
-    its place, found by name in --images DIR (default: the level's folder
-    and below), any letter case. Signs, chests and NPCs drawn as a gani
-    are not drawn.";
+    tile sheet (default: Seihai's built-in pics1.png). A chest is the 2x2
+    closed or open tiles (magenta left out); one whose x or y is outside
+    0 to 62 is skipped. A sign is a 2 by 1 mark with its first line, except
+    a sign at 0,0, which is not drawn. --npcs also draws each visible level
+    NPC: an image (.png, .gif or .mng, first frame), or a gani when the
+    image ends in .gani or the script has a literal showcharacter,
+    setcharani or setani (idle when showcharacter names nothing). That
+    read is not a GS1 run: a command inside a quote or a comment is not
+    drawn, and a name built at runtime is not drawn. Files are found by
+    name in --images DIR (default: the level's
+    folder and below), any letter case; body.png and head0.png fall back
+    to Seihai's built-in pictures, and a stock gani such as idle.gani too.";
 
 pub const GMAP_USAGE: &str = "\
 gmap make OUT.gmap --width N LEVEL...
@@ -43,9 +52,9 @@ gmap make OUT.gmap --links DIR START
 gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
            [--npcs] [--images DIR]
     Paints every level of the gmap into one PNG. Levels are looked up in
-    --dir (default: the gmap's folder and below), any letter case. --npcs
-    and --images as for level render (images default to --dir).
-    --scale defaults to 4 (256 pixels a level).";
+    --dir (default: the gmap's folder and below), any letter case. Chests
+    and signs as for level render. --npcs and --images as for level render
+    (files default to --dir). --scale defaults to 4 (256 pixels a level).";
 
 fn fail(cmd: &str, msg: impl std::fmt::Display) -> ExitCode {
     eprintln!("{cmd}: {msg}");
@@ -218,20 +227,27 @@ fn render_level(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    let images = image_index(o, folder);
-    let mut load = images.as_ref().map(image_loader);
+    let files = image_index(o, folder);
+    let mut load = files.as_ref().map(image_loader);
+    let mut ganis = files.as_ref().map(gani_loader);
+    let pics = match files.as_ref() {
+        Some(index) => character_pics(index),
+        None => CharacterPics::empty(),
+    };
     let (img, missing) = render::level_rgba(
         &level,
         sheet.sheet(),
         o.scale.unwrap_or(1),
         load.as_mut()
             .map(|f| f as &mut dyn FnMut(&str) -> Option<lat_core::preview::Rgba>),
+        ganis
+            .as_mut()
+            .map(|f| f as &mut dyn FnMut(&str) -> Option<Gani>),
+        pics.view(),
     )?;
     write(dst, &render::png_bytes(&img)?)?;
     println!("{}: {} by {}", dst.display(), img.width, img.height);
-    for name in &missing {
-        println!("  missing image: {name}");
-    }
+    report_missing(&missing);
     Ok(())
 }
 
@@ -309,7 +325,7 @@ fn image_index(o: &Opts, default: &Path) -> Option<HashMap<String, PathBuf>> {
     o.npcs.then(|| {
         file_index(
             o.images.as_deref().unwrap_or(default),
-            &["png", "gif", "mng"],
+            &["png", "gif", "mng", "gani"],
         )
     })
 }
@@ -321,6 +337,85 @@ pub(crate) fn image_loader(
         let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
         let bytes = std::fs::read(index.get(&base.to_ascii_lowercase())?).ok()?;
         render::decode_image(&bytes)
+    }
+}
+
+fn gani_loader(index: &HashMap<String, PathBuf>) -> impl FnMut(&str) -> Option<Gani> + '_ {
+    |name| {
+        let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        let mut key = base.to_ascii_lowercase();
+        if !key.ends_with(".gani") {
+            key.push_str(".gani");
+        }
+        if let Some(bytes) = index.get(&key).and_then(|p| std::fs::read(p).ok()) {
+            if let Some(gani) = render::read_gani(&bytes) {
+                return Some(gani);
+            }
+        }
+        render::builtin_gani(&key)
+    }
+}
+
+/// Body, head, sword, shield and sprite sheets for a character gani.
+/// Folder files win; body and head fall back to the built-in pictures.
+struct CharacterPics {
+    body: Option<OwnedSheet>,
+    head: Option<OwnedSheet>,
+    sword: Option<OwnedSheet>,
+    shield: Option<OwnedSheet>,
+    sprites: Option<OwnedSheet>,
+}
+
+impl CharacterPics {
+    fn view(&self) -> GaniPics<'_> {
+        GaniPics {
+            body: self.body.as_ref().map(OwnedSheet::sheet),
+            head: self.head.as_ref().map(OwnedSheet::sheet),
+            sword: self.sword.as_ref().map(OwnedSheet::sheet),
+            shield: self.shield.as_ref().map(OwnedSheet::sheet),
+            sprites: self.sprites.as_ref().map(OwnedSheet::sheet),
+            ..GaniPics::default()
+        }
+    }
+}
+
+impl CharacterPics {
+    fn empty() -> Self {
+        Self {
+            body: None,
+            head: None,
+            sword: None,
+            shield: None,
+            sprites: None,
+        }
+    }
+}
+
+fn character_pics(index: &HashMap<String, PathBuf>) -> CharacterPics {
+    let png = |file: &str, builtin: Option<&str>| -> Option<OwnedSheet> {
+        if let Some(bytes) = index.get(file).and_then(|p| std::fs::read(p).ok()) {
+            if let Ok(sheet) = OwnedSheet::from_png(&bytes) {
+                return Some(sheet);
+            }
+        }
+        builtin.and_then(render::builtin_png)
+    };
+    CharacterPics {
+        body: png("body.png", Some("bodies/body.png")),
+        head: png("head0.png", Some("heads/head0.png")),
+        sword: png("sword1.png", None),
+        shield: png("shield1.png", None),
+        sprites: png("sprites.png", None),
+    }
+}
+
+fn report_missing(names: &[String]) {
+    for name in names {
+        if name.to_ascii_lowercase().ends_with(".gani") {
+            println!("  missing gani: {name}");
+        } else {
+            println!("  missing image: {name}");
+        }
     }
 }
 
@@ -376,6 +471,11 @@ fn render_gmap(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
     let sheet = sheet(o)?;
     let images = image_index(o, &dir);
     let mut load = images.as_ref().map(image_loader);
+    let mut ganis = images.as_ref().map(gani_loader);
+    let pics = match images.as_ref() {
+        Some(index) => character_pics(index),
+        None => CharacterPics::empty(),
+    };
     let (img, report) = render::gmap_rgba(
         &gmap,
         sheet.sheet(),
@@ -383,6 +483,10 @@ fn render_gmap(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
         loader(&index),
         load.as_mut()
             .map(|f| f as &mut dyn FnMut(&str) -> Option<lat_core::preview::Rgba>),
+        ganis
+            .as_mut()
+            .map(|f| f as &mut dyn FnMut(&str) -> Option<Gani>),
+        pics.view(),
     )?;
     write(dst, &render::png_bytes(&img)?)?;
     println!(
@@ -395,8 +499,6 @@ fn render_gmap(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
     for name in &report.missing {
         println!("  missing: {name}");
     }
-    for name in &report.missing_images {
-        println!("  missing image: {name}");
-    }
+    report_missing(&report.missing_images);
     Ok(())
 }

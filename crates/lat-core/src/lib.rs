@@ -23,7 +23,7 @@
 //! | [`lfscript`] | LevelFiller's object language for complex theme objects | working |
 //! | [`movie`] | GraalShop movie mode (`GANI0002`): actors at a frame, SPRITE, CHAR and TEXT actors painted | working |
 //! | [`tmx`] | Levels to and from Tiled `.tmx` maps (NW2TMX, nw-converter) | working |
-//! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job) | working |
+//! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job): board, chests, signs, and with loaders NPC images and ganis | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
 //! Parsers come from `seihai-core` and painting from `seihai-draw`, both

@@ -312,6 +312,35 @@ fn render_draws_npc_images_with_npcs() {
 }
 
 #[test]
+fn render_draws_chests_signs_and_a_gani_npc() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(
+        d.path().join("a.nw"),
+        "GLEVNW01\nCHEST 2 3 greenrupee -1\nSIGN 0 0\nindex\nSIGNEND\nSIGN 4 5\nHello\nSIGNEND\nNPC - 6 6\nshowcharacter;\nNPCEND\n",
+    )
+    .unwrap();
+    run(&["level", "render", "a.nw", "plain.png"], d.path());
+    let out = run(&["level", "render", "a.nw", "npcs.png", "--npcs"], d.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("missing"), "{stdout}");
+    assert_ne!(
+        fs::read(d.path().join("plain.png")).unwrap(),
+        fs::read(d.path().join("npcs.png")).unwrap(),
+        "the showcharacter NPC is drawn only with --npcs"
+    );
+    fs::write(
+        d.path().join("gone.nw"),
+        "GLEVNW01\nNPC missing.gani 1 1\nNPCEND\n",
+    )
+    .unwrap();
+    let out = run(
+        &["level", "render", "gone.nw", "gone.png", "--npcs"],
+        d.path(),
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("missing gani: missing.gani"));
+}
+
+#[test]
 fn level_fill_scatters_a_theme_and_theme_make_writes_one() {
     let d = tempfile::tempdir().unwrap();
     fs::write(

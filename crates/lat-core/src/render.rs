@@ -2,11 +2,12 @@
 //! and the classic level viewers.
 //!
 //! Tiles are painted by `seihai-draw` (through [`crate::preview`]), the
-//! same painter as the editors, on every board layer. Level NPC images are
-//! drawn on top when the caller supplies an image loader
-//! ([`NpcImages`]); signs and chests are not drawn. A gmap is painted one
-//! level at a time and each level is shrunk by `scale` before it is put in
-//! place, so a large map does not need the full-size picture in memory.
+//! same painter as the editors, on every board layer. Chest records and
+//! signs are drawn on top (a sign at 0,0 is not). Level NPC images, and
+//! NPCs shown as a gani, are drawn when the caller supplies loaders
+//! ([`NpcImages`], [`GaniFiles`]). A gmap is painted one level at a time
+//! and each level is shrunk by `scale` before it is put in place, so a
+//! large map does not need the full-size picture in memory.
 
 use seihai_core::assets::read_png_rgb;
 use seihai_core::assets::Level;
@@ -14,11 +15,9 @@ use seihai_core::assets::Level;
 pub use seihai_core::assets::{gif::read_gif_rgba, read_png_rgba};
 use seihai_core::gmap::Gmap;
 
-use crate::preview::{paint_level, paint_level_npcs, BoardView, Rgba, Sheet, TILE_PX};
+use crate::preview::{paint_scene, BoardView, GaniPics, Rgba, Sheet, TILE_PX};
 
-/// Where NPC images come from: an image by the name a level NPC gives
-/// (`block.png`), already decoded. `None` paints the board only.
-pub type NpcImages<'a, 'f> = Option<&'a mut (dyn FnMut(&str) -> Option<Rgba> + 'f)>;
+pub use crate::preview::{GaniFiles, NpcImages};
 
 /// A level is 64 tiles a side.
 pub const LEVEL_TILES: u32 = 64;
@@ -84,13 +83,37 @@ pub fn check_scale(scale: u32) -> Result<(), String> {
     }
 }
 
-/// The whole level, `LEVEL_PX / scale` a side, and the NPC image names
-/// `npcs` could not load.
+/// Read a gani's bytes. `None` when they are not a gani.
+pub fn read_gani(bytes: &[u8]) -> Option<seihai_core::assets::Gani> {
+    seihai_core::assets::Gani::parse(&String::from_utf8_lossy(bytes)).ok()
+}
+
+/// A built-in PNG (`bodies/body.png`, `heads/head0.png`) as a tile sheet.
+pub fn builtin_png(rel: &str) -> Option<OwnedSheet> {
+    OwnedSheet::from_png(seihai_core::assets::builtin::bytes(rel)?).ok()
+}
+
+/// A built-in gani (`gani/idle.gani`) by its file name.
+pub fn builtin_gani(name: &str) -> Option<seihai_core::assets::Gani> {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let mut file = base.to_ascii_lowercase();
+    if !file.ends_with(".gani") {
+        file.push_str(".gani");
+    }
+    read_gani(seihai_core::assets::builtin::bytes(&format!(
+        "gani/{file}"
+    ))?)
+}
+
+/// The whole level, `LEVEL_PX / scale` a side, and the NPC file names
+/// `images` or `ganis` could not load. Chests and signs are always drawn.
 pub fn level_rgba(
     level: &Level,
     sheet: Sheet<'_>,
     scale: u32,
-    npcs: NpcImages<'_, '_>,
+    images: NpcImages<'_, '_>,
+    ganis: GaniFiles<'_, '_>,
+    pics: GaniPics<'_>,
 ) -> Result<(Rgba, Vec<String>), String> {
     check_scale(scale)?;
     let view = BoardView {
@@ -99,10 +122,7 @@ pub fn level_rgba(
         width: LEVEL_PX,
         height: LEVEL_PX,
     };
-    let (full, missing) = match npcs {
-        Some(load) => paint_level_npcs(level, sheet, view, load),
-        None => (paint_level(level, sheet, view), Vec::new()),
-    };
+    let (full, missing) = paint_scene(level, sheet, view, images, ganis, pics);
     Ok((shrink(&full, scale), missing))
 }
 
@@ -145,7 +165,7 @@ pub struct GmapReport {
     pub painted: usize,
     /// Named cells whose level `load` did not return.
     pub missing: Vec<String>,
-    /// NPC image names the image loader did not return, once each.
+    /// NPC image and gani names the loaders did not return, once each.
     pub missing_images: Vec<String>,
 }
 
@@ -156,7 +176,9 @@ pub fn gmap_rgba(
     sheet: Sheet<'_>,
     scale: u32,
     mut load: impl FnMut(&str) -> Option<Level>,
-    mut npcs: NpcImages<'_, '_>,
+    mut images: NpcImages<'_, '_>,
+    mut ganis: GaniFiles<'_, '_>,
+    pics: GaniPics<'_>,
 ) -> Result<(Rgba, GmapReport), String> {
     check_scale(scale)?;
     let cell = LEVEL_PX / scale;
@@ -184,7 +206,14 @@ pub fn gmap_rgba(
             report.missing.push(name.clone());
             continue;
         };
-        let (tile, missing) = level_rgba(&level, sheet, scale, npcs.as_deref_mut())?;
+        let (tile, missing) = level_rgba(
+            &level,
+            sheet,
+            scale,
+            images.as_deref_mut(),
+            ganis.as_deref_mut(),
+            pics,
+        )?;
         for m in missing {
             if !report.missing_images.contains(&m) {
                 report.missing_images.push(m);
@@ -244,16 +273,16 @@ mod tests {
             width: sw,
             height: sh,
         };
-        let (full, _) = level_rgba(&level, sheet, 1, None).unwrap();
+        let (full, _) = level_rgba(&level, sheet, 1, None, None, GaniPics::default()).unwrap();
         assert_eq!((full.width, full.height), (1024, 1024));
         let red = full.pixel(0, 0).unwrap();
         let green = full.pixel(500, 500).unwrap();
         assert_ne!(red, green);
-        let (small, _) = level_rgba(&level, sheet, 16, None).unwrap();
+        let (small, _) = level_rgba(&level, sheet, 16, None, None, GaniPics::default()).unwrap();
         assert_eq!((small.width, small.height), (64, 64));
         assert_eq!(small.pixel(0, 0), Some(red));
         assert_eq!(small.pixel(1, 0), Some(green));
-        assert!(level_rgba(&level, sheet, 3, None).is_err());
+        assert!(level_rgba(&level, sheet, 3, None, None, GaniPics::default()).is_err());
     }
 
     #[test]
@@ -274,6 +303,8 @@ mod tests {
             16,
             |n| (n == "a.nw").then(|| level.clone()),
             None,
+            None,
+            GaniPics::default(),
         )
         .unwrap();
         assert_eq!((img.width, img.height), (128, 128));
@@ -315,12 +346,13 @@ mod tests {
                 pixels: [0, 0, 255, 255].repeat(4),
             })
         };
-        let (img, missing) = level_rgba(&level, sheet, 1, Some(&mut load)).unwrap();
+        let (img, missing) =
+            level_rgba(&level, sheet, 1, Some(&mut load), None, GaniPics::default()).unwrap();
         assert_eq!(img.pixel(32, 48), Some([0, 0, 255, 255]));
         assert_eq!(img.pixel(34, 48).map(|p| p[3]), Some(0), "only 2 wide");
         assert_eq!(missing, vec!["gone.png".to_string()]);
         assert_eq!(asked, ["blue.png", "gone.png"], "each name once, no `-`");
-        let (plain, _) = level_rgba(&level, sheet, 1, None).unwrap();
+        let (plain, _) = level_rgba(&level, sheet, 1, None, None, GaniPics::default()).unwrap();
         assert_eq!(plain.pixel(32, 48).map(|p| p[3]), Some(0));
     }
 
@@ -334,5 +366,157 @@ mod tests {
         .unwrap();
         assert_eq!(decode_image(&png).unwrap().pixels, [1, 2, 3, 255]);
         assert!(decode_image(b"nothing").is_none());
+    }
+
+    #[test]
+    fn chests_signs_and_gani_npcs_are_drawn() {
+        let ((rgb, sw, sh), _) = sheet_and_level();
+        // Chest tiles sit in different sheet blocks, so the picture has to
+        // cover both the closed set (column 57) and the open set (row 20).
+        let (wide, ww, wh) = coloured_sheet(1866);
+        let wide = Sheet {
+            rgb: &wide,
+            width: ww,
+            height: wh,
+        };
+        let closed = Level::parse("GLEVNW01\nCHEST 2 3 greenrupee -1\n").unwrap();
+        let (img, _) = level_rgba(&closed, wide, 1, None, None, GaniPics::default()).unwrap();
+        assert_eq!(img.pixel(32, 48), Some([192, 48, 160, 255]));
+        let mut open = closed.clone();
+        open.chests[0].opened = true;
+        let (img, _) = level_rgba(&open, wide, 1, None, None, GaniPics::default()).unwrap();
+        assert_eq!(img.pixel(32, 48), Some([136, 114, 160, 255]));
+        let off = Level::parse("GLEVNW01\nCHEST 63 3 greenrupee -1\n").unwrap();
+        let (img, _) = level_rgba(&off, wide, 1, None, None, GaniPics::default()).unwrap();
+        assert_eq!(img.pixel(63 * 16, 48), Some([0, 0, 0, 0]));
+
+        let small = Sheet {
+            rgb: &rgb,
+            width: sw,
+            height: sh,
+        };
+        let signs =
+            Level::parse("GLEVNW01\nSIGN 0 0\nindex only\nSIGNEND\nSIGN 5 6\nHello\nSIGNEND\n")
+                .unwrap();
+        let (img, _) = level_rgba(&signs, small, 1, None, None, GaniPics::default()).unwrap();
+        assert_eq!(
+            img.pixel(0, 0),
+            Some([0, 0, 0, 0]),
+            "a sign at 0,0 is not drawn"
+        );
+        assert_eq!(img.pixel(80, 96), Some([255, 230, 60, 255]));
+
+        let body = [0u8, 255, 0];
+        let pics = GaniPics {
+            body: Some(Sheet {
+                rgb: &body,
+                width: 1,
+                height: 1,
+            }),
+            ..GaniPics::default()
+        };
+        let gani = "SPRITE 0 BODY 0 0 1 1\nSINGLEDIRECTION\nANI\n0 2 3\nANIEND\n";
+        let level = Level::parse(
+            "GLEVNW01\nNPC stand.gani 1 1\nNPCEND\nNPC - 4 4\nshowcharacter;\nsetcharani stand,;\nNPCEND\nNPC pic.png 2 2\n// setcharani stand\nNPCEND\nNPC gone.gani 3 3\nNPCEND\n",
+        )
+        .unwrap();
+        let mut asked = Vec::new();
+        let mut load_gani = |name: &str| {
+            asked.push(name.to_string());
+            (name == "stand.gani").then(|| seihai_core::assets::Gani::parse(gani).unwrap())
+        };
+        let mut load_img = |name: &str| {
+            (name == "pic.png").then(|| Rgba {
+                width: 1,
+                height: 1,
+                pixels: vec![0, 0, 255, 255],
+            })
+        };
+        let (img, missing) = level_rgba(
+            &level,
+            small,
+            1,
+            Some(&mut load_img),
+            Some(&mut load_gani),
+            pics,
+        )
+        .unwrap();
+        assert_eq!(img.pixel(18, 19), Some([0, 255, 0, 255]), "the .gani image");
+        assert_eq!(img.pixel(66, 67), Some([0, 255, 0, 255]), "showcharacter");
+        assert_eq!(
+            img.pixel(32, 32),
+            Some([0, 0, 255, 255]),
+            "a picture NPC stays a picture"
+        );
+        assert_eq!(missing, vec!["gone.gani".to_string()]);
+        assert_eq!(asked, ["stand.gani", "gone.gani"]);
+        assert!(builtin_gani("idle.gani").is_some());
+        assert!(builtin_png("bodies/body.png").is_some());
+    }
+
+    #[test]
+    fn a_quoted_setani_stays_an_image_npc() {
+        let ((rgb, sw, sh), _) = sheet_and_level();
+        let small = Sheet {
+            rgb: &rgb,
+            width: sw,
+            height: sh,
+        };
+        let body = [0u8, 255, 0];
+        let pics = GaniPics {
+            body: Some(Sheet {
+                rgb: &body,
+                width: 1,
+                height: 1,
+            }),
+            ..GaniPics::default()
+        };
+        let gani = "SPRITE 0 BODY 0 0 1 1\nSINGLEDIRECTION\nANI\n0 2 3\nANIEND\n";
+        let level = Level::parse(
+            "GLEVNW01\n\
+             NPC pic.png 2 2\nmessage \"please setani walk, now\";\nNPCEND\n\
+             NPC pic.png 4 4\nsetani walk;\nNPCEND\n\
+             NPC stand.gani 1 1\nmessage \"setani run\";\nNPCEND\n",
+        )
+        .unwrap();
+        let mut asked = Vec::new();
+        let mut load_gani = |name: &str| {
+            asked.push(name.to_string());
+            Some(seihai_core::assets::Gani::parse(gani).unwrap())
+        };
+        let mut load_img = |name: &str| {
+            (name == "pic.png").then(|| Rgba {
+                width: 1,
+                height: 1,
+                pixels: vec![0, 0, 255, 255],
+            })
+        };
+        let (img, missing) = level_rgba(
+            &level,
+            small,
+            1,
+            Some(&mut load_img),
+            Some(&mut load_gani),
+            pics,
+        )
+        .unwrap();
+        assert_eq!(
+            img.pixel(32, 32),
+            Some([0, 0, 255, 255]),
+            "setani inside a message stays the image"
+        );
+        assert_eq!(img.pixel(34, 35).map(|p| p[3]), Some(0));
+        assert_eq!(
+            img.pixel(66, 67),
+            Some([0, 255, 0, 255]),
+            "a real setani still draws"
+        );
+        assert_eq!(
+            img.pixel(18, 19),
+            Some([0, 255, 0, 255]),
+            "a .gani image still draws"
+        );
+        assert!(missing.is_empty(), "{missing:?}");
+        assert_eq!(asked, ["walk.gani", "stand.gani"]);
     }
 }
