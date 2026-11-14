@@ -3,6 +3,7 @@
 //! place that prints or reads the environment (see docs/ARCHITECTURE.md).
 
 mod code;
+mod fill;
 mod gani;
 mod generate;
 mod gpak;
@@ -32,6 +33,10 @@ Usage:
                                     clients (`gpak --help`)
   seihai-servertools level convert IN OUT.nw | render IN OUT.png [--sheet PNG] [--scale N]
                                     convert .graal/.zelda levels, paint a level (`level --help`)
+  seihai-servertools level fill THEME.nwt LEVEL... (--out DIR | --in-place) [--seed N]
+                                    LevelFiller: scatter a theme's objects (`level fill --help`)
+  seihai-servertools theme make RECIPE.tm OUT.nwt [--seed N]
+                                    LFThemeMaker: patch themes from a recipe (`theme --help`)
   seihai-servertools gmap make OUT.gmap (--width N LEVEL... | --names DIR | --links DIR START)
   seihai-servertools gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
                                     build a gmap from levels, paint a whole gmap (`gmap --help`)
@@ -112,7 +117,17 @@ fn main() -> ExitCode {
             println!("{}", maps::LEVEL_USAGE);
             ExitCode::SUCCESS
         }
+        ["level", "fill", "--help" | "-h"] => {
+            println!("{}", fill::FILL_USAGE);
+            ExitCode::SUCCESS
+        }
+        ["level", "fill", rest @ ..] => fill::run_fill(rest),
         ["level", rest @ ..] => maps::run_level(rest),
+        ["theme", "--help" | "-h"] => {
+            println!("{}", fill::THEME_USAGE);
+            ExitCode::SUCCESS
+        }
+        ["theme", rest @ ..] => fill::run_theme(rest),
         ["gmap", "--help" | "-h"] => {
             println!("{}", maps::GMAP_USAGE);
             ExitCode::SUCCESS
