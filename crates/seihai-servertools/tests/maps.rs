@@ -375,3 +375,46 @@ fn level_fill_runs_complex_objects() {
     let filled = fs::read_to_string(d.path().join("o/a.nw")).unwrap();
     assert_eq!(filled.matches("AC").count(), 9, "three diagonals of three");
 }
+
+#[test]
+fn level_fill_runs_across_a_gmap() {
+    let d = tempfile::tempdir().unwrap();
+    // Long logs, tried over the edge, with a border under each patch.
+    fs::write(
+        d.path().join("l.nwt"),
+        "[theme]\nname=l\n[rules]\nbase=AA\nlog=300\n[objects]\n<log>\n.bttm=100%,moss\nAFAFAFAF\n<moss>\nAH\n",
+    )
+    .unwrap();
+    for n in ["w-a01.nw", "w-b01.nw"] {
+        fs::write(d.path().join(n), "GLEVNW01\n").unwrap();
+    }
+    fs::write(
+        d.path().join("w.gmap"),
+        "GRMAP001\nWIDTH 2\nHEIGHT 1\nLEVELNAMES\n\"W-A01.nw\",\"w-b01.nw\",\nLEVELNAMESEND\n",
+    )
+    .unwrap();
+    let out = run(
+        &[
+            "level", "fill", "l.nwt", "w-a01.nw", "w-b01.nw", "--out", "o", "--edges", "--across",
+            "w.gmap", "--seed", "2",
+        ],
+        d.path(),
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("w-b01.nw"), "{stdout}");
+    let right = fs::read_to_string(d.path().join("o/w-b01.nw")).unwrap();
+    let left = fs::read_to_string(d.path().join("o/w-a01.nw")).unwrap();
+    assert!(left.contains("AH"), "borders drawn");
+    // Some log in the left level ran over into the right one: a row of the
+    // right level that starts with a log piece shorter than a whole log.
+    let crossed = right.lines().filter(|l| l.starts_with("BOARD")).any(|l| {
+        let cells = &l.split_whitespace().nth(5).unwrap();
+        let run = cells
+            .as_bytes()
+            .chunks(2)
+            .take_while(|c| *c == b"AF")
+            .count();
+        run % 4 != 0
+    });
+    assert!(crossed, "a log runs across the edge");
+}

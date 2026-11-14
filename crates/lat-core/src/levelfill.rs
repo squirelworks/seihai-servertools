@@ -5,8 +5,24 @@
 //!
 //! What is here: `.nwt` themes (read and write), the quantity forms, the
 //! placement rules, complex objects through [`crate::lfscript`], the level
-//! text kept as LevelFiller keeps it, and `.tm` recipes. Not yet: border
-//! objects (`.top=` …, kept but not drawn) and "fill across levels".
+//! text kept as LevelFiller keeps it, `.tm` recipes, border objects and
+//! filling across neighbouring levels ([`Area`]).
+//!
+//! Borders: LevelFiller's border pass was never traced (its author called it
+//! "a dubious feature"), so the rule here is ours. After all placements of a
+//! rule, the cells that rule wrote form patches; every patch cell on an
+//! outer edge (the cell beyond it on that side was not written by the rule)
+//! gets one roll of the side's chance, in reading order, and on a hit the
+//! border object is placed just outside that cell: above it with the same
+//! left column (`.top`), below it (`.bttm`), left of it with the same top
+//! row (`.left`), or right of it (`.rght`). It is placed only where its
+//! whole box holds the rule's replace tile. Edge cells a placed border
+//! already runs along get no roll of their own.
+//!
+//! Across levels: [`Area`] holds the level and up to eight neighbours. A
+//! position is still picked inside the level, but the object's box may run
+//! over its right or bottom edge into a neighbour that is there, and a
+//! border may run over any edge.
 //!
 //! `.nwt` and `.tm` are LevelFiller's own files, not Graal formats, so they
 //! are read here and not in seihai-core. The level board goes through
@@ -18,6 +34,76 @@ use seihai_core::assets::{tile_code, tile_id, Level};
 
 /// A level is 64 cells a side.
 const SIDE: usize = 64;
+
+/// A level's board and the boards around it, row by row from the top left;
+/// index 4 is the level being filled. A missing neighbour is `None`, and a
+/// cell there never fits.
+#[derive(Debug, Clone, Default)]
+pub struct Area {
+    pub boards: [Option<Vec<u16>>; 9],
+}
+
+impl Area {
+    /// Just `board`, with no neighbours.
+    pub fn single(board: Vec<u16>) -> Self {
+        let mut area = Self::default();
+        area.boards[4] = Some(board);
+        area
+    }
+
+    fn slot(x: i64, y: i64) -> Option<(usize, usize)> {
+        let side = SIDE as i64;
+        if !(-side..2 * side).contains(&x) || !(-side..2 * side).contains(&y) {
+            return None;
+        }
+        let (bx, by) = (x.div_euclid(side), y.div_euclid(side));
+        let (cx, cy) = (x.rem_euclid(side), y.rem_euclid(side));
+        Some((((by + 1) * 3 + bx + 1) as usize, (cy * side + cx) as usize))
+    }
+
+    /// The tile at `(x, y)` in the level's cells (negative or 64 and up
+    /// reach a neighbour).
+    pub fn get(&self, x: i64, y: i64) -> Option<u16> {
+        let (b, i) = Self::slot(x, y)?;
+        self.boards[b].as_ref().map(|board| board[i])
+    }
+
+    fn set(&mut self, x: i64, y: i64, tile: u16) {
+        if let Some((b, i)) = Self::slot(x, y) {
+            if let Some(board) = self.boards[b].as_mut() {
+                board[i] = tile;
+            }
+        }
+    }
+
+    /// Whether every cell of a `w` by `h` box at `(x, y)` holds `tile`.
+    fn holds(&self, (x, y): (i64, i64), (w, h): (usize, usize), tile: u16) -> bool {
+        (0..h as i64).all(|dy| (0..w as i64).all(|dx| self.get(x + dx, y + dy) == Some(tile)))
+    }
+
+    /// Write `stamp`'s non-blank cells at `(x, y)`; the cells written.
+    fn stamp(&mut self, (x, y): (i64, i64), stamp: &Stamp) -> Vec<(i64, i64)> {
+        let mut out = Vec::new();
+        for dy in 0..stamp.height {
+            for dx in 0..stamp.width {
+                if let Some(t) = stamp.cells[dy * stamp.width + dx] {
+                    let at = (x + dx as i64, y + dy as i64);
+                    self.set(at.0, at.1, t);
+                    out.push(at);
+                }
+            }
+        }
+        out
+    }
+}
+
+/// The four border sides: property, step to the cell beyond the edge.
+const SIDES: [(&str, (i64, i64)); 4] = [
+    ("top", (0, -1)),
+    ("left", (-1, 0)),
+    ("bttm", (0, 1)),
+    ("rght", (1, 0)),
+];
 
 /// How many placements a rule tries.
 #[derive(Debug, Clone, PartialEq)]
@@ -398,7 +484,8 @@ impl FillLevel {
 pub struct FillOptions {
     /// Pick positions only where the whole object fits in the level
     /// (LevelFiller's "keep inside the level"). Without it an object may
-    /// be tried over the edge, where it never fits.
+    /// be tried over the right or bottom edge, where it fits only into a
+    /// neighbour of an [`Area`].
     pub keep_inside: bool,
 }
 
@@ -419,7 +506,25 @@ pub fn fill(
     rng: &mut DelphiRandom,
     opts: &FillOptions,
 ) -> FillReport {
+    let mut area = Area::single(std::mem::take(&mut level.board));
+    let report = fill_area(&mut area, theme, rng, opts);
+    level.board = area.boards[4].take().unwrap_or_default();
+    report
+}
+
+/// Fill the level in the middle of `area` (index 4, which must be there),
+/// letting objects and borders run into the neighbours that are there.
+pub fn fill_area(
+    area: &mut Area,
+    theme: &Theme,
+    rng: &mut DelphiRandom,
+    opts: &FillOptions,
+) -> FillReport {
     let mut report = FillReport::default();
+    if area.boards[4].is_none() {
+        report.notes.push("no level to fill".into());
+        return report;
+    }
     for rule in &theme.rules {
         let Some(obj) = theme.object(&rule.object) else {
             report
@@ -436,6 +541,7 @@ pub fn fill(
         };
         let (mut left, by_area) = rule.quantity.amount(SIDE * SIDE, rng);
         let (mut placed, mut tried) = (0, 0);
+        let mut written = std::collections::HashSet::new();
         while left > 0.0 {
             tried += 1;
             // A complex object builds a new picture for every placement.
@@ -448,8 +554,9 @@ pub fn fill(
                     break;
                 }
             };
-            if place(level, &stamp, replace, rng, opts) {
+            if let Some(cells) = place(area, &stamp, replace, rng, opts) {
                 placed += 1;
+                written.extend(cells);
             }
             left -= if by_area {
                 (stamp.width * stamp.height).max(1) as f64
@@ -458,8 +565,99 @@ pub fn fill(
             };
         }
         report.placed.push((obj.name.clone(), placed, tried));
+        borders(area, theme, obj, &written, replace, rng, &mut report);
     }
     report
+}
+
+/// `percent,object` of a border property (`100%,edge` or `50,edge`).
+fn border_prop(value: &str) -> Result<(f64, &str), String> {
+    let (p, name) = value
+        .split_once(',')
+        .ok_or_else(|| format!("{value}: want percent,object"))?;
+    let p: f64 = p
+        .trim()
+        .trim_end_matches('%')
+        .trim()
+        .parse()
+        .map_err(|_| format!("{value}: {p} is not a percent"))?;
+    Ok((p.clamp(0.0, 100.0), name.trim()))
+}
+
+/// The border pass of one rule (see the module notes).
+fn borders(
+    area: &mut Area,
+    theme: &Theme,
+    obj: &Object,
+    written: &std::collections::HashSet<(i64, i64)>,
+    replace: u16,
+    rng: &mut DelphiRandom,
+    report: &mut FillReport,
+) {
+    let mut edge: Vec<(i64, i64)> = written.iter().copied().collect();
+    edge.sort_by_key(|&(x, y)| (y, x));
+    for (side, (sx, sy)) in SIDES {
+        let Some(value) = obj
+            .props
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(side))
+            .map(|(_, v)| v.as_str())
+        else {
+            continue;
+        };
+        let (chance, name) = match border_prop(value) {
+            Ok(v) => v,
+            Err(e) => {
+                report.notes.push(format!("{} .{side}: {e}", obj.name));
+                continue;
+            }
+        };
+        let Some(border) = theme.object(name) else {
+            report
+                .notes
+                .push(format!("{} .{side}: no such object {name}", obj.name));
+            continue;
+        };
+        let (mut placed, mut tried) = (0, 0);
+        let mut covered = std::collections::HashSet::new();
+        for &(x, y) in &edge {
+            if written.contains(&(x + sx, y + sy)) || covered.contains(&(x, y)) {
+                continue;
+            }
+            covered.insert((x, y));
+            tried += 1;
+            if f64::from(rng.below(10_000)) >= chance * 100.0 {
+                continue;
+            }
+            let stamp = match resolve(theme, border, rng, &mut report.log, 0) {
+                Ok(s) => s,
+                Err(e) => {
+                    report.notes.push(format!("{} .{side}: {e}", obj.name));
+                    break;
+                }
+            };
+            let (w, h) = (stamp.width as i64, stamp.height as i64);
+            let at = match side {
+                "top" => (x, y - h),
+                "bttm" => (x, y + 1),
+                "left" => (x - w, y),
+                _ => (x + 1, y),
+            };
+            if w == 0 || h == 0 || !area.holds(at, (stamp.width, stamp.height), replace) {
+                continue;
+            }
+            area.stamp(at, &stamp);
+            placed += 1;
+            // The edge cells this border runs along need no roll of their own.
+            let run = if sx == 0 { w } else { h };
+            for i in 1..run {
+                covered.insert(if sx == 0 { (x + i, y) } else { (x, y + i) });
+            }
+        }
+        report
+            .placed
+            .push((format!("{} .{side} {name}", obj.name), placed, tried));
+    }
 }
 
 /// The picture `obj` places: its tiles, or what its script builds (a
@@ -505,17 +703,17 @@ fn resolve(
 }
 
 /// One placement: up to three positions, the first where every cell of the
-/// object's box holds `replace`.
+/// object's box holds `replace`. The cells written, or `None`.
 fn place(
-    level: &mut FillLevel,
+    area: &mut Area,
     obj: &Stamp,
     replace: u16,
     rng: &mut DelphiRandom,
     opts: &FillOptions,
-) -> bool {
+) -> Option<Vec<(i64, i64)>> {
     let (w, h) = (obj.width, obj.height);
     if w == 0 || h == 0 {
-        return false;
+        return None;
     }
     let (span_x, span_y) = if opts.keep_inside {
         (SIDE.saturating_sub(w) + 1, SIDE.saturating_sub(h) + 1)
@@ -523,26 +721,13 @@ fn place(
         (SIDE, SIDE)
     };
     for _ in 0..3 {
-        let row = rng.below(span_y as u32) as usize;
-        let col = rng.below(span_x as u32) as usize;
-        if row + h > SIDE || col + w > SIDE {
-            continue;
+        let row = i64::from(rng.below(span_y as u32));
+        let col = i64::from(rng.below(span_x as u32));
+        if area.holds((col, row), (w, h), replace) {
+            return Some(area.stamp((col, row), obj));
         }
-        let fits =
-            (0..h).all(|dy| (0..w).all(|dx| level.board[(row + dy) * SIDE + col + dx] == replace));
-        if !fits {
-            continue;
-        }
-        for dy in 0..h {
-            for dx in 0..w {
-                if let Some(t) = obj.cells[dy * w + dx] {
-                    level.board[(row + dy) * SIDE + col + dx] = t;
-                }
-            }
-        }
-        return true;
     }
-    false
+    None
 }
 
 /// An LFThemeMaker recipe (`.tm`).
@@ -791,5 +976,96 @@ mod tests {
             assert!(o.cells.iter().any(Option::is_some));
         }
         assert_eq!(Theme::parse(&theme.write()).unwrap(), theme);
+    }
+
+    #[test]
+    fn borders_go_round_the_patch_edges() {
+        // A 2 x 2 patch of tile 5 with a 1 x 1 border of tile 7 above and
+        // tile 8 to the right, every time.
+        let theme = Theme::parse(
+            "[rules]\nbase=AA\npatch=1\n[objects]\n<patch>\n.top=100%,cap\n.rght=100,side\nAFAF\nAFAF\n<cap>\nAH\n<side>\nAI\n",
+        )
+        .unwrap();
+        let mut level = grass();
+        let report = fill(
+            &mut level,
+            &theme,
+            &mut DelphiRandom(3),
+            &FillOptions { keep_inside: true },
+        );
+        assert!(report.notes.is_empty(), "{:?}", report.notes);
+        assert_eq!(report.placed[0], ("patch".into(), 1, 1));
+        let at = |t| level.board.iter().position(|&x| x == t).unwrap();
+        let (px, py) = (at(5) % SIDE, at(5) / SIDE);
+        let count = |t| level.board.iter().filter(|&&x| x == t).count();
+        // Only the patch's outer top and right edges, not between its cells.
+        let caps = if py > 0 { 2 } else { 0 };
+        let sides = if px + 2 < SIDE { 2 } else { 0 };
+        assert_eq!(count(7), caps);
+        assert_eq!(count(8), sides);
+        if caps > 0 {
+            assert_eq!(level.board[(py - 1) * SIDE + px], 7);
+        }
+        if sides > 0 {
+            assert_eq!(level.board[py * SIDE + px + 2], 8);
+        }
+        // A wider border runs along the edge and covers two edge cells.
+        let theme = Theme::parse(
+            "[rules]\nbase=AA\npatch=1\n[objects]\n<patch>\n.bttm=100%,lip\nAFAFAF\n<lip>\nAHAH\n",
+        )
+        .unwrap();
+        let mut level = grass();
+        let report = fill(
+            &mut level,
+            &theme,
+            &mut DelphiRandom(11),
+            &FillOptions { keep_inside: true },
+        );
+        assert_eq!(report.placed[1].0, "patch .bttm lip");
+        // Three edge cells: the first border covers two, the third rolls again.
+        assert_eq!(report.placed[1].2, 2);
+        let lips = level.board.iter().filter(|&&x| x == 7).count();
+        assert_eq!(lips as u32, 2 * report.placed[1].1);
+        // A bad property is a note, not a failure.
+        let theme = Theme::parse("[rules]\nbase=AA\npatch=1\n[objects]\n<patch>\n.left=lots\nAF\n")
+            .unwrap();
+        let r = fill(
+            &mut grass(),
+            &theme,
+            &mut DelphiRandom(1),
+            &FillOptions { keep_inside: true },
+        );
+        assert!(r.notes[0].contains(".left"), "{:?}", r.notes);
+    }
+
+    #[test]
+    fn objects_run_into_a_neighbour() {
+        // A 3-wide object tried anywhere: over the right edge it fits only
+        // when the level to the right is in the area.
+        let theme = Theme::parse("[rules]\nbase=AA\nlog=200\n[objects]\n<log>\nAFAFAF\n").unwrap();
+        let opts = FillOptions { keep_inside: false };
+        let mut area = Area::single(grass().board);
+        area.boards[5] = Some(grass().board);
+        fill_area(&mut area, &theme, &mut DelphiRandom(5), &opts);
+        let right = area.boards[5].as_ref().unwrap();
+        let spill = right.iter().filter(|&&t| t == 5).count();
+        assert!(spill > 0, "some logs run into the right level");
+        // Only its first two columns can be reached.
+        for (i, &t) in right.iter().enumerate() {
+            if t == 5 {
+                assert!(i % SIDE < 2);
+            }
+        }
+        // Alone, nothing crosses the edge.
+        let mut alone = Area::single(grass().board);
+        fill_area(&mut alone, &theme, &mut DelphiRandom(5), &opts);
+        let board = alone.boards[4].as_ref().unwrap();
+        for y in 0..SIDE {
+            let row = &board[y * SIDE..][..SIDE];
+            let run = row.iter().rev().take_while(|&&t| t == 5).count();
+            assert_eq!(run % 3, 0, "row {y} ends in whole logs");
+        }
+        assert_eq!(area.get(-1, 0), None);
+        assert!(area.get(64, 0).is_some());
     }
 }
