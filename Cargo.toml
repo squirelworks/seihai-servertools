@@ -23,8 +23,8 @@ publish = false
 # seihai-core and seihai-draw both live in squirelworks/seihai-core and are
 # tagged together, so one tag pins both and a Level or Gani from the parser
 # is the same type seihai-draw paints.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", rev = "2e2eb0b", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai-core", rev = "2e2eb0b" }
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.2.5", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.2.5" }
 # RC file link: list_dir, get_file, put_file. seihai-rc dd10322 (#45). It
 # still pins seihai-core v0.1.0, so until seihai-rc moves to 0.2.x the build
 # carries two cores; no seihai-core type crosses into seihai-rc. No rc tag yet.
