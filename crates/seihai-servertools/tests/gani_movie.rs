@@ -41,7 +41,7 @@ MOVIE
   ACTOREND
 
   ACTOR TEXT title
-    FRAME 0 text=Hello
+    FRAME 0 text=Hi,font=Fancy,color=#00ff00,fontsize=6,dx=0,dy=4
   ACTOREND
 
   ACTOR CHAR hero
@@ -97,7 +97,8 @@ fn shows_and_renders_a_movie() {
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
-    assert!(err.contains("title (TEXT): not drawn yet"), "{err}");
+    assert!(!err.contains("title (TEXT)"), "{err}");
+    assert!(err.contains("font Fancy not found"), "{err}");
     let (w, h, px) = read_png(&fs::read(dir.path().join("f2.png")).unwrap());
     assert_eq!((w, h), (16, 8));
     let at = |x: u32, y: u32| &px[((y * w + x) * 4) as usize..][..4];
@@ -106,6 +107,11 @@ fn shows_and_renders_a_movie() {
     assert_eq!(at(3, 1)[3], 0);
     assert_eq!(at(4, 0)[3], 0);
     assert_eq!(at(10, 4), [255, 0, 0, 255], "the CHAR's body cell");
+    let greenish = px
+        .chunks(4)
+        .filter(|p| p[1] > 60 && p[0] < 60 && p[3] > 0)
+        .count();
+    assert!(greenish > 0, "the TEXT actor");
     assert_eq!(at(11, 4)[3], 0);
     assert!(err.contains("head0.png not found"), "{err}");
 
