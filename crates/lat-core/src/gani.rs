@@ -8,7 +8,7 @@
 
 use crate::preview::{paint_gani, FrameView, GaniPics, Rgba};
 
-pub use seihai_core::assets::Gani;
+pub use seihai_core::assets::{Gani, GaniMovie};
 
 /// Parse a gani's text. The bytes need not be UTF-8.
 pub fn open(bytes: &[u8]) -> Result<Gani, String> {
@@ -19,16 +19,31 @@ pub fn open(bytes: &[u8]) -> Result<Gani, String> {
 #[derive(Debug, Clone)]
 pub struct GaniDoc {
     gani: Gani,
+    /// GraalShop's movie (`GANI0002`), kept so a save does not drop it.
+    movie: Option<GaniMovie>,
     dirty: bool,
 }
 
 impl GaniDoc {
     /// Parse `bytes`.
     pub fn open(bytes: &[u8]) -> Result<Self, String> {
+        let text = String::from_utf8_lossy(bytes);
         Ok(Self {
-            gani: open(bytes)?,
+            gani: Gani::parse(&text)?,
+            movie: GaniMovie::parse(&text)?,
             dirty: false,
         })
+    }
+
+    /// The movie of a `GANI0002` file, if it has one.
+    pub fn movie(&self) -> Option<&GaniMovie> {
+        self.movie.as_ref()
+    }
+
+    /// Change the movie; the document becomes dirty.
+    pub fn movie_mut(&mut self) -> Option<&mut GaniMovie> {
+        self.dirty = true;
+        self.movie.as_mut()
     }
 
     /// The parsed gani.
@@ -114,7 +129,10 @@ impl GaniDoc {
 
     /// Gani text for the animation as it is now.
     pub fn encode(&self) -> Vec<u8> {
-        encode(&self.gani)
+        match &self.movie {
+            Some(m) => encode_movie(&self.gani, m),
+            None => encode(&self.gani),
+        }
     }
 
     /// One frame, painted by `seihai-draw`.
@@ -125,6 +143,24 @@ impl GaniDoc {
 
 /// Write `gani` as text that [`open`] can read back.
 pub fn encode(gani: &Gani) -> Vec<u8> {
+    let mut out = header(gani, false);
+    out.push_str(&steps(gani));
+    out.into_bytes()
+}
+
+/// Write a movie-mode gani: `GANI0002`, the sprite table and header lines
+/// of `gani` (never `SINGLEDIRECTION`, which GraalShop does not write in
+/// movie mode), `FRAMES`, and the `MOVIE` block.
+pub fn encode_movie(gani: &Gani, movie: &GaniMovie) -> Vec<u8> {
+    let mut out = String::from("GANI0002\n");
+    out.push_str(&header(gani, true));
+    out.push_str(&movie.frames_line());
+    out.push_str(&movie.write_block());
+    out.into_bytes()
+}
+
+/// The sprite table and header lines.
+fn header(gani: &Gani, movie: bool) -> String {
     let mut out = String::new();
     for sprite in &gani.sprites {
         out.push_str(&format!(
@@ -154,7 +190,7 @@ pub fn encode(gani: &Gani) -> Vec<u8> {
             out.push_str(&format!("DEFAULTBODY {name}\n"));
         }
     }
-    if gani.single_direction {
+    if gani.single_direction && !movie {
         out.push_str("SINGLEDIRECTION\n");
     }
     if let Some(name) = &gani.setback_to {
@@ -165,7 +201,12 @@ pub fn encode(gani: &Gani) -> Vec<u8> {
     if gani.looped {
         out.push_str("LOOP\n");
     }
-    out.push_str("ANI\n");
+    out
+}
+
+/// The `ANI` … `ANIEND` block.
+fn steps(gani: &Gani) -> String {
+    let mut out = String::from("ANI\n");
     for frame in &gani.frames {
         if frame.rows.is_empty() {
             continue;
@@ -192,7 +233,7 @@ pub fn encode(gani: &Gani) -> Vec<u8> {
         out.push('\n');
     }
     out.push_str("ANIEND\n");
-    out.into_bytes()
+    out
 }
 
 fn float_text(n: f32) -> String {

@@ -83,6 +83,13 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
 - [x] `render --npcs`: level NPC images (PNG, GIF, first MNG frame) on
       the board, found by name in any letter case.
 - [ ] Draw signs, chests and NPCs shown as a gani in `render`.
+- [x] GraalShop movie mode (#78): `gani movie show|render`
+      (`lat-core::movie`) on seihai-core 0.2.9's `GANI0002` model; the gani
+      editor keeps the movie on save. SPRITE actors are painted at dx, dy
+      in pixels, by layer.
+- [ ] Movie mode: paint CHAR actors (a player through a gani) and TEXT
+      actors; confirm GraalShop's dx/dy unit from a saved `GANI0002` file;
+      a movie page in the gani editor.
 - [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
       pages from seihai-gserver accounts, gserverstat's modes that the
       accounts can fill (no bomb power or online time yet); no passwords,

@@ -3,6 +3,7 @@
 //! place that prints or reads the environment (see docs/ARCHITECTURE.md).
 
 mod code;
+mod gani;
 mod generate;
 mod gpak;
 mod lab;
@@ -34,6 +35,9 @@ Usage:
   seihai-servertools gmap make OUT.gmap (--width N LEVEL... | --names DIR | --links DIR START)
   seihai-servertools gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
                                     build a gmap from levels, paint a whole gmap (`gmap --help`)
+  seihai-servertools gani movie show FILE [--frame N] | render FILE OUT.png [--frame N]
+                                    GraalShop movies (GANI0002): list actors and keyframes,
+                                    paint a timeline frame (`gani --help`)
   seihai-servertools gen terrain|image|dungeon ...
                                     generate a world: height field, from a picture, or a
                                     dungeon from a layout or maze (`gen --help`)
@@ -114,6 +118,11 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["gmap", rest @ ..] => maps::run_gmap(rest),
+        ["gani", "--help" | "-h"] => {
+            println!("{}", gani::USAGE);
+            ExitCode::SUCCESS
+        }
+        ["gani", rest @ ..] => gani::run(rest),
         ["gen", "--help" | "-h"] => {
             println!("{}", generate::USAGE);
             ExitCode::SUCCESS
