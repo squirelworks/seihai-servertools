@@ -13,8 +13,9 @@
 //! tiles from the layers and everything else from those `nw` properties,
 //! so moving an object in Tiled does not move it in the level: edit its
 //! `nw` text for that. Reading accepts what Tiled writes for such a map:
-//! CSV layer data and one tileset (any `firstgid`); other encodings are
-//! refused with a message. TMX is Tiled's format, not Graal's, so it lives
+//! CSV layer data and one inline tileset (any positive `firstgid`);
+//! other encodings and multiple/external tilesets are refused with a
+//! message. TMX is Tiled's format, not Graal's, so it lives
 //! here and not in seihai-core.
 
 use seihai_core::assets::{tile_code, BoardRun, Level};
@@ -388,6 +389,37 @@ fn attr<'a>(attrs: &'a [(&str, String)], key: &str) -> Option<&'a str> {
 /// editing one. The warnings name what was skipped.
 pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
     let pieces = pieces(xml)?;
+    // Refuse incomplete documents before returning a level that the CLI
+    // could save over an existing file.
+    let mut stack = Vec::new();
+    let mut maps = 0;
+    for piece in &pieces {
+        match piece {
+            Piece::Open { name, closed, .. } => {
+                if stack.is_empty() {
+                    if *name != "map" || maps != 0 {
+                        return Err("expected one map root".into());
+                    }
+                    maps += 1;
+                }
+                if !closed {
+                    stack.push(*name);
+                }
+            }
+            Piece::Close(name) => {
+                if stack.pop() != Some(*name) {
+                    return Err(format!("unmatched closing tag </{name}>"));
+                }
+            }
+            Piece::Text(text) if stack.is_empty() && !text.trim().is_empty() => {
+                return Err("text outside the map".into());
+            }
+            _ => {}
+        }
+    }
+    if maps != 1 || !stack.is_empty() {
+        return Err("missing or unclosed map".into());
+    }
     let mut warnings = Vec::new();
     let mut firstgid: Option<u32> = None;
     let mut boards: Vec<(i32, Vec<u32>)> = Vec::new();
@@ -412,18 +444,29 @@ pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
                     if attr(attrs, "infinite") == Some("1") {
                         return Err("an infinite map is not read; turn it into a fixed one".into());
                     }
+                    if attr(attrs, "orientation") != Some("orthogonal")
+                        || attr(attrs, "tilewidth") != Some("16")
+                        || attr(attrs, "tileheight") != Some("16")
+                    {
+                        return Err("a level map must be orthogonal with 16 by 16 tiles".into());
+                    }
                 }
                 "tileset" => {
                     let gid = attr(attrs, "firstgid")
                         .and_then(|v| v.parse().ok())
                         .ok_or("a tileset with no firstgid")?;
                     if firstgid.is_some() {
-                        warnings.push("more than one tileset: only the first is read".into());
-                    } else {
-                        firstgid = Some(gid);
+                        return Err("more than one tileset is not supported".into());
                     }
+                    if gid == 0 || attr(attrs, "source").is_some() {
+                        return Err("use one inline tileset with a positive firstgid".into());
+                    }
+                    firstgid = Some(gid);
                 }
                 "layer" => {
+                    if attr(attrs, "width") != Some("64") || attr(attrs, "height") != Some("64") {
+                        return Err("a tile layer must be 64 by 64 tiles".into());
+                    }
                     seen_layers += 1;
                     let name = attr(attrs, "name").unwrap_or("");
                     layer = Some(
@@ -489,6 +532,9 @@ pub fn from_tmx(xml: &str) -> Result<(Level, Vec<String>), String> {
                 _ => {}
             },
         }
+    }
+    if boards.is_empty() || boards.len() != seen_layers as usize {
+        return Err("each tile layer must contain CSV data".into());
     }
     let first = firstgid.ok_or("the map has no tileset")?;
     let mut level = if nw.trim().is_empty() {
@@ -570,6 +616,25 @@ NPCEND
             assert_eq!(tile_of_cell(gid(id) - 1), Some(id));
         }
         assert_eq!(tile_of_cell(SHEET_COLS * SHEET_ROWS), None);
+    }
+
+    #[test]
+    fn refuses_incomplete_maps_and_unsupported_tilesets() {
+        let tmx = to_tmx(&Level::parse(LEVEL).unwrap(), "pics1.png");
+        for bad in [
+            tmx.replace("</map>", ""),
+            tmx.replace("</data>", "</wrong>"),
+            tmx.replace("<data encoding=\"csv\">", "<data encoding=\"csv\"/><!--")
+                .replace("</data>", "-->"),
+            tmx.replace("</map>", "<tileset firstgid=\"1000\"/></map>"),
+            tmx.replace("firstgid=\"1\"", "firstgid=\"0\""),
+            tmx.replace("firstgid=\"1\"", "firstgid=\"1\" source=\"other.tsx\""),
+            tmx.replace("orientation=\"orthogonal\"", "orientation=\"isometric\""),
+            tmx.replace("tilewidth=\"16\"", "tilewidth=\"32\""),
+            tmx.replace("width=\"64\"", "width=\"32\""),
+        ] {
+            assert!(from_tmx(&bad).is_err(), "unsupported map was accepted");
+        }
     }
 
     #[test]

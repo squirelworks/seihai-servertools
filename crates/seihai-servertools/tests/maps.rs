@@ -435,3 +435,18 @@ fn level_convert_goes_to_tiled_and_back() {
     assert!(back.contains("LINK b.nw 0 0 1 64 61 playery"), "{back}");
     assert!(back.contains("BOARD 0 0 64 0 ABAC"), "{back}");
 }
+
+#[test]
+fn invalid_tmx_does_not_replace_an_existing_level() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(d.path().join("bad.tmx"), "<map width=\"64\" height=\"64\">").unwrap();
+    let original = b"GLEVNW01\nBOARD 0 0 1 0 AB\n";
+    fs::write(d.path().join("keep.nw"), original).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_seihai-servertools"))
+        .args(["level", "convert", "bad.tmx", "keep.nw"])
+        .current_dir(d.path())
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert_eq!(fs::read(d.path().join("keep.nw")).unwrap(), original);
+}
