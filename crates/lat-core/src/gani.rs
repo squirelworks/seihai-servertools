@@ -214,7 +214,7 @@ fn steps(gani: &Gani) -> String {
         for row in &frame.rows {
             let parts: Vec<String> = row
                 .iter()
-                .map(|p| format!("{} {} {}", p.sprite_id, p.x, p.y))
+                .map(|p| format!("{} {} {}", p.reference, p.x, p.y))
                 .collect();
             out.push_str(&parts.join(", "));
             out.push('\n');
@@ -265,6 +265,26 @@ ANIEND
 ";
 
     #[test]
+    fn symbolic_placement_survives_encode_without_becoming_zero() {
+        use seihai_core::assets::GaniPlacementReference;
+        for row in ["PARAM1 3 5, 0 7 9", "0 7 9, PARAM1 3 5"] {
+            let input = format!("SINGLEDIRECTION\nANI\n{row}\nANIEND\n");
+            let doc = GaniDoc::open(input.as_bytes()).unwrap();
+            let encoded = doc.encode();
+            assert!(String::from_utf8_lossy(&encoded).contains(row));
+            let again = GaniDoc::open(&encoded).unwrap();
+            let placements = &again.gani().frames[0].rows[0];
+            let symbolic = placements
+                .iter()
+                .find(|p| p.reference == GaniPlacementReference::Param1)
+                .unwrap();
+            assert_eq!((symbolic.x, symbolic.y), (3, 5));
+            assert!(placements
+                .iter()
+                .any(|p| p.reference == GaniPlacementReference::Sprite(0)));
+        }
+    }
+    #[test]
     fn changing_one_sprite_frame_round_trips_through_the_parser() {
         let mut doc = GaniDoc::open(GANI.as_bytes()).unwrap();
         assert!(!doc.is_dirty());
@@ -290,14 +310,20 @@ ANIEND
         assert_eq!(again.frame_count(), 2);
         let first = &again.gani().frames[0];
         assert_eq!(first.rows.len(), 1);
-        assert_eq!(first.rows[0][0].sprite_id, 0);
+        assert_eq!(
+            first.rows[0][0].reference,
+            seihai_core::assets::GaniPlacementReference::Sprite(0)
+        );
         assert_eq!((first.rows[0][0].x, first.rows[0][0].y), (4, 2));
         assert_eq!(first.wait, 2);
         assert_eq!(first.sounds.len(), 1);
         assert_eq!(first.sounds[0].file, "hit");
         assert_eq!(first.sounds[0].x, 1.5);
         assert_eq!(first.sounds[0].y, 2.0);
-        assert_eq!(again.gani().frames[1].rows[0][0].sprite_id, 1);
+        assert_eq!(
+            again.gani().frames[1].rows[0][0].reference,
+            seihai_core::assets::GaniPlacementReference::Sprite(1)
+        );
     }
 
     #[test]

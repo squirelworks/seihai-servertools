@@ -266,6 +266,7 @@ Held until Seihai M4 or M5 asks for it:
       Upload (`gui --page npcs`). Lab run: `docs/lab/2026-11-04-npc-editor.md`.
 - [ ] NPC editor, NPC-server objects (database NPCs, classes, weapons)
       after `seihai-rc` stage 5.
+- [x] Gani editor preserves observed uppercase PARAM1 placement references through save (shared core/draw v0.3.0); unresolved symbolic references are not drawn. Synthetic round-trip coverage only, not native slot-resolution evidence.
 - [x] Gani editor with preview: open, change one sprite frame, encode,
       paint one frame.
 

@@ -24,3 +24,5 @@ links, preservation of unrelated temporary names, replacement failure and
 cleanup, and simultaneous world saves returning one complete version.
 Windows uses directory junctions; Unix uses symlinks. No original-client or
 adversarial link-race experiment is claimed.
+
+On Windows, LocalFolder serializes in-process saves through path resolution and replacement: concurrent replacement of the same destination can return ACCESS_DENIED even with independent temporary files. This is not cross-process coordination. Unique temporary-file ownership and complete-file replacement remain unchanged; concurrent-save regression runs 32 rounds.
