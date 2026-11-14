@@ -209,14 +209,6 @@ impl RemoteFiles for RcFiles {
     }
 
     fn put(&mut self, path: &str, data: &[u8]) -> io::Result<()> {
-        // Windows replacement can fail with ACCESS_DENIED when two saves
-        // replace the same destination concurrently. Serialize in-process
-        // saves through resolution and replacement; other processes remain
-        // outside this guarantee. Each save still owns its unique temp file.
-        #[cfg(windows)]
-        static SAVES: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        #[cfg(windows)]
-        let _save = SAVES.lock().unwrap_or_else(|e| e.into_inner());
         self.session
             .put_file(path, data, RC_TIMEOUT)
             .map_err(io_file)
