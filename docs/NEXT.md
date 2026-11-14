@@ -243,6 +243,19 @@ Held until Seihai M4 or M5 asks for it:
       `v0.0.6`, with `seihai-core` on that same tag. The level *document* (line-preserving save) is still only in
       the client's offline editor; this editor writes `GLEVNW01` text from
       the parsed level.
+- [x] **seihai-core pin `v0.2.16`**
+      (`8fb62fbfa2bc770412de8cc470e2f1269676667c`), with `seihai-draw` on
+      the same tag. Previous pin `v0.2.11`
+      (`d5e335145e3f33f988b5bafb5ae096ba0d66f38d`). `seihai-rc` `dd103226`
+      still pulls `seihai-core` `v0.1.0`; no core type crosses into it.
+      The published tag and that commit were checked on GitHub, and
+      `Cargo.toml` plus `Cargo.lock` match for both crates. No source
+      change was needed. Linux `cargo fmt --check`, `cargo clippy
+      --all-targets -- -D warnings`, `cargo test`, `cargo build` and the
+      headless build passed. GitHub CI on Ubuntu and Windows passed for
+      `442c174`, this branch before #88 and before this note. That run is
+      not clearance for the tree after #88 merges. No original client, lab,
+      stress rerun or macOS run.
 - [x] Level editor on a local folder (`LocalFolder`) and through `RcFiles`:
       open, change one tile, encode, paint.
 - [x] `RcFiles`: `RemoteFiles` over `seihai-rc`'s `list_dir` / `get_file` /
