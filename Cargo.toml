@@ -23,10 +23,11 @@ publish = false
 # seihai-core and seihai-draw both live in squirelworks/seihai-core and are
 # tagged together, so one tag pins both and a Level or Gani from the parser
 # is the same type seihai-draw paints.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.1.0", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.1.0" }
-# RC file link: list_dir, get_file, put_file. seihai-rc dd10322 (#45), on seihai-core
-# v0.1.0, so the build has one core. No rc tag yet.
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", rev = "ca41fbb", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", rev = "ca41fbb" }
+# RC file link: list_dir, get_file, put_file. seihai-rc dd10322 (#45). It
+# still pins seihai-core v0.1.0, so until seihai-rc moves to 0.2.3 the build
+# carries two cores; no seihai-core type crosses into seihai-rc. No rc tag yet.
 seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "dd103226dca1bedbeb983bc523a17259b81f118f" }
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
@@ -50,3 +51,4 @@ getrandom = "0.2"
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }
 servertools-app = { path = "crates/app" }
+

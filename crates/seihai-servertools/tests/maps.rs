@@ -79,13 +79,28 @@ fn a_graal_level_converts_to_nw_and_renders() {
     );
     assert_eq!(png_size(&d.path().join("a.png")), (64, 64));
 
+    // Back to binary: the .graal reads back with the same board and link.
+    run(&["level", "convert", "a.nw", "b.graal"], d.path());
+    let graal = fs::read(d.path().join("b.graal")).unwrap();
+    assert!(graal.starts_with(b"GR-V1.03"));
+    run(&["level", "convert", "b.graal", "b.nw"], d.path());
+    assert_eq!(fs::read_to_string(d.path().join("b.nw")).unwrap(), nw);
+
+    run(&["level", "convert", "a.nw", "c.zelda"], d.path());
+    assert!(fs::read(d.path().join("c.zelda"))
+        .unwrap()
+        .starts_with(b"Z3-V1.04"));
+    run(&["level", "convert", "c.zelda", "c.nw"], d.path());
+    assert!(fs::read_to_string(d.path().join("c.nw"))
+        .unwrap()
+        .contains("BOARD 0 0 64 0 AFAF"));
+
     let refused = Command::new(env!("CARGO_BIN_EXE_seihai-servertools"))
-        .args(["level", "convert", "a.nw", "b.graal"])
+        .args(["level", "convert", "a.nw", "b.txt"])
         .current_dir(d.path())
         .output()
         .unwrap();
     assert!(!refused.status.success());
-    assert!(String::from_utf8_lossy(&refused.stderr).contains("not done yet"));
 }
 
 #[test]
