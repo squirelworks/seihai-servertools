@@ -398,7 +398,7 @@ mod tests {
     fn concurrent_saves_use_independent_temporary_files() {
         let dir = tempfile::tempdir().unwrap();
         let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
-        let jobs: Vec<_> = [b'a', b'b']
+        let jobs: Vec<_> = (*b"ab")
             .into_iter()
             .map(|byte| {
                 let root = dir.path().to_path_buf();
