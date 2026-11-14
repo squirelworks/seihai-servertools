@@ -171,7 +171,9 @@ fn image(pic: &Path, dir: &Path, o: &Opts) -> Result<(), String> {
     }
     .map_err(|e| format!("{}: {e}", pic.display()))?;
     let rgb: Vec<u8> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| [p[0], p[1], p[2]])
         .collect();
     let files = generate::from_image(&world(o, "--world")?, &rgb, w, h, |name| {
