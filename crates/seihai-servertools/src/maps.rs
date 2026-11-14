@@ -248,7 +248,7 @@ fn level_index(dir: &Path) -> HashMap<String, PathBuf> {
 
 /// Every file under `dir` (and below) whose extension is one of `exts`, by
 /// lower-case file name. The first one found for a name wins.
-fn file_index(dir: &Path, exts: &[&str]) -> HashMap<String, PathBuf> {
+pub(crate) fn file_index(dir: &Path, exts: &[&str]) -> HashMap<String, PathBuf> {
     let mut out = HashMap::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
@@ -293,7 +293,7 @@ fn image_index(o: &Opts, default: &Path) -> Option<HashMap<String, PathBuf>> {
     })
 }
 
-fn image_loader(
+pub(crate) fn image_loader(
     index: &HashMap<String, PathBuf>,
 ) -> impl FnMut(&str) -> Option<lat_core::preview::Rgba> + '_ {
     |name| {
