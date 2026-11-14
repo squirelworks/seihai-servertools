@@ -2,13 +2,15 @@
 //! LFThemeMaker (`lat_core::levelfill`).
 
 use lat_core::generate::DelphiRandom;
-use lat_core::levelfill::{fill, make_theme, FillLevel, FillOptions, Recipe, Theme};
+use lat_core::levelfill::{fill_area, make_theme, Area, FillLevel, FillOptions, Recipe, Theme};
+use lat_core::worldmap::Gmap;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub const FILL_USAGE: &str = "\
 level fill THEME.nwt LEVEL... (--out DIR | --in-place) [--seed N] [--edges]
-           [--log FILE]
+           [--log FILE] [--across GMAP]
     LevelFiller: scatters the theme's objects over each GLEVNW01 level, rule
     by rule in theme order, only where the whole object covers the rule's
     replace tile (|tile, else repbase, else base). Every line but the
@@ -18,8 +20,12 @@ level fill THEME.nwt LEVEL... (--out DIR | --in-place) [--seed N] [--edges]
     \"keep inside\" off). --log writes what each rule placed.
     Complex objects run their script (setsize, add, return, if, while,
     for, r, c, round); their debug and msg lines are printed and logged.
-    Not done yet: border objects (.top= and the rest are kept, not drawn)
-    and filling across neighbouring levels.";
+    Border objects (.top=, .left=, .bttm=, .rght= as percent,object) are
+    placed along the outer edges of each rule's patches, where the whole
+    border fits on the replace tile. --across GMAP lets objects (with
+    --edges) and borders run into the neighbouring levels that the gmap
+    places next to a level, when those levels are in the same batch; all
+    levels are written after the whole batch is filled.";
 
 pub const THEME_USAGE: &str = "\
 theme make RECIPE.tm OUT.nwt [--seed N] [--force]
@@ -36,7 +42,7 @@ fn take_opts(args: &[&str]) -> Result<(Vec<String>, Flags), String> {
     let mut it = args.iter();
     while let Some(&a) = it.next() {
         match a {
-            "--out" | "--seed" | "--log" => {
+            "--out" | "--seed" | "--log" | "--across" => {
                 let v = it.next().ok_or(format!("{a} needs a value"))?;
                 flags.push((a.to_string(), Some(v.to_string())));
             }
@@ -100,10 +106,34 @@ fn fill_levels(args: &[&str]) -> Result<(), String> {
     if let Some(dir) = &out {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
+    let mut batch = Vec::new();
     for name in levels {
         let src = Path::new(name);
-        let mut level = FillLevel::parse(&read(src)?).map_err(|e| format!("{name}: {e}"))?;
-        let report = fill(&mut level, &theme, &mut rng, &opts);
+        let level = FillLevel::parse(&read(src)?).map_err(|e| format!("{name}: {e}"))?;
+        batch.push((src, level));
+    }
+    let neighbours = match flag(&flags, "--across").flatten() {
+        Some(gmap) => neighbours(Path::new(gmap), &batch)?,
+        None => vec![[None; 9]; batch.len()],
+    };
+    let mut reports = Vec::new();
+    for (i, around) in neighbours.iter().enumerate() {
+        let mut area = Area::default();
+        for (slot, at) in around.iter().enumerate() {
+            if let Some(j) = at {
+                area.boards[slot] = Some(std::mem::take(&mut batch[*j].1.board));
+            }
+        }
+        area.boards[4] = Some(std::mem::take(&mut batch[i].1.board));
+        reports.push(fill_area(&mut area, &theme, &mut rng, &opts));
+        batch[i].1.board = area.boards[4].take().unwrap_or_default();
+        for (slot, at) in around.iter().enumerate() {
+            if let Some(j) = at {
+                batch[*j].1.board = area.boards[slot].take().unwrap_or_default();
+            }
+        }
+    }
+    for ((src, level), report) in batch.iter().zip(reports) {
         let dst = match &out {
             Some(dir) => dir.join(src.file_name().unwrap_or_default()),
             None => src.to_path_buf(),
@@ -132,6 +162,58 @@ fn fill_levels(args: &[&str]) -> Result<(), String> {
         std::fs::write(path, log).map_err(|e| format!("{path}: {e}"))?;
     }
     Ok(())
+}
+
+/// For each level of the batch, the batch levels around it on `gmap`
+/// (row by row from the top left, itself at 4, which stays `None`). Levels
+/// are matched by file name in any letter case.
+fn neighbours(
+    gmap: &Path,
+    batch: &[(&Path, FillLevel)],
+) -> Result<Vec<[Option<usize>; 9]>, String> {
+    let g = Gmap::parse(&read(gmap)?).ok_or_else(|| format!("{}: not a gmap", gmap.display()))?;
+    let base = |name: &str| {
+        name.rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(name)
+            .to_ascii_lowercase()
+    };
+    let by_name: HashMap<String, usize> = batch
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (p, _))| Some((p.file_name()?.to_string_lossy().to_ascii_lowercase(), i)))
+        .collect();
+    let width = g.width.max(1) as i64;
+    let mut cell = vec![None; batch.len()];
+    let mut at: HashMap<(i64, i64), usize> = HashMap::new();
+    for (k, name) in g.names.iter().enumerate() {
+        if let Some(&i) = by_name.get(&base(name)) {
+            let pos = (k as i64 % width, k as i64 / width);
+            cell[i].get_or_insert(pos);
+            at.entry(pos).or_insert(i);
+        }
+    }
+    let mut out = Vec::new();
+    for (i, pos) in cell.iter().enumerate() {
+        let mut around = [None; 9];
+        match pos {
+            Some((x, y)) => {
+                for (slot, a) in around.iter_mut().enumerate() {
+                    let (dx, dy) = (slot as i64 % 3 - 1, slot as i64 / 3 - 1);
+                    if slot != 4 {
+                        *a = at.get(&(x + dx, y + dy)).copied();
+                    }
+                }
+            }
+            None => eprintln!(
+                "level fill: warning: {} is not on {}; filled alone",
+                batch[i].0.display(),
+                gmap.display()
+            ),
+        }
+        out.push(around);
+    }
+    Ok(out)
 }
 
 pub fn run_theme(args: &[&str]) -> ExitCode {

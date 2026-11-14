@@ -84,8 +84,12 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       patch themes.
 - [x] LevelFiller complex objects: the object language in
       `lat-core::lfscript` (#77).
-- [ ] LevelFiller border objects and filling across neighbouring levels
-      (#77; the teardown did not trace either tile by tile).
+- [x] LevelFiller border objects and filling across neighbouring levels
+      (`level fill --across GMAP`). The border rule is ours (LevelFiller's
+      border pass was never traced): one roll per outer edge cell of a
+      rule's patches, the border placed just outside it where it fits.
+- [ ] Compare the border pass with LevelFiller v0.7 in the lab, if a
+      copy runs, and adjust the rule.
 - [ ] gif2mng `-b`'s seven body colour slots (RGB not described yet; `-b`
       only makes index 2 transparent), and Assimilator's batch modes.
 - [x] `render --npcs`: level NPC images (PNG, GIF, first MNG frame) on
