@@ -80,7 +80,9 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       MNG, through seihai-core 0.2.5's frame reader and MNG writer.
 - [ ] gif2mng `-b`'s seven body colour slots (RGB not described yet; `-b`
       only makes index 2 transparent), and Assimilator's batch modes.
-- [ ] Draw NPC images, signs and chests in `render`.
+- [x] `render --npcs`: level NPC images (PNG, GIF, first MNG frame) on
+      the board, found by name in any letter case.
+- [ ] Draw signs, chests and NPCs shown as a gani in `render`.
 - [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
       pages from seihai-gserver accounts, gserverstat's modes that the
       accounts can fill (no bomb power or online time yet); no passwords,
