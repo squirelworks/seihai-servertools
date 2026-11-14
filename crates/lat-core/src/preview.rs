@@ -117,6 +117,57 @@ pub fn paint_level(level: &Level, sheet: Sheet<'_>, view: BoardView) -> Rgba {
     }
 }
 
+/// [`paint_level`], then each visible level NPC's image on top, in file
+/// order, at its tile position (`x * 16`, `y * 16`), clipped to
+/// `image_part` when the level sets one. `load` returns an image by the
+/// name the NPC gives; the names it could not load come back, once each.
+/// NPCs drawn as a gani, or with no image, are left out.
+pub fn paint_level_npcs(
+    level: &Level,
+    sheet: Sheet<'_>,
+    view: BoardView,
+    mut load: impl FnMut(&str) -> Option<Rgba>,
+) -> (Rgba, Vec<String>) {
+    let mut buf = PixelBuffer::new(view.width, view.height);
+    seihai_draw::draw_level_tiles(&mut buf, level, image(sheet), view.origin_x, view.origin_y);
+    let mut cache: std::collections::HashMap<String, Option<Rgba>> = Default::default();
+    let mut missing = Vec::new();
+    for npc in &level.npcs {
+        // `-` is GLEVNW01's "no image".
+        if !npc.visible || npc.ani.is_some() || matches!(npc.image.trim(), "" | "-") {
+            continue;
+        }
+        let name = npc.image.trim().to_string();
+        let pic = cache.entry(name.clone()).or_insert_with(|| {
+            let pic = load(&name);
+            if pic.is_none() {
+                missing.push(name.clone());
+            }
+            pic
+        });
+        let Some(pic) = pic else { continue };
+        let rect = npc
+            .image_part
+            .unwrap_or((0, 0, pic.width as i32, pic.height as i32));
+        let px = TILE_PX as f32;
+        seihai_draw::draw_sprite(
+            &mut buf,
+            Image::rgba(&pic.pixels, pic.width, pic.height),
+            rect,
+            (npc.x * px).round() as i32 - view.origin_x,
+            (npc.y * px).round() as i32 - view.origin_y,
+        );
+    }
+    (
+        Rgba {
+            width: buf.width,
+            height: buf.height,
+            pixels: buf.rgba,
+        },
+        missing,
+    )
+}
+
 /// Paint one gani frame with `seihai-draw`.
 pub fn paint_gani(gani: &Gani, pics: &GaniPics<'_>, view: FrameView) -> Rgba {
     let mut buf = PixelBuffer::new(view.width, view.height);

@@ -2,8 +2,9 @@
 //! and the classic level viewers.
 //!
 //! Tiles are painted by `seihai-draw` (through [`crate::preview`]), the
-//! same painter as the editors, on every board layer. NPC images, signs and
-//! chests are not drawn: the picture is the board. A gmap is painted one
+//! same painter as the editors, on every board layer. Level NPC images are
+//! drawn on top when the caller supplies an image loader
+//! ([`NpcImages`]); signs and chests are not drawn. A gmap is painted one
 //! level at a time and each level is shrunk by `scale` before it is put in
 //! place, so a large map does not need the full-size picture in memory.
 
@@ -13,7 +14,11 @@ use seihai_core::assets::Level;
 pub use seihai_core::assets::{gif::read_gif_rgba, read_png_rgba};
 use seihai_core::gmap::Gmap;
 
-use crate::preview::{paint_level, BoardView, Rgba, Sheet, TILE_PX};
+use crate::preview::{paint_level, paint_level_npcs, BoardView, Rgba, Sheet, TILE_PX};
+
+/// Where NPC images come from: an image by the name a level NPC gives
+/// (`block.png`), already decoded. `None` paints the board only.
+pub type NpcImages<'a, 'f> = Option<&'a mut (dyn FnMut(&str) -> Option<Rgba> + 'f)>;
 
 /// A level is 64 tiles a side.
 pub const LEVEL_TILES: u32 = 64;
@@ -53,6 +58,23 @@ impl OwnedSheet {
     }
 }
 
+/// A `.png`, `.gif` or `.mng` file's bytes (by their signature) as RGBA,
+/// for [`NpcImages`]. An MNG gives its first frame, as a still picture.
+pub fn decode_image(bytes: &[u8]) -> Option<Rgba> {
+    let (width, height, pixels) = if seihai_core::assets::gif::is_gif(bytes) {
+        read_gif_rgba(bytes).ok()?
+    } else if seihai_core::assets::is_mng(bytes) {
+        seihai_core::assets::mng::read_mng_rgba(bytes, &[]).ok()?
+    } else {
+        read_png_rgba(bytes).ok()?
+    };
+    Some(Rgba {
+        width,
+        height,
+        pixels,
+    })
+}
+
 /// Check a scale: 1, 2, 4, 8 or 16 (pixels per output pixel, each way).
 pub fn check_scale(scale: u32) -> Result<(), String> {
     if matches!(scale, 1 | 2 | 4 | 8 | 16) {
@@ -62,20 +84,26 @@ pub fn check_scale(scale: u32) -> Result<(), String> {
     }
 }
 
-/// The whole level, `LEVEL_PX / scale` a side.
-pub fn level_rgba(level: &Level, sheet: Sheet<'_>, scale: u32) -> Result<Rgba, String> {
+/// The whole level, `LEVEL_PX / scale` a side, and the NPC image names
+/// `npcs` could not load.
+pub fn level_rgba(
+    level: &Level,
+    sheet: Sheet<'_>,
+    scale: u32,
+    npcs: NpcImages<'_, '_>,
+) -> Result<(Rgba, Vec<String>), String> {
     check_scale(scale)?;
-    let full = paint_level(
-        level,
-        sheet,
-        BoardView {
-            origin_x: 0,
-            origin_y: 0,
-            width: LEVEL_PX,
-            height: LEVEL_PX,
-        },
-    );
-    Ok(shrink(&full, scale))
+    let view = BoardView {
+        origin_x: 0,
+        origin_y: 0,
+        width: LEVEL_PX,
+        height: LEVEL_PX,
+    };
+    let (full, missing) = match npcs {
+        Some(load) => paint_level_npcs(level, sheet, view, load),
+        None => (paint_level(level, sheet, view), Vec::new()),
+    };
+    Ok((shrink(&full, scale), missing))
 }
 
 /// Average `scale` by `scale` blocks. Alpha is averaged too, so a block
@@ -117,6 +145,8 @@ pub struct GmapReport {
     pub painted: usize,
     /// Named cells whose level `load` did not return.
     pub missing: Vec<String>,
+    /// NPC image names the image loader did not return, once each.
+    pub missing_images: Vec<String>,
 }
 
 /// The whole gmap, each level `LEVEL_PX / scale` a side, holes and missing
@@ -126,6 +156,7 @@ pub fn gmap_rgba(
     sheet: Sheet<'_>,
     scale: u32,
     mut load: impl FnMut(&str) -> Option<Level>,
+    mut npcs: NpcImages<'_, '_>,
 ) -> Result<(Rgba, GmapReport), String> {
     check_scale(scale)?;
     let cell = LEVEL_PX / scale;
@@ -153,7 +184,12 @@ pub fn gmap_rgba(
             report.missing.push(name.clone());
             continue;
         };
-        let tile = level_rgba(&level, sheet, scale)?;
+        let (tile, missing) = level_rgba(&level, sheet, scale, npcs.as_deref_mut())?;
+        for m in missing {
+            if !report.missing_images.contains(&m) {
+                report.missing_images.push(m);
+            }
+        }
         let (cx, cy) = (
             (i % gmap.width) as u32 * cell,
             (i / gmap.width) as u32 * cell,
@@ -208,16 +244,16 @@ mod tests {
             width: sw,
             height: sh,
         };
-        let full = level_rgba(&level, sheet, 1).unwrap();
+        let (full, _) = level_rgba(&level, sheet, 1, None).unwrap();
         assert_eq!((full.width, full.height), (1024, 1024));
         let red = full.pixel(0, 0).unwrap();
         let green = full.pixel(500, 500).unwrap();
         assert_ne!(red, green);
-        let small = level_rgba(&level, sheet, 16).unwrap();
+        let (small, _) = level_rgba(&level, sheet, 16, None).unwrap();
         assert_eq!((small.width, small.height), (64, 64));
         assert_eq!(small.pixel(0, 0), Some(red));
         assert_eq!(small.pixel(1, 0), Some(green));
-        assert!(level_rgba(&level, sheet, 3).is_err());
+        assert!(level_rgba(&level, sheet, 3, None).is_err());
     }
 
     #[test]
@@ -232,8 +268,14 @@ mod tests {
             "GRMAP001\nWIDTH 2\nHEIGHT 2\nLEVELNAMES\n\"a.nw\",\"\",\n\"gone.nw\",\"a.nw\",\nLEVELNAMESEND\n",
         )
         .unwrap();
-        let (img, report) =
-            gmap_rgba(&gmap, sheet, 16, |n| (n == "a.nw").then(|| level.clone())).unwrap();
+        let (img, report) = gmap_rgba(
+            &gmap,
+            sheet,
+            16,
+            |n| (n == "a.nw").then(|| level.clone()),
+            None,
+        )
+        .unwrap();
         assert_eq!((img.width, img.height), (128, 128));
         assert_eq!(report.painted, 2);
         assert_eq!(report.missing, vec!["gone.nw".to_string()]);
@@ -250,5 +292,47 @@ mod tests {
         let s = OwnedSheet::builtin().unwrap();
         assert!(s.width >= 512 && s.height >= 512);
         assert_eq!(s.rgb.len(), (s.width * s.height * 3) as usize);
+    }
+
+    #[test]
+    fn npc_images_are_drawn_on_the_board_and_missing_ones_named() {
+        let ((rgb, sw, sh), _) = sheet_and_level();
+        let sheet = Sheet {
+            rgb: &rgb,
+            width: sw,
+            height: sh,
+        };
+        let level = Level::parse(
+            "GLEVNW01\nNPC blue.png 2 3\nNPCEND\nNPC gone.png 5 5\nNPCEND\nNPC gone.png 6 6\nNPCEND\nNPC - 7 7\nNPCEND\n",
+        )
+        .unwrap();
+        let mut asked = Vec::new();
+        let mut load = |name: &str| {
+            asked.push(name.to_string());
+            (name == "blue.png").then(|| Rgba {
+                width: 2,
+                height: 2,
+                pixels: [0, 0, 255, 255].repeat(4),
+            })
+        };
+        let (img, missing) = level_rgba(&level, sheet, 1, Some(&mut load)).unwrap();
+        assert_eq!(img.pixel(32, 48), Some([0, 0, 255, 255]));
+        assert_eq!(img.pixel(34, 48).map(|p| p[3]), Some(0), "only 2 wide");
+        assert_eq!(missing, vec!["gone.png".to_string()]);
+        assert_eq!(asked, ["blue.png", "gone.png"], "each name once, no `-`");
+        let (plain, _) = level_rgba(&level, sheet, 1, None).unwrap();
+        assert_eq!(plain.pixel(32, 48).map(|p| p[3]), Some(0));
+    }
+
+    #[test]
+    fn decodes_png_and_gif_images() {
+        let png = png_bytes(&Rgba {
+            width: 1,
+            height: 1,
+            pixels: vec![1, 2, 3, 255],
+        })
+        .unwrap();
+        assert_eq!(decode_image(&png).unwrap().pixels, [1, 2, 3, 255]);
+        assert!(decode_image(b"nothing").is_none());
     }
 }

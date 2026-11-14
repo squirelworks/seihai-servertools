@@ -277,3 +277,36 @@ fn gif2mng_writes_a_png_or_an_mng() {
         d.path(),
     );
 }
+
+#[test]
+fn render_draws_npc_images_with_npcs() {
+    let d = tempfile::tempdir().unwrap();
+    fs::create_dir(d.path().join("art")).unwrap();
+    // A 1 x 1 GIF of colour index 1 (red) stands in for the NPC's art.
+    fs::write(d.path().join("art/Rock.GIF"), gif(&[1])).unwrap();
+    fs::write(
+        d.path().join("a.nw"),
+        "GLEVNW01\nNPC rock.gif 1 1\nNPCEND\nNPC gone.png 2 2\nNPCEND\n",
+    )
+    .unwrap();
+    run(&["level", "render", "a.nw", "plain.png"], d.path());
+    let out = run(&["level", "render", "a.nw", "npcs.png", "--npcs"], d.path());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("missing image: gone.png"), "{stdout}");
+    assert!(!stdout.contains("rock.gif"), "{stdout}");
+    assert_ne!(
+        fs::read(d.path().join("plain.png")).unwrap(),
+        fs::read(d.path().join("npcs.png")).unwrap()
+    );
+
+    fs::write(
+        d.path().join("w.gmap"),
+        "GRMAP001\nWIDTH 1\nHEIGHT 1\nLEVELNAMES\n\"a.nw\",\nLEVELNAMESEND\n",
+    )
+    .unwrap();
+    let out = run(
+        &["gmap", "render", "w.gmap", "w.png", "--images", "art"],
+        d.path(),
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("missing image: gone.png"));
+}

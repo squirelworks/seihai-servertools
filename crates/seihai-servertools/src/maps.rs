@@ -16,11 +16,14 @@ level convert IN OUT.nw|OUT.graal|OUT.zelda
     and chests are kept; comments and a GR-V1.04 HEIGHTS block are not.
     A binary level has one layer, and a .zelda has no NPCs or chests and
     numbered link arrivals; what is dropped is printed as a warning.
-level render IN OUT.png [--sheet PNG] [--scale N]
+level render IN OUT.png [--sheet PNG] [--scale N] [--npcs] [--images DIR]
     Paints the level's board (every layer) to a PNG, 1024 pixels a side at
     --scale 1 (default), or 1024/N with N = 2, 4, 8 or 16. --sheet is the
-    tile sheet (default: Seihai's built-in pics1.png). NPC images, signs
-    and chests are not drawn.";
+    tile sheet (default: Seihai's built-in pics1.png). --npcs also draws
+    each visible level NPC's image (.png, .gif or .mng, first frame) at
+    its place, found by name in --images DIR (default: the level's folder
+    and below), any letter case. Signs, chests and NPCs drawn as a gani
+    are not drawn.";
 
 pub const GMAP_USAGE: &str = "\
 gmap make OUT.gmap --width N LEVEL...
@@ -34,8 +37,10 @@ gmap make OUT.gmap --links DIR START
     linked world on one grid.
     Each prints the grid size and what it could not place.
 gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
+           [--npcs] [--images DIR]
     Paints every level of the gmap into one PNG. Levels are looked up in
-    --dir (default: the gmap's folder and below), any letter case.
+    --dir (default: the gmap's folder and below), any letter case. --npcs
+    and --images as for level render (images default to --dir).
     --scale defaults to 4 (256 pixels a level).";
 
 fn fail(cmd: &str, msg: impl std::fmt::Display) -> ExitCode {
@@ -52,6 +57,8 @@ struct Opts {
     names: Option<PathBuf>,
     links: bool,
     dir: Option<PathBuf>,
+    npcs: bool,
+    images: Option<PathBuf>,
 }
 
 fn parse(args: &[&str]) -> Result<Opts, String> {
@@ -64,6 +71,11 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
             "--dir" => o.dir = Some(value()?.into()),
             "--names" => o.names = Some(value()?.into()),
             "--links" => o.links = true,
+            "--npcs" => o.npcs = true,
+            "--images" => {
+                o.images = Some(value()?.into());
+                o.npcs = true;
+            }
             "--scale" => {
                 let v = value()?;
                 o.scale = Some(
@@ -181,9 +193,24 @@ fn convert(src: &Path, dst: &Path) -> Result<(), String> {
 fn render_level(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
     let level = read_level(src)?;
     let sheet = sheet(o)?;
-    let img = render::level_rgba(&level, sheet.sheet(), o.scale.unwrap_or(1))?;
+    let folder = src
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let images = image_index(o, folder);
+    let mut load = images.as_ref().map(image_loader);
+    let (img, missing) = render::level_rgba(
+        &level,
+        sheet.sheet(),
+        o.scale.unwrap_or(1),
+        load.as_mut()
+            .map(|f| f as &mut dyn FnMut(&str) -> Option<lat_core::preview::Rgba>),
+    )?;
     write(dst, &render::png_bytes(&img)?)?;
     println!("{}: {} by {}", dst.display(), img.width, img.height);
+    for name in &missing {
+        println!("  missing image: {name}");
+    }
     Ok(())
 }
 
@@ -216,6 +243,12 @@ pub fn run_gmap(args: &[&str]) -> ExitCode {
 /// Every level file under `dir` (and below), by lower-case file name. The
 /// first one found for a name wins.
 fn level_index(dir: &Path) -> HashMap<String, PathBuf> {
+    file_index(dir, &["nw", "graal", "zelda"])
+}
+
+/// Every file under `dir` (and below) whose extension is one of `exts`, by
+/// lower-case file name. The first one found for a name wins.
+fn file_index(dir: &Path, exts: &[&str]) -> HashMap<String, PathBuf> {
     let mut out = HashMap::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
@@ -227,7 +260,7 @@ fn level_index(dir: &Path) -> HashMap<String, PathBuf> {
         for p in entries {
             if p.is_dir() {
                 stack.push(p);
-            } else if matches!(extension(&p).as_str(), "nw" | "graal" | "zelda") {
+            } else if exts.contains(&extension(&p).as_str()) {
                 if let Some(name) = p.file_name() {
                     out.entry(name.to_string_lossy().to_ascii_lowercase())
                         .or_insert(p);
@@ -246,6 +279,27 @@ fn loader(
         index
             .get(&base.to_ascii_lowercase())
             .and_then(|p| read_level(p).ok())
+    }
+}
+
+/// NPC images for `--npcs`: every picture under `--images DIR`, or else
+/// under `default`, looked up by file name in any letter case.
+fn image_index(o: &Opts, default: &Path) -> Option<HashMap<String, PathBuf>> {
+    o.npcs.then(|| {
+        file_index(
+            o.images.as_deref().unwrap_or(default),
+            &["png", "gif", "mng"],
+        )
+    })
+}
+
+fn image_loader(
+    index: &HashMap<String, PathBuf>,
+) -> impl FnMut(&str) -> Option<lat_core::preview::Rgba> + '_ {
+    |name| {
+        let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        let bytes = std::fs::read(index.get(&base.to_ascii_lowercase())?).ok()?;
+        render::decode_image(&bytes)
     }
 }
 
@@ -291,12 +345,24 @@ fn render_gmap(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
     let dir = o
         .dir
         .clone()
-        .or_else(|| src.parent().map(Path::to_path_buf))
+        .or_else(|| {
+            src.parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(Path::to_path_buf)
+        })
         .unwrap_or_else(|| PathBuf::from("."));
     let index = level_index(&dir);
     let sheet = sheet(o)?;
-    let (img, report) =
-        render::gmap_rgba(&gmap, sheet.sheet(), o.scale.unwrap_or(4), loader(&index))?;
+    let images = image_index(o, &dir);
+    let mut load = images.as_ref().map(image_loader);
+    let (img, report) = render::gmap_rgba(
+        &gmap,
+        sheet.sheet(),
+        o.scale.unwrap_or(4),
+        loader(&index),
+        load.as_mut()
+            .map(|f| f as &mut dyn FnMut(&str) -> Option<lat_core::preview::Rgba>),
+    )?;
     write(dst, &render::png_bytes(&img)?)?;
     println!(
         "{}: {} by {}, {} levels painted",
@@ -307,6 +373,9 @@ fn render_gmap(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
     );
     for name in &report.missing {
         println!("  missing: {name}");
+    }
+    for name in &report.missing_images {
+        println!("  missing image: {name}");
     }
     Ok(())
 }
