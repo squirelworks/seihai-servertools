@@ -19,7 +19,7 @@
 //! | [`worldmap`] | Build a `.gmap` from a level list, generator-style names, or a linked world's edge links | working |
 //! | [`generate`] | Terrain, image-to-levels and dungeon worlds (TerrainGenerator, GraalLevelGen, the NW Dungeon Generator) | working |
 //! | [`anim`] | gif2mng: a GIF as a PNG (one frame) or an MNG animation | working |
-//! | [`levelfill`] | LevelFiller: scatter a `.nwt` theme's objects over levels; LFThemeMaker's patch themes | working; no border objects |
+//! | [`levelfill`] | LevelFiller: scatter a `.nwt` theme's objects over levels; LFThemeMaker's patch themes | working, with borders and neighbouring levels |
 //! | [`lfscript`] | LevelFiller's object language for complex theme objects | working |
 //! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job) | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
