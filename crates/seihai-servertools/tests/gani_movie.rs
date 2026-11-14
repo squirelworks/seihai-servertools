@@ -43,6 +43,10 @@ MOVIE
   ACTOR TEXT title
     FRAME 0 text=Hello
   ACTOREND
+
+  ACTOR CHAR hero
+    FRAME 0 ani=stand,body=sheet.png,dx=10,dy=4
+  ACTOREND
 MOVIEEND
 ";
 
@@ -56,11 +60,17 @@ fn shows_and_renders_a_movie() {
     )
     .unwrap();
     fs::write(dir.path().join("intro.gani"), MOVIE).unwrap();
+    // A one-step gani that draws one body cell, the same in every direction.
+    fs::write(
+        dir.path().join("pics/Stand.gani"),
+        "GANI0001\nSPRITE 0 BODY 0 0 1 1 b\nSINGLEDIRECTION\nANI\n0 0 0\nANIEND\n",
+    )
+    .unwrap();
 
     let out = run(&["gani", "movie", "show", "intro.gani"], dir.path());
     assert!(out.status.success());
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.starts_with("5 frames, 2 actors"), "{text}");
+    assert!(text.starts_with("5 frames, 3 actors"), "{text}");
     assert!(text.contains("SPRITE box (2 keyframes)"), "{text}");
     assert!(text.contains("  4 dx=8"), "{text}");
 
@@ -95,6 +105,9 @@ fn shows_and_renders_a_movie() {
     assert_eq!(at(5, 2), [255, 0, 0, 255]);
     assert_eq!(at(3, 1)[3], 0);
     assert_eq!(at(4, 0)[3], 0);
+    assert_eq!(at(10, 4), [255, 0, 0, 255], "the CHAR's body cell");
+    assert_eq!(at(11, 4)[3], 0);
+    assert!(err.contains("head0.png not found"), "{err}");
 
     // Past the timeline, and a plain gani, are refused.
     let out = run(
