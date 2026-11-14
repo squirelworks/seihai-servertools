@@ -418,3 +418,58 @@ fn level_fill_runs_across_a_gmap() {
     });
     assert!(crossed, "a log runs across the edge");
 }
+
+#[test]
+fn level_convert_goes_to_tiled_and_back() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(
+        d.path().join("a.nw"),
+        "GLEVNW01\nBOARD 0 0 2 0 ABAC\nLINK b.nw 0 0 1 64 61 playery\n",
+    )
+    .unwrap();
+    run(&["level", "convert", "a.nw", "a.tmx"], d.path());
+    let tmx = fs::read_to_string(d.path().join("a.tmx")).unwrap();
+    assert!(tmx.contains("<image source=\"pics1.png\""), "{tmx}");
+    run(&["level", "convert", "a.tmx", "b.nw"], d.path());
+    let back = fs::read_to_string(d.path().join("b.nw")).unwrap();
+    assert!(back.contains("LINK b.nw 0 0 1 64 61 playery"), "{back}");
+    assert!(back.contains("BOARD 0 0 64 0 ABAC"), "{back}");
+}
+
+#[test]
+fn invalid_tmx_does_not_replace_an_existing_level() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(d.path().join("bad.tmx"), "<map width=\"64\" height=\"64\">").unwrap();
+    let original = b"GLEVNW01\nBOARD 0 0 1 0 AB\n";
+    fs::write(d.path().join("keep.nw"), original).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_seihai-servertools"))
+        .args(["level", "convert", "bad.tmx", "keep.nw"])
+        .current_dir(d.path())
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert_eq!(fs::read(d.path().join("keep.nw")).unwrap(), original);
+}
+
+#[test]
+fn unsupported_tmx_layout_does_not_replace_an_existing_level() {
+    let d = tempfile::tempdir().unwrap();
+    let original = b"GLEVNW01\nBOARD 0 0 1 0 AB\n";
+    fs::write(d.path().join("keep.nw"), original).unwrap();
+    run(&["level", "convert", "keep.nw", "valid.tmx"], d.path());
+    let valid = fs::read_to_string(d.path().join("valid.tmx")).unwrap();
+    for bad in [
+        valid.replace("columns=\"128\"", "columns=\"64\""),
+        valid.replace("<layer ", "<layer offsetx=\"16\" "),
+        valid.replace("</map>", "<group offsety=\"16\"/></map>"),
+    ] {
+        fs::write(d.path().join("bad.tmx"), bad).unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_seihai-servertools"))
+            .args(["level", "convert", "bad.tmx", "keep.nw"])
+            .current_dir(d.path())
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        assert_eq!(fs::read(d.path().join("keep.nw")).unwrap(), original);
+    }
+}

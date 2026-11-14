@@ -32,7 +32,7 @@ Usage:
                                     resource packages (.gpak, .gpake) for 4.20 and 6.x
                                     clients (`gpak --help`)
   seihai-servertools level convert IN OUT.nw | render IN OUT.png [--sheet PNG] [--scale N]
-                                    convert .graal/.zelda levels, paint a level (`level --help`)
+                                    convert .graal/.zelda/.nw/Tiled .tmx levels, paint a level (`level --help`)
   seihai-servertools level fill THEME.nwt LEVEL... (--out DIR | --in-place) [--seed N]
                                     LevelFiller: scatter a theme's objects (`level fill --help`)
   seihai-servertools theme make RECIPE.tm OUT.nwt [--seed N]

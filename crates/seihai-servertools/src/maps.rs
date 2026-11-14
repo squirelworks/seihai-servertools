@@ -9,10 +9,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub const LEVEL_USAGE: &str = "\
-level convert IN OUT.nw|OUT.graal|OUT.zelda
+level convert IN OUT.nw|OUT.graal|OUT.zelda|OUT.tmx [--sheet PNG]
     Reads a .nw (GLEVNW01), .graal (GR-V1) or .zelda (Z3-V1) level, chosen
-    by the file's first bytes, and writes the format OUT's extension names:
-    GLEVNW01 text, GR-V1.03 or Z3-V1.04. Board, links, signs, baddies, NPCs
+    by the file's first bytes, or a Tiled .tmx map, and writes the format
+    OUT's extension names: GLEVNW01 text, GR-V1.03, Z3-V1.04 or a Tiled
+    map (one 16-pixel tile layer per board layer on the tile sheet --sheet
+    names, default pics1.png beside the map; links, signs, NPCs, baddies
+    and chests as objects carrying their level lines in an nw property).
+    A .tmx is read back from its CSV layers and those nw properties. Board, links, signs, baddies, NPCs
     and chests are kept; comments and a GR-V1.04 HEIGHTS block are not.
     A binary level has one layer, and a .zelda has no NPCs or chests and
     numbered link arrivals; what is dropped is printed as a warning.
@@ -130,7 +134,7 @@ pub fn run_level(args: &[&str]) -> ExitCode {
         }
     };
     let result = match (cmd, o.plain.as_slice()) {
-        ("convert", [src, dst]) => convert(Path::new(src), Path::new(dst)),
+        ("convert", [src, dst]) => convert(Path::new(src), Path::new(dst), &o),
         ("render", [src, dst]) => render_level(Path::new(src), Path::new(dst), &o),
         _ => return usage(LEVEL_USAGE),
     };
@@ -151,23 +155,40 @@ fn extension(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn convert(src: &Path, dst: &Path) -> Result<(), String> {
+fn convert(src: &Path, dst: &Path, o: &Opts) -> Result<(), String> {
     use lat_core::level::BinaryLevel;
     let format = match extension(dst).as_str() {
         "nw" => None,
-        "graal" => Some(BinaryLevel::Graal),
-        "zelda" => Some(BinaryLevel::Zelda),
+        "graal" => Some(Some(BinaryLevel::Graal)),
+        "zelda" => Some(Some(BinaryLevel::Zelda)),
+        "tmx" => Some(None),
         _ => {
             return Err(format!(
-                "{}: the output must end in .nw, .graal or .zelda",
+                "{}: the output must end in .nw, .graal, .zelda or .tmx",
                 dst.display()
             ))
         }
     };
-    let level = read_level(src)?;
+    let level = if extension(src) == "tmx" {
+        let bytes = std::fs::read(src).map_err(|e| format!("{}: {e}", src.display()))?;
+        let (level, warnings) = lat_core::tmx::from_tmx(&String::from_utf8_lossy(&bytes))
+            .map_err(|e| format!("{}: {e}", src.display()))?;
+        for w in warnings {
+            eprintln!("level: {}: {w}", src.display());
+        }
+        level
+    } else {
+        read_level(src)?
+    };
     let bytes = match format {
         None => lat_core::level::encode(&level),
-        Some(f) => {
+        Some(None) => {
+            let sheet = o.sheet.as_ref().map_or("pics1.png".to_string(), |p| {
+                p.to_string_lossy().into_owned()
+            });
+            lat_core::tmx::to_tmx(&level, &sheet).into_bytes()
+        }
+        Some(Some(f)) => {
             let (bytes, warnings) = lat_core::level::encode_binary(&level, f);
             for w in warnings {
                 eprintln!("level: {}: {w}", dst.display());

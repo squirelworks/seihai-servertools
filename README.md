@@ -40,7 +40,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Resource packages: build a `.gpak` / encrypted `.gpake` for a gserver folder ([notes](docs/design/gpak.md)) | `seihai-servertools gpak pack\|unpack`, `gui --page packages` | working |
 | Client `.code` caches (`GWEBL001`, `GRESCR01`) | `seihai-servertools code show\|crc\|dump\|pack` | working |
 | World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts, packages |
-| Level convert: `.graal` / `.zelda` / `.nw`, either way | `seihai-servertools level convert` | working |
+| Level convert: `.graal` / `.zelda` / `.nw`, either way, and Tiled `.tmx` (NW2TMX's job) | `seihai-servertools level convert` | working |
 | gif2mng: GIF to PNG or MNG animation | `seihai-servertools gif2mng` | working (`-b` partial) |
 | GraalShop movie mode (`GANI0002`): list actors, paint a timeline frame; movies survive a gani save | `seihai-servertools gani movie show\|render` | working (SPRITE, CHAR and TEXT actors drawn) |
 | Level and gmap pictures (NW2PNG's job) | `seihai-servertools level render`, `gmap render` | working (board and NPC images with `--npcs`) |
