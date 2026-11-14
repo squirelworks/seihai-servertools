@@ -5,6 +5,7 @@
 mod code;
 mod gpak;
 mod lab;
+mod maps;
 mod setup;
 
 use std::path::Path;
@@ -27,6 +28,11 @@ Usage:
   seihai-servertools gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --server DIR]
                                     resource packages (.gpak, .gpake) for 4.20 and 6.x
                                     clients (`gpak --help`)
+  seihai-servertools level convert IN OUT.nw | render IN OUT.png [--sheet PNG] [--scale N]
+                                    convert .graal/.zelda levels, paint a level (`level --help`)
+  seihai-servertools gmap make OUT.gmap (--width N LEVEL... | --names DIR | --links DIR START)
+  seihai-servertools gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
+                                    build a gmap from levels, paint a whole gmap (`gmap --help`)
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
@@ -87,6 +93,16 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["gpak", rest @ ..] => gpak::run(rest),
+        ["level", "--help" | "-h"] => {
+            println!("{}", maps::LEVEL_USAGE);
+            ExitCode::SUCCESS
+        }
+        ["level", rest @ ..] => maps::run_level(rest),
+        ["gmap", "--help" | "-h"] => {
+            println!("{}", maps::GMAP_USAGE);
+            ExitCode::SUCCESS
+        }
+        ["gmap", rest @ ..] => maps::run_gmap(rest),
         ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");
