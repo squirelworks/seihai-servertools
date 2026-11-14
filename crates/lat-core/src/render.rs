@@ -453,4 +453,70 @@ mod tests {
         assert!(builtin_gani("idle.gani").is_some());
         assert!(builtin_png("bodies/body.png").is_some());
     }
+
+    #[test]
+    fn a_quoted_setani_stays_an_image_npc() {
+        let ((rgb, sw, sh), _) = sheet_and_level();
+        let small = Sheet {
+            rgb: &rgb,
+            width: sw,
+            height: sh,
+        };
+        let body = [0u8, 255, 0];
+        let pics = GaniPics {
+            body: Some(Sheet {
+                rgb: &body,
+                width: 1,
+                height: 1,
+            }),
+            ..GaniPics::default()
+        };
+        let gani = "SPRITE 0 BODY 0 0 1 1\nSINGLEDIRECTION\nANI\n0 2 3\nANIEND\n";
+        let level = Level::parse(
+            "GLEVNW01\n\
+             NPC pic.png 2 2\nmessage \"please setani walk, now\";\nNPCEND\n\
+             NPC pic.png 4 4\nsetani walk;\nNPCEND\n\
+             NPC stand.gani 1 1\nmessage \"setani run\";\nNPCEND\n",
+        )
+        .unwrap();
+        let mut asked = Vec::new();
+        let mut load_gani = |name: &str| {
+            asked.push(name.to_string());
+            Some(seihai_core::assets::Gani::parse(gani).unwrap())
+        };
+        let mut load_img = |name: &str| {
+            (name == "pic.png").then(|| Rgba {
+                width: 1,
+                height: 1,
+                pixels: vec![0, 0, 255, 255],
+            })
+        };
+        let (img, missing) = level_rgba(
+            &level,
+            small,
+            1,
+            Some(&mut load_img),
+            Some(&mut load_gani),
+            pics,
+        )
+        .unwrap();
+        assert_eq!(
+            img.pixel(32, 32),
+            Some([0, 0, 255, 255]),
+            "setani inside a message stays the image"
+        );
+        assert_eq!(img.pixel(34, 35).map(|p| p[3]), Some(0));
+        assert_eq!(
+            img.pixel(66, 67),
+            Some([0, 255, 0, 255]),
+            "a real setani still draws"
+        );
+        assert_eq!(
+            img.pixel(18, 19),
+            Some([0, 255, 0, 255]),
+            "a .gani image still draws"
+        );
+        assert!(missing.is_empty(), "{missing:?}");
+        assert_eq!(asked, ["walk.gani", "stand.gani"]);
+    }
 }

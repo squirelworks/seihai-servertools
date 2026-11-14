@@ -7,6 +7,8 @@
 
 use seihai_core::assets::{Gani, Level};
 use seihai_core::npcart;
+use seihai_core::scripting::engine::ast::{Arg, Stmt};
+use seihai_core::scripting::engine::{self, Era};
 use seihai_draw::ab_glyph::FontVec;
 use seihai_draw::{Align, Image, PixelBuffer, SpriteSheets, TextStyle};
 
@@ -161,10 +163,11 @@ pub fn paint_level_npcs(
 /// Chests are a 2×2 blit. A chest whose x or y is outside 0 to 62 is
 /// skipped. Signs are a 2×1 outline with the first line of text, except a
 /// sign at (0, 0). `images` draws an NPC's picture. `ganis` draws an NPC
-/// whose image is a `.gani`, or whose script text names `showcharacter`,
-/// `setcharani` or `setani` (the script is not run; `idle` when
-/// `showcharacter` names nothing). Names `images` or `ganis` could not
-/// load come back, once each.
+/// whose image is a `.gani`, or whose script has a literal `showcharacter`,
+/// `setcharani` or `setani` (`idle` when `showcharacter` names nothing).
+/// That read is not a GS1 run: a command inside a string or comment is not
+/// drawn, and a name built at runtime is not drawn. Names `images` or
+/// `ganis` could not load come back, once each.
 pub fn paint_scene<'i, 'il, 'g, 'gl>(
     level: &Level,
     sheet: Sheet<'_>,
@@ -325,53 +328,136 @@ fn draw_npcs<'i, 'il, 'g, 'gl>(
 
 /// The gani file an NPC is shown as, when it has one.
 ///
-/// `ani` wins (a script that already ran). Otherwise the first
-/// `setcharani` or `setani` word in the script text, then an image whose
-/// name ends in `.gani`, then `idle.gani` when the script says
-/// `showcharacter` and names nothing. Words after `//` are ignored. This
-/// does not run the script.
+/// `ani` wins (a script that already ran). Otherwise the first literal
+/// `setcharani` or `setani`, then an image whose name ends in `.gani`,
+/// then `idle.gani` when a literal `showcharacter` names nothing.
+///
+/// The commands are the ones `seihai-core`'s GS1 parser reports. This is a
+/// read of those three commands, not a script run: a command inside a
+/// string or a comment is not one of them, and a name built at runtime is
+/// not drawn.
 fn gani_file(npc: &seihai_core::assets::Npc) -> Option<String> {
     if let Some(ani) = npc.ani.as_deref().and_then(npcart::ani_name) {
         return Some(format!("{}.gani", npcart::ani_file(&ani)));
     }
-    let tokens = script_words(&npc.script);
-    let mut named = None;
-    let mut character = false;
-    for (i, word) in tokens.iter().enumerate() {
-        if word.eq_ignore_ascii_case("showcharacter") {
-            character = true;
-        } else if word.eq_ignore_ascii_case("setcharani") || word.eq_ignore_ascii_case("setani") {
-            character = true;
-            if named.is_none() {
-                named = tokens.get(i + 1).and_then(|s| npcart::ani_name(s));
-            }
-        }
-    }
-    if let Some(name) = named {
+    let found = literal_ani_commands(&npc.script);
+    if let Some(name) = found.named {
         return Some(format!("{}.gani", npcart::ani_file(&name)));
     }
     let image = npc.image.trim();
     if image.len() > 5 && image.to_ascii_lowercase().ends_with(".gani") {
         return Some(image.to_string());
     }
-    character.then(|| "idle.gani".to_string())
+    found.character.then(|| "idle.gani".to_string())
 }
 
-/// Words of a script, with `//` comments and the punctuation around a
-/// command removed. Not a GS1 parse.
-fn script_words(script: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in script.lines() {
-        let line = line.split("//").next().unwrap_or("");
-        for word in line
-            .split(|c: char| c.is_whitespace() || matches!(c, '{' | '}' | ';' | ',' | '(' | ')'))
-        {
-            if !word.is_empty() {
-                out.push(word.to_string());
+/// Literal `showcharacter`, `setcharani` and `setani` commands in `script`.
+///
+/// The pinned `seihai-core` exposes its GS1 parser (`engine::parse`) and
+/// the same era the NPC check uses. The GS2 lexer, which is the one that
+/// tokenises both quote styles itself, is not public in that tag, so this
+/// does not call it and does not reimplement a parser. A command hidden in
+/// a `"` string, a `'` string, a `//` comment or a `/* */` comment is not
+/// reported, because the parser does not make it one of these commands.
+/// A name that is not a single literal (a `#` code, or a join with `@`) is
+/// left out: this is not a script run.
+struct LiteralAni {
+    named: Option<String>,
+    character: bool,
+}
+
+fn literal_ani_commands(script: &str) -> LiteralAni {
+    let parsed = engine::parse(script, Era::V217);
+    let mut found = LiteralAni {
+        named: None,
+        character: false,
+    };
+    for stmt in &parsed.body {
+        note_ani_stmt(stmt, &mut found);
+    }
+    found
+}
+
+fn note_ani_stmt(stmt: &Stmt, found: &mut LiteralAni) {
+    match stmt {
+        Stmt::Block(body) | Stmt::Function { body, .. } => {
+            for stmt in body {
+                note_ani_stmt(stmt, found);
             }
         }
+        Stmt::If { then, els, .. } => {
+            note_ani_stmt(then, found);
+            if let Some(els) = els {
+                note_ani_stmt(els, found);
+            }
+        }
+        Stmt::While { body, .. } | Stmt::With { body, .. } => note_ani_stmt(body, found),
+        Stmt::For {
+            init, step, body, ..
+        } => {
+            for stmt in [init, step].into_iter().flatten() {
+                note_ani_stmt(stmt, found);
+            }
+            note_ani_stmt(body, found);
+        }
+        Stmt::Command { name, args, .. } => note_ani_command(name, args, found),
+        _ => {}
     }
-    out
+}
+
+fn note_ani_command(name: &str, args: &[Arg], found: &mut LiteralAni) {
+    if name.eq_ignore_ascii_case("showcharacter") {
+        found.character = true;
+        return;
+    }
+    if !name.eq_ignore_ascii_case("setani") && !name.eq_ignore_ascii_case("setcharani") {
+        return;
+    }
+    let Some(Arg::Text(text)) = args.first() else {
+        found.character = true;
+        return;
+    };
+    if text.trim().is_empty() {
+        found.character = true;
+        return;
+    }
+    if let Some(ani) = literal_ani_name(text) {
+        found.character = true;
+        if found.named.is_none() {
+            found.named = Some(ani);
+        }
+    }
+}
+
+/// The animation file stem in a command argument, when it is one literal
+/// name. Surrounding `"` or `'` quotes, and one pair of parentheses, are
+/// the argument's own spelling (`setani "walk"`, `setani 'walk'`). A `#`
+/// code or an `@` join is a name built at runtime.
+fn literal_ani_name(text: &str) -> Option<String> {
+    let mut text = text.trim();
+    if text.len() >= 2 && text.starts_with('(') && text.ends_with(')') {
+        text = text[1..text.len() - 1].trim();
+    }
+    if text.len() >= 2 {
+        let bytes = text.as_bytes();
+        let quote = bytes[0];
+        if (quote == b'"' || quote == b'\'') && bytes[bytes.len() - 1] == quote {
+            text = text[1..text.len() - 1].trim();
+        }
+    }
+    if text.is_empty() || text.contains(['#', '@']) {
+        return None;
+    }
+    let name = npcart::ani_name(text)?;
+    let stem = npcart::ani_file(&name);
+    if stem.is_empty()
+        || !stem
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+    {
+        return None;
+    }
+    Some(name)
 }
 
 /// Paint one gani frame with `seihai-draw`.
@@ -439,5 +525,86 @@ fn fill_tile(rgb: &mut [u8], width: u32, col: u32, row: u32, colour: [u8; 3]) {
                 slot.copy_from_slice(&colour);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gani_file;
+    use seihai_core::assets::Npc;
+
+    fn chosen(image: &str, script: &str) -> Option<String> {
+        gani_file(&Npc::new(image.into(), 1.0, 1.0, script.into()))
+    }
+
+    #[test]
+    fn quoted_and_commented_commands_do_not_change_the_picture() {
+        // A command inside either quote style is not a command. An image
+        // NPC stays an image NPC.
+        assert_eq!(
+            chosen("pic.png", r#"message "please setani walk, now";"#),
+            None
+        );
+        assert_eq!(
+            chosen("pic.png", r#"message "please showcharacter now";"#),
+            None
+        );
+        assert_eq!(
+            chosen("pic.png", "message 'please setani walk, now';"),
+            None
+        );
+        assert_eq!(
+            chosen("pic.png", "message 'please showcharacter now';"),
+            None
+        );
+        // `//` inside a string is not a comment, so the command after it
+        // still names a gani. A real comment hides the rest of its line.
+        assert_eq!(
+            chosen("pic.png", "message \"see // setani walk\";\nsetani stand;"),
+            Some("stand.gani".into())
+        );
+        assert_eq!(chosen("pic.png", "// setani walk\n// showcharacter"), None);
+        assert_eq!(
+            chosen("pic.png", "/* setani walk */ /* showcharacter */"),
+            None
+        );
+        assert_eq!(
+            chosen("pic.png", "setani walk; // setani run"),
+            Some("walk.gani".into())
+        );
+        // A real command, including a quoted animation name, still draws.
+        assert_eq!(chosen("pic.png", "setani walk;"), Some("walk.gani".into()));
+        assert_eq!(
+            chosen("pic.png", "setcharani stand,;"),
+            Some("stand.gani".into())
+        );
+        assert_eq!(
+            chosen("pic.png", "showcharacter;"),
+            Some("idle.gani".into())
+        );
+        assert_eq!(
+            chosen("pic.png", "if (playerenters) { setani walk; }"),
+            Some("walk.gani".into())
+        );
+        assert_eq!(
+            chosen("pic.png", "setani \"walk\";"),
+            Some("walk.gani".into())
+        );
+        assert_eq!(
+            chosen("pic.png", "setani 'walk';"),
+            Some("walk.gani".into())
+        );
+        assert_eq!(
+            chosen("pic.png", "setani(\"walk\");"),
+            Some("walk.gani".into())
+        );
+        assert_eq!(chosen("pic.png", "setani;"), Some("idle.gani".into()));
+        assert_eq!(
+            chosen("stand.gani", r#"message "please setani walk, now";"#),
+            Some("stand.gani".into())
+        );
+        // A name built at runtime is not a file we can draw.
+        assert_eq!(chosen("pic.png", "setani #s(name);"), None);
+        assert_eq!(chosen("pic.png", r#"setani "wa" @ "lk";"#), None);
     }
 }

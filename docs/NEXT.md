@@ -101,10 +101,13 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       is the 2×2 record (closed or open, magenta left out; x and y only
       from 0 to 62). A sign is a 2×1 mark with its first line, except a
       sign at (0, 0), which is index-only. `--npcs` also draws an NPC
-      whose image is a `.gani`, or whose script text says `showcharacter`,
-      `setcharani` or `setani` (`idle` when that names nothing), through
-      `seihai-draw`. The script is not run. Tests only; not a claim that
-      the mark matches the in-game sign letters.
+      whose image is a `.gani`, or whose script has a literal
+      `showcharacter`, `setcharani` or `setani` (`idle` when that names
+      nothing), through `seihai-draw`. The picture is not a GS1 run: it
+      reads those three commands from the pinned parser, so a command
+      inside a string or a comment is not drawn, and a name built at
+      runtime is not drawn. Tests only; not a claim of native fidelity,
+      and not a claim that the sign mark matches the in-game letters.
 - [x] GraalShop movie mode (#78): `gani movie show|render`
       (`lat-core::movie`) on seihai-core 0.2.9's `GANI0002` model; the gani
       editor keeps the movie on save. SPRITE actors are painted at dx, dy

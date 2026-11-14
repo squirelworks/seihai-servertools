@@ -30,9 +30,11 @@ level render IN OUT.png [--sheet PNG] [--scale N] [--npcs] [--images DIR]
     0 to 62 is skipped. A sign is a 2 by 1 mark with its first line, except
     a sign at 0,0, which is not drawn. --npcs also draws each visible level
     NPC: an image (.png, .gif or .mng, first frame), or a gani when the
-    image ends in .gani or the script text says showcharacter, setcharani
-    or setani (idle when showcharacter names nothing; the script is not
-    run). Files are found by name in --images DIR (default: the level's
+    image ends in .gani or the script has a literal showcharacter,
+    setcharani or setani (idle when showcharacter names nothing). That
+    read is not a GS1 run: a command inside a quote or a comment is not
+    drawn, and a name built at runtime is not drawn. Files are found by
+    name in --images DIR (default: the level's
     folder and below), any letter case; body.png and head0.png fall back
     to Seihai's built-in pictures, and a stock gani such as idle.gani too.";
 
