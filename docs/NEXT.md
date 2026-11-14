@@ -55,6 +55,33 @@ session that built the setup did not do them:
       `files/`), and a plain `.gpak` when `allowedversions.txt` may let in
       4.20r8. Tests only; no lab run of the page yet.
 
+## Offline LAT chain (`lat-core::{worldmap,render}`)
+
+The classic converters, map makers, viewers and generators in Rust. Tool
+coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
+
+- [x] `level convert IN OUT.nw`: `.graal` and `.zelda` to `GLEVNW01`
+      (TextConvert, GRAALtoNWconverter, nw-converter).
+- [x] `level render` and `gmap render`: the board as PNG, a gmap in one
+      picture with `--scale` (NW2PNG, graalmapview, the level viewers).
+- [x] `gmap make`: a grid from a list, from generator-style names, or by
+      walking a linked world's edge links (Graal Map Maker, MapGenerator).
+- [ ] Write `.graal` (GR-V1.03) and `.zelda` (Z3-V1.04): a binary writer
+      and sign encoder in seihai-core first, then bump the tag here.
+- [x] Generators (`gen terrain|image|dungeon`, `lat-core::generate`), from
+      the behaviour notes: a height field with `HEIGHTS` blocks, levels
+      from a picture in the twelve GraalLevelGen colours, a dungeon from an
+      `X`/`.` layout or a seeded maze. Not byte-for-byte the originals.
+- [ ] Dungeon styles beyond the maze (onion, spiral, rogue, snake), NPC
+      and `TILES` blocks from `dungeonoptions.txt`, and GraalLevelGen's
+      water, mountain and sand edge pieces (not described yet).
+- [ ] gif2mng and GIF/PNG batch conversion (Assimilator).
+- [ ] Draw NPC images, signs and chests in `render`.
+- [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
+      pages from seihai-gserver accounts, gserverstat's modes that the
+      accounts can fill (no bomb power or online time yet); no passwords,
+      no account names, load-only accounts skipped.
+
 ## Client caches (`lat-core::code_cache`, `docs/design/code-caches.md`)
 
 - [x] Issue #37 `code show|crc|dump|pack` for `GWEBL001` level caches and

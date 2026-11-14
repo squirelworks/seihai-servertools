@@ -40,6 +40,11 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Resource packages: build a `.gpak` / encrypted `.gpake` for a gserver folder ([notes](docs/design/gpak.md)) | `seihai-servertools gpak pack\|unpack`, `gui --page packages` | working |
 | Client `.code` caches (`GWEBL001`, `GRESCR01`) | `seihai-servertools code show\|crc\|dump\|pack` | working |
 | World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts, packages |
+| Level convert: `.graal` / `.zelda` to `.nw` | `seihai-servertools level convert` | working (`.nw` output) |
+| Level and gmap pictures (NW2PNG's job) | `seihai-servertools level render`, `gmap render` | working (board only) |
+| Gmap from levels: a list, generator names, or a linked world's edge links | `seihai-servertools gmap make` | working |
+| World generators: height field, from a picture, dungeon | `seihai-servertools gen terrain\|image\|dungeon` | working |
+| Leaderboard pages from seihai-gserver accounts (gserverstat's job) | `seihai-servertools stats` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
 The level editor here is for staff editing a live server. The Seihai

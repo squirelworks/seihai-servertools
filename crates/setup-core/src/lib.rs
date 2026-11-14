@@ -14,6 +14,7 @@
 //! | [`profile`] | Key tables, detect, Back to lab, apply the public answers | working |
 //! | [`checks`] | Safety check and the combinations the wizard refuses | working |
 //! | [`lights`] | The three "Start and check" lights, read from a gserver console | working |
+//! | [`stats`] | Leaderboard pages from a seihai-gserver world's accounts (gserverstat's job) | working |
 //! | [`net`] | "Test connection" and the "Listen on" address list (working); opt-in UPnP (planned) | partly |
 //!
 //! The plan for each module is in `docs/ARCHITECTURE.md` and the order of
@@ -31,3 +32,4 @@ pub mod net;
 pub mod profile;
 pub mod run;
 pub mod stamp;
+pub mod stats;

@@ -3,8 +3,10 @@
 //! place that prints or reads the environment (see docs/ARCHITECTURE.md).
 
 mod code;
+mod generate;
 mod gpak;
 mod lab;
+mod maps;
 mod setup;
 
 use std::path::Path;
@@ -27,6 +29,18 @@ Usage:
   seihai-servertools gpak unpack PACKAGE DIR [--key HEX16 | --keys FILE | --server DIR]
                                     resource packages (.gpak, .gpake) for 4.20 and 6.x
                                     clients (`gpak --help`)
+  seihai-servertools level convert IN OUT.nw | render IN OUT.png [--sheet PNG] [--scale N]
+                                    convert .graal/.zelda levels, paint a level (`level --help`)
+  seihai-servertools gmap make OUT.gmap (--width N LEVEL... | --names DIR | --links DIR START)
+  seihai-servertools gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
+                                    build a gmap from levels, paint a whole gmap (`gmap --help`)
+  seihai-servertools gen terrain|image|dungeon ...
+                                    generate a world: height field, from a picture, or a
+                                    dungeon from a layout or maze (`gen --help`)
+  seihai-servertools stats ACCOUNTS OUTDIR [MODE...]
+                                    leaderboard pages (kills, deaths, rupees, highap, lowap,
+                                    maxpower, power, arrows, bombs, glovepower, swordpower,
+                                    shieldpower; default all) from seihai-gserver accounts
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
@@ -87,6 +101,22 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["gpak", rest @ ..] => gpak::run(rest),
+        ["level", "--help" | "-h"] => {
+            println!("{}", maps::LEVEL_USAGE);
+            ExitCode::SUCCESS
+        }
+        ["level", rest @ ..] => maps::run_level(rest),
+        ["gmap", "--help" | "-h"] => {
+            println!("{}", maps::GMAP_USAGE);
+            ExitCode::SUCCESS
+        }
+        ["gmap", rest @ ..] => maps::run_gmap(rest),
+        ["gen", "--help" | "-h"] => {
+            println!("{}", generate::USAGE);
+            ExitCode::SUCCESS
+        }
+        ["gen", rest @ ..] => generate::run(rest),
+        ["stats", accounts, out, modes @ ..] => stats(accounts, out, modes),
         ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");
@@ -251,6 +281,48 @@ fn json_str(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// `stats ACCOUNTS OUTDIR [MODE...]`: one `<mode>.html` per mode.
+fn stats(accounts: &str, out: &str, modes: &[&str]) -> ExitCode {
+    use setup_core::stats;
+    let chosen: Vec<stats::Mode> = if modes.is_empty() {
+        stats::MODES.to_vec()
+    } else {
+        let mut v = Vec::new();
+        for m in modes {
+            match stats::mode(m) {
+                Some(m) => v.push(m),
+                None => {
+                    eprintln!("stats: unknown mode {m}");
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        v
+    };
+    let entries = match stats::read_accounts(Path::new(accounts)) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("stats: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(e) = std::fs::create_dir_all(out) {
+        eprintln!("stats: {out}: {e}");
+        return ExitCode::FAILURE;
+    }
+    for m in chosen {
+        let path = Path::new(out).join(format!("{}.html", m.name));
+        let html = stats::page(m, &stats::rank(&entries, m));
+        if let Err(e) = std::fs::write(&path, html) {
+            eprintln!("stats: {}: {e}", path.display());
+            return ExitCode::FAILURE;
+        }
+        println!("{}", path.display());
+    }
+    println!("{} accounts ranked", entries.len());
+    ExitCode::SUCCESS
 }
 
 #[cfg(feature = "gui")]
