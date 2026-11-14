@@ -16,6 +16,8 @@ path = "src/lib.rs"
 seihai-core.workspace = true
 # Tile and gani RGBA. Same commit as seihai-core (see the workspace note).
 seihai-draw.workspace = true
+# Ubuntu Light, the default font of movie TEXT actors (movie.rs).
+epaint_default_fonts.workspace = true
 # Live file link. The editor does not speak RC itself.
 seihai-rc.workspace = true
 # .gpak/.gpake packages (gpak.rs).

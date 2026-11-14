@@ -23,8 +23,8 @@ publish = false
 # seihai-core and seihai-draw both live in squirelworks/seihai-core and are
 # tagged together, so one tag pins both and a Level or Gani from the parser
 # is the same type seihai-draw paints.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.2.9", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.2.9" }
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", rev = "9e529ed", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", rev = "9e529ed" }
 # RC file link: list_dir, get_file, put_file. seihai-rc dd10322 (#45). It
 # still pins seihai-core v0.1.0, so until seihai-rc moves to 0.2.x the build
 # carries two cores; no seihai-core type crosses into seihai-rc. No rc tag yet.
@@ -32,6 +32,9 @@ seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "dd103226
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
 egui = "0.29"
+# The default font of movie TEXT actors (Ubuntu Light, already in the tree
+# through egui).
+epaint_default_fonts = "0.29"
 ctrlc = "3"
 # Edits seihai-listserver.toml keeping comments, order and unknown keys.
 toml_edit = "0.22"
