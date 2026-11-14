@@ -76,9 +76,10 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
 - [ ] Dungeon styles beyond the maze (onion, spiral, rogue, snake), NPC
       and `TILES` blocks from `dungeonoptions.txt`, and GraalLevelGen's
       water, mountain and sand edge pieces (not described yet).
-- [ ] gif2mng and GIF/PNG batch conversion (Assimilator): the MNG writer
-      is in seihai-core 0.2.3; a reader for every GIF frame, with its
-      palette and delay, goes there next.
+- [x] `gif2mng [-b] GIF...` (`lat-core::anim`): one frame to PNG, more to
+      MNG, through seihai-core 0.2.5's frame reader and MNG writer.
+- [ ] gif2mng `-b`'s seven body colour slots (RGB not described yet; `-b`
+      only makes index 2 transparent), and Assimilator's batch modes.
 - [ ] Draw NPC images, signs and chests in `render`.
 - [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
       pages from seihai-gserver accounts, gserverstat's modes that the

@@ -41,6 +41,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Client `.code` caches (`GWEBL001`, `GRESCR01`) | `seihai-servertools code show\|crc\|dump\|pack` | working |
 | World and config checker | `seihai-servertools check WORLD` | parse, links, images and sounds, NPC scripts, packages |
 | Level convert: `.graal` / `.zelda` / `.nw`, either way | `seihai-servertools level convert` | working |
+| gif2mng: GIF to PNG or MNG animation | `seihai-servertools gif2mng` | working (`-b` partial) |
 | Level and gmap pictures (NW2PNG's job) | `seihai-servertools level render`, `gmap render` | working (board only) |
 | Gmap from levels: a list, generator names, or a linked world's edge links | `seihai-servertools gmap make` | working |
 | World generators: height field, from a picture, dungeon | `seihai-servertools gen terrain\|image\|dungeon` | working |
