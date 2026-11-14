@@ -185,7 +185,11 @@ pub fn height_field(
         }
         // Square: the edge midpoints.
         for y in (0..n).step_by(half) {
-            let start = if (y / half).is_multiple_of(2) { half } else { 0 };
+            let start = if (y / half).is_multiple_of(2) {
+                half
+            } else {
+                0
+            };
             for x in (start..n).step_by(step) {
                 if even_borders && rim(x, y) {
                     f[y][x] = f64::from(base);

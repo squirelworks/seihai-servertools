@@ -185,3 +185,20 @@ fn generators_write_worlds_that_read_back() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("2 levels painted"));
 }
+
+#[test]
+fn stats_pages_rank_accounts_without_passwords() {
+    let d = tempfile::tempdir().unwrap();
+    let acc = d.path().join("accounts");
+    fs::create_dir(&acc).unwrap();
+    fs::write(
+        acc.join("alice.txt"),
+        "SEIHAIACC 1\nPASSWORD pbkdf2-sha256:1:aa:bb\nNICK Alice\nKILLS 5\n",
+    )
+    .unwrap();
+    fs::write(acc.join("bob.txt"), "SEIHAIACC 1\nNICK Bob\nKILLS 9\n").unwrap();
+    run(&["stats", "accounts", "out", "kills"], d.path());
+    let html = fs::read_to_string(d.path().join("out/kills.html")).unwrap();
+    assert!(html.find("Bob").unwrap() < html.find("Alice").unwrap());
+    assert!(!html.contains("pbkdf2") && !html.contains("alice"));
+}

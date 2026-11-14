@@ -37,6 +37,10 @@ Usage:
   seihai-servertools gen terrain|image|dungeon ...
                                     generate a world: height field, from a picture, or a
                                     dungeon from a layout or maze (`gen --help`)
+  seihai-servertools stats ACCOUNTS OUTDIR [MODE...]
+                                    leaderboard pages (kills, deaths, rupees, highap, lowap,
+                                    maxpower, power, arrows, bombs, glovepower, swordpower,
+                                    shieldpower; default all) from seihai-gserver accounts
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
@@ -112,6 +116,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["gen", rest @ ..] => generate::run(rest),
+        ["stats", accounts, out, modes @ ..] => stats(accounts, out, modes),
         ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");
@@ -276,6 +281,48 @@ fn json_str(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// `stats ACCOUNTS OUTDIR [MODE...]`: one `<mode>.html` per mode.
+fn stats(accounts: &str, out: &str, modes: &[&str]) -> ExitCode {
+    use setup_core::stats;
+    let chosen: Vec<stats::Mode> = if modes.is_empty() {
+        stats::MODES.to_vec()
+    } else {
+        let mut v = Vec::new();
+        for m in modes {
+            match stats::mode(m) {
+                Some(m) => v.push(m),
+                None => {
+                    eprintln!("stats: unknown mode {m}");
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        v
+    };
+    let entries = match stats::read_accounts(Path::new(accounts)) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("stats: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(e) = std::fs::create_dir_all(out) {
+        eprintln!("stats: {out}: {e}");
+        return ExitCode::FAILURE;
+    }
+    for m in chosen {
+        let path = Path::new(out).join(format!("{}.html", m.name));
+        let html = stats::page(m, &stats::rank(&entries, m));
+        if let Err(e) = std::fs::write(&path, html) {
+            eprintln!("stats: {}: {e}", path.display());
+            return ExitCode::FAILURE;
+        }
+        println!("{}", path.display());
+    }
+    println!("{} accounts ranked", entries.len());
+    ExitCode::SUCCESS
 }
 
 #[cfg(feature = "gui")]

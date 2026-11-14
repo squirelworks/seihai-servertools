@@ -77,6 +77,10 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       water, mountain and sand edge pieces (not described yet).
 - [ ] gif2mng and GIF/PNG batch conversion (Assimilator).
 - [ ] Draw NPC images, signs and chests in `render`.
+- [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
+      pages from seihai-gserver accounts, gserverstat's modes that the
+      accounts can fill (no bomb power or online time yet); no passwords,
+      no account names, load-only accounts skipped.
 
 ## Client caches (`lat-core::code_cache`, `docs/design/code-caches.md`)
 
