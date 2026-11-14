@@ -99,8 +99,11 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       (`lat-core::movie`) on seihai-core 0.2.9's `GANI0002` model; the gani
       editor keeps the movie on save. SPRITE actors are painted at dx, dy
       in pixels, by layer.
-- [ ] Movie mode: paint CHAR actors (a player through a gani) and TEXT
-      actors; confirm GraalShop's dx/dy unit from a saved `GANI0002` file;
+- [x] Movie mode: CHAR actors painted as a player through their `ani`
+      gani, facing `dir`, with the head, body, sword, shield and attr
+      pictures their keys name.
+- [ ] Movie mode: TEXT actors (fonts), a CHAR's colours, chat, horse and
+      params; confirm GraalShop's dx/dy unit from a saved `GANI0002` file;
       a movie page in the gani editor.
 - [x] `stats ACCOUNTS OUTDIR [MODE...]` (`setup-core::stats`): leaderboard
       pages from seihai-gserver accounts, gserverstat's modes that the

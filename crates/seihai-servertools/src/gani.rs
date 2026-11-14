@@ -15,10 +15,12 @@ gani movie show FILE [--frame N]
     dx and dy move in a straight line between keyframes).
 gani movie render FILE OUT.png [--frame N] [--size WxH] [--images DIR]
     Paints timeline frame N (default 0) to a PNG, WxH pixels (default
-    640x480). SPRITE actors are drawn from the gani's sprite table, at dx,
-    dy in pixels, lower layer first; sprite sheets are found by name in
-    --images DIR (default: the gani's folder and below), any letter case.
-    CHAR and TEXT actors are not drawn yet and are listed.";
+    640x480). SPRITE actors are drawn from the gani's sprite table and CHAR
+    actors as a player through their ani gani (default idle, facing dir,
+    with the head, body, sword, shield and attr pictures their keys name),
+    at dx, dy in pixels, lower layer first. Pictures and ganis are found by
+    name in --images DIR (default: the gani's folder and below), any letter
+    case. TEXT actors, and a CHAR's colours and chat, are not drawn yet.";
 
 #[derive(Default)]
 struct Opts {
@@ -148,21 +150,26 @@ fn render_frame(path: &Path, out: &Path, o: &Opts) -> Result<(), String> {
         Some(p) if !p.as_os_str().is_empty() => p,
         _ => Path::new("."),
     };
-    let index = crate::maps::file_index(
-        o.images.as_deref().unwrap_or(folder),
-        &["png", "gif", "mng"],
-    );
+    let root = o.images.as_deref().unwrap_or(folder);
+    let index = crate::maps::file_index(root, &["png", "gif", "mng"]);
+    let ganis = crate::maps::file_index(root, &["gani"]);
+    let load_gani = |name: &str| {
+        let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        let bytes = std::fs::read(ganis.get(&base.to_ascii_lowercase())?).ok()?;
+        GaniDoc::open(&bytes).ok().map(|d| d.gani().clone())
+    };
     let frame = lat_core::movie::paint_frame(
         doc.gani(),
         movie,
         t,
         o.size.unwrap_or((640, 480)),
         crate::maps::image_loader(&index),
+        load_gani,
     );
     let png = render::png_bytes(&frame.image)?;
     std::fs::write(out, png).map_err(|e| format!("{}: {e}", out.display()))?;
     for m in &frame.missing {
-        eprintln!("warning: sprite sheet {m} not found");
+        eprintln!("warning: {m} not found");
     }
     for s in &frame.skipped {
         eprintln!("note: {s}");
