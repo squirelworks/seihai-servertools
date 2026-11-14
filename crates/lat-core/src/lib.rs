@@ -18,6 +18,7 @@
 //! | [`gifcopy`] | GIF copies of PNG art for pre-2.1 clients (`check --make-gif`, opt-in) | working |
 //! | [`worldmap`] | Build a `.gmap` from a level list, generator-style names, or a linked world's edge links | working |
 //! | [`generate`] | Terrain, image-to-levels and dungeon worlds (TerrainGenerator, GraalLevelGen, the NW Dungeon Generator) | working |
+//! | [`anim`] | gif2mng: a GIF as a PNG (one frame) or an MNG animation | working |
 //! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job) | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
@@ -25,6 +26,7 @@
 //! pinned in the workspace `Cargo.toml`. Do not write a second level or
 //! gani parser, and do not copy the drawing (`docs/ARCHITECTURE.md`).
 
+pub mod anim;
 pub mod check;
 pub mod code_cache;
 pub mod diff;

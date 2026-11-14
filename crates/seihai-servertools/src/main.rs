@@ -41,6 +41,9 @@ Usage:
                                     leaderboard pages (kills, deaths, rupees, highap, lowap,
                                     maxpower, power, arrows, bombs, glovepower, swordpower,
                                     shieldpower; default all) from seihai-gserver accounts
+  seihai-servertools gif2mng [-b] [--out DIR] [--force] GIF...
+                                    each GIF as a .png (one frame) or .mng animation beside
+                                    it or in DIR; -b makes palette index 2 transparent
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
@@ -117,6 +120,7 @@ fn main() -> ExitCode {
         }
         ["gen", rest @ ..] => generate::run(rest),
         ["stats", accounts, out, modes @ ..] => stats(accounts, out, modes),
+        ["gif2mng", rest @ ..] => gif2mng(rest),
         ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");
@@ -284,6 +288,75 @@ fn json_str(s: &str) -> String {
 }
 
 /// `stats ACCOUNTS OUTDIR [MODE...]`: one `<mode>.html` per mode.
+fn gif2mng(args: &[&str]) -> ExitCode {
+    let (mut body, mut force, mut out, mut gifs) = (false, false, None, Vec::new());
+    let mut it = args.iter();
+    while let Some(&a) = it.next() {
+        match a {
+            "-b" => body = true,
+            "--force" => force = true,
+            "--out" => match it.next() {
+                Some(d) => out = Some(Path::new(*d)),
+                None => {
+                    eprintln!("gif2mng: --out needs a folder");
+                    return ExitCode::from(2);
+                }
+            },
+            s if s.starts_with('-') => {
+                eprintln!("gif2mng: unknown option {s}\n{USAGE}");
+                return ExitCode::from(2);
+            }
+            s => gifs.push(Path::new(s)),
+        }
+    }
+    if gifs.is_empty() {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    }
+    let mut failed = false;
+    for gif in gifs {
+        let result = std::fs::read(gif)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| lat_core::anim::gif_to_anim(&bytes, body))
+            .and_then(|anim| {
+                let name = gif.with_extension(anim.extension);
+                let dst = match out {
+                    Some(dir) => {
+                        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+                        dir.join(name.file_name().unwrap_or_default())
+                    }
+                    None => name,
+                };
+                if dst.exists() && !force {
+                    return Err(format!(
+                        "{} already exists (use --force to replace)",
+                        dst.display()
+                    ));
+                }
+                std::fs::write(&dst, &anim.bytes).map_err(|e| e.to_string())?;
+                println!(
+                    "{} -> {}: {} by {}, {} frame{}",
+                    gif.display(),
+                    dst.display(),
+                    anim.width,
+                    anim.height,
+                    anim.frames,
+                    if anim.frames == 1 { "" } else { "s" }
+                );
+                Ok(())
+            });
+        if let Err(e) = result {
+            eprintln!("gif2mng: {}: {e}", gif.display());
+            failed = true;
+        }
+    }
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
 fn stats(accounts: &str, out: &str, modes: &[&str]) -> ExitCode {
     use setup_core::stats;
     let chosen: Vec<stats::Mode> = if modes.is_empty() {
