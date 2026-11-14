@@ -141,3 +141,47 @@ fn a_linked_world_becomes_a_gmap_and_renders() {
         "{gmap}"
     );
 }
+
+#[test]
+fn generators_write_worlds_that_read_back() {
+    let d = tempfile::tempdir().unwrap();
+    run(
+        &[
+            "gen",
+            "terrain",
+            "t",
+            "--world",
+            "isle",
+            "--size",
+            "2x1",
+            "--islands",
+        ],
+        d.path(),
+    );
+    let gmap = fs::read_to_string(d.path().join("t/isle.gmap")).unwrap();
+    assert!(gmap.contains("\"isleA00.nw\",\"isleB00.nw\","), "{gmap}");
+    let lvl = fs::read_to_string(d.path().join("t/isleA00.nw")).unwrap();
+    assert!(lvl.contains("HEIGHTS\n") && lvl.contains("LINK isleB00.nw 63 0 1 64 0 playery"));
+    let again = Command::new(env!("CARGO_BIN_EXE_seihai-servertools"))
+        .args(["gen", "terrain", "t", "--world", "isle", "--size", "2x1"])
+        .current_dir(d.path())
+        .output()
+        .unwrap();
+    assert!(
+        !again.status.success(),
+        "refuses to replace without --force"
+    );
+
+    fs::write(d.path().join("l.txt"), "XXXXXXXXX\nX.......X\nXXXXXXXXX\n").unwrap();
+    run(
+        &[
+            "gen", "dungeon", "d", "--start", "cave_", "--layout", "l.txt",
+        ],
+        d.path(),
+    );
+    let out = run(
+        &["gmap", "render", "d/cave_.gmap", "d.png", "--scale", "16"],
+        d.path(),
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("2 levels painted"));
+}

@@ -43,6 +43,7 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 | Level convert: `.graal` / `.zelda` to `.nw` | `seihai-servertools level convert` | working (`.nw` output) |
 | Level and gmap pictures (NW2PNG's job) | `seihai-servertools level render`, `gmap render` | working (board only) |
 | Gmap from levels: a list, generator names, or a linked world's edge links | `seihai-servertools gmap make` | working |
+| World generators: height field, from a picture, dungeon | `seihai-servertools gen terrain\|image\|dungeon` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
 The level editor here is for staff editing a live server. The Seihai

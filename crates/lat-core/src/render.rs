@@ -9,6 +9,8 @@
 
 use seihai_core::assets::read_png_rgb;
 use seihai_core::assets::Level;
+/// Picture readers for the generators' input (`gen image`).
+pub use seihai_core::assets::{gif::read_gif_rgba, read_png_rgba};
 use seihai_core::gmap::Gmap;
 
 use crate::preview::{paint_level, BoardView, Rgba, Sheet, TILE_PX};

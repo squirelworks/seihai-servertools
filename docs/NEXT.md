@@ -68,7 +68,13 @@ coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
       walking a linked world's edge links (Graal Map Maker, MapGenerator).
 - [ ] Write `.graal` (GR-V1.03) and `.zelda` (Z3-V1.04): a binary writer
       and sign encoder in seihai-core first, then bump the tag here.
-- [ ] Generators: terrain, dungeon, image-to-levels (`gen ...`).
+- [x] Generators (`gen terrain|image|dungeon`, `lat-core::generate`), from
+      the behaviour notes: a height field with `HEIGHTS` blocks, levels
+      from a picture in the twelve GraalLevelGen colours, a dungeon from an
+      `X`/`.` layout or a seeded maze. Not byte-for-byte the originals.
+- [ ] Dungeon styles beyond the maze (onion, spiral, rogue, snake), NPC
+      and `TILES` blocks from `dungeonoptions.txt`, and GraalLevelGen's
+      water, mountain and sand edge pieces (not described yet).
 - [ ] gif2mng and GIF/PNG batch conversion (Assimilator).
 - [ ] Draw NPC images, signs and chests in `render`.
 

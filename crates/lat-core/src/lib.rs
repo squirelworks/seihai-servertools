@@ -17,6 +17,7 @@
 //! | [`npc`] | NPC scripts: the GS1 check of level NPCs, used by [`check`] and the NPC editor page; NPC-server objects are planned | level NPCs working |
 //! | [`gifcopy`] | GIF copies of PNG art for pre-2.1 clients (`check --make-gif`, opt-in) | working |
 //! | [`worldmap`] | Build a `.gmap` from a level list, generator-style names, or a linked world's edge links | working |
+//! | [`generate`] | Terrain, image-to-levels and dungeon worlds (TerrainGenerator, GraalLevelGen, the NW Dungeon Generator) | working |
 //! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job) | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
@@ -28,6 +29,7 @@ pub mod check;
 pub mod code_cache;
 pub mod diff;
 pub mod gani;
+pub mod generate;
 pub mod gifcopy;
 pub mod gpak;
 pub mod level;

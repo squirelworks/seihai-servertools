@@ -3,6 +3,7 @@
 //! place that prints or reads the environment (see docs/ARCHITECTURE.md).
 
 mod code;
+mod generate;
 mod gpak;
 mod lab;
 mod maps;
@@ -33,6 +34,9 @@ Usage:
   seihai-servertools gmap make OUT.gmap (--width N LEVEL... | --names DIR | --links DIR START)
   seihai-servertools gmap render IN.gmap OUT.png [--dir DIR] [--sheet PNG] [--scale N]
                                     build a gmap from levels, paint a whole gmap (`gmap --help`)
+  seihai-servertools gen terrain|image|dungeon ...
+                                    generate a world: height field, from a picture, or a
+                                    dungeon from a layout or maze (`gen --help`)
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
@@ -103,6 +107,11 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["gmap", rest @ ..] => maps::run_gmap(rest),
+        ["gen", "--help" | "-h"] => {
+            println!("{}", generate::USAGE);
+            ExitCode::SUCCESS
+        }
+        ["gen", rest @ ..] => generate::run(rest),
         ["gui", rest @ ..] => gui(rest),
         _ => {
             eprintln!("{USAGE}");
