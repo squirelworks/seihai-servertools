@@ -127,6 +127,14 @@ impl RemoteFiles for LocalFolder {
     }
 
     fn put(&mut self, path: &str, data: &[u8]) -> io::Result<()> {
+        // Windows replacement can fail with ACCESS_DENIED when two saves
+        // replace the same destination concurrently. Serialize in-process
+        // saves through resolution and replacement; other processes remain
+        // outside this guarantee. Each save still owns its unique temp file.
+        #[cfg(windows)]
+        static SAVES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        #[cfg(windows)]
+        let _save = SAVES.lock().unwrap_or_else(|e| e.into_inner());
         safe_relative(path)?;
         fs::create_dir_all(&self.root)?;
         let target = self.resolve(path)?;
@@ -201,6 +209,14 @@ impl RemoteFiles for RcFiles {
     }
 
     fn put(&mut self, path: &str, data: &[u8]) -> io::Result<()> {
+        // Windows replacement can fail with ACCESS_DENIED when two saves
+        // replace the same destination concurrently. Serialize in-process
+        // saves through resolution and replacement; other processes remain
+        // outside this guarantee. Each save still owns its unique temp file.
+        #[cfg(windows)]
+        static SAVES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        #[cfg(windows)]
+        let _save = SAVES.lock().unwrap_or_else(|e| e.into_inner());
         self.session
             .put_file(path, data, RC_TIMEOUT)
             .map_err(io_file)
@@ -396,27 +412,29 @@ mod tests {
 
     #[test]
     fn concurrent_saves_use_independent_temporary_files() {
-        let dir = tempfile::tempdir().unwrap();
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
-        let jobs: Vec<_> = (*b"ab")
-            .into_iter()
-            .map(|byte| {
-                let root = dir.path().to_path_buf();
-                let barrier = barrier.clone();
-                std::thread::spawn(move || {
-                    let mut f = LocalFolder::new(root);
-                    let data = vec![byte; 65536];
-                    barrier.wait();
-                    f.put("same.txt", &data).unwrap();
+        for _ in 0..32 {
+            let dir = tempfile::tempdir().unwrap();
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let jobs: Vec<_> = (*b"ab")
+                .into_iter()
+                .map(|byte| {
+                    let root = dir.path().to_path_buf();
+                    let barrier = barrier.clone();
+                    std::thread::spawn(move || {
+                        let mut f = LocalFolder::new(root);
+                        let data = vec![byte; 65536];
+                        barrier.wait();
+                        f.put("same.txt", &data).unwrap();
+                    })
                 })
-            })
-            .collect();
-        for job in jobs {
-            job.join().unwrap();
+                .collect();
+            for job in jobs {
+                job.join().unwrap();
+            }
+            let saved = fs::read(dir.path().join("same.txt")).unwrap();
+            assert!(saved == vec![b'a'; 65536] || saved == vec![b'b'; 65536]);
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
         }
-        let saved = fs::read(dir.path().join("same.txt")).unwrap();
-        assert!(saved == vec![b'a'; 65536] || saved == vec![b'b'; 65536]);
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[cfg(any(unix, windows))]
