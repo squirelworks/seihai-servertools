@@ -61,6 +61,8 @@ session that built the setup did not do them:
 
 The classic converters, map makers, viewers and generators in Rust. Tool
 coverage and ranking: Graal_analysis `tools/tools-coverage-2026-11-14.md`.
+Remaining classic jobs after that landing wave:
+`docs/design/classic-offline-gaps.md` (2026-11-16).
 
 - [x] `level convert IN OUT.nw`: `.graal` and `.zelda` to `GLEVNW01`
       (TextConvert, GRAALtoNWconverter, nw-converter).
