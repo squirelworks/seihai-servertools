@@ -125,17 +125,21 @@ thousands of fake gservers, or load large account files. For those, use:
 ```
 python3 scripts/lab/listserver-hard.py --bin path/to/seihai-listserver \
     --out out/ls-hard --label main \
-    --only flood,slowloris,malformed,login,ramp,accounts
+    --only flood,slowloris,malformed,login,ramp,accounts,buddies
 ```
 
 `--only` selects scenarios. `ramp` registers many synthetic gservers with
 heartbeats and player-count updates (raise `max_connections` inside the
 script's lab TOML). `accounts` seeds synthetic argon2 rows (one PHC
-reused). Older listserver tags that reject newer config keys need
-`LS_LEGACY_CONFIG=1`. Loopback only; keep `out/` out of the repo.
+reused; set `SEIHAI_LAB_PASSWORD` in the environment — never commit the
+value). `buddies` writes a synthetic buddy TSV plus a `[guilds]` table and
+measures startup / RSS. Older listserver tags that reject newer config keys
+need `LS_LEGACY_CONFIG=1` (skip `buddies` on those tags). Loopback only;
+keep `out/` out of the repo.
 
 ## Rules
 
-Loopback only (`check_loopback`). Lab accounts and the lab password are
-placeholders; the gserver makes each account on its first login. Keep
-`out/` folders out of the repo.
+Loopback only (`check_loopback`). Lab accounts and passwords come from the
+environment (`SEIHAI_LAB_PASSWORD` / `--password-env`); do not put password
+literals, lab home paths, or Share paths in the repo. The gserver makes
+suite-stress accounts on first login. Keep `out/` folders out of the repo.
