@@ -44,6 +44,9 @@ session that built the setup did not do them:
       file-probe tail the bots added.
 - [ ] The 1000-player mixed-version run, once the suite parts are further
       along (Squirrel, 2026-11-04: a later side project).
+- [x] Listserver hard scenarios past suite defaults (flood / slowloris /
+      malformed / login storm / gserver ramp / large synthetic accounts):
+      `scripts/lab/listserver-hard.py`, noted in `docs/lab/suite-stress.md`.
 
 ## Resource packages (`lat-core::gpak`, `docs/design/gpak.md`)
 
