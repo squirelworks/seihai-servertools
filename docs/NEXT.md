@@ -3,6 +3,8 @@
 Work in this order, one branch and pull request each. Tick the box in the
 same PR. Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`.
 
+Shared core and drawing dependencies are paired at published v0.4.0. Its new exhaustive GS1 Era::V140 variant exposes registration evidence only; tools retain their explicit V217 script checks and make no native 1.40 argument/effect/timing claim. PARAM1 preservation and Windows LocalFolder save serialization remain in place.
+
 ## Handed to the team (Squirrel, 2026-10-31)
 
 Squirrel left these for the other agents (Cursor, Grok, Chiaki); the Claude
