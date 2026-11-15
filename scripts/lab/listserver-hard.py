@@ -10,10 +10,15 @@ listserver-focused cases that those bots do not cover:
   login       — parallel shape-B list logins
   ramp        — many fake gservers with heartbeats and player-count updates
   accounts    — synthetic argon2 account files (hash once, reuse PHC)
+  buddies     — synthetic buddy TSV + [guilds] TOML load (startup / RSS)
 
 Synthetic traffic only, on 127.0.0.1. Writes metrics JSON under --out.
 Keep out/ folders out of the repo. Set LS_LEGACY_CONFIG=1 for older tags
 that reject newer config keys.
+
+Passwords never appear as literals here: open-mode logins use an empty
+password; the accounts scenario reads SEIHAI_LAB_PASSWORD from the
+environment (same as suite-stress).
 """
 
 from __future__ import annotations
@@ -32,6 +37,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 LOOP = "127.0.0.1"
+
+# Lab password for hashed-account scenarios only. Never hardcode a value.
+LAB_PASSWORD_ENV = "SEIHAI_LAB_PASSWORD"
+
+
+def lab_password() -> bytes:
+    value = os.environ.get(LAB_PASSWORD_ENV)
+    if not value:
+        raise SystemExit(
+            f"{LAB_PASSWORD_ENV} must be set for hashed-account scenarios "
+            "(export it in the shell; do not commit the value)"
+        )
+    return value.encode()
 
 
 def gchar(n: int) -> int:
@@ -98,7 +116,15 @@ def sample_proc(pid: int) -> dict:
     return out
 
 
-def start_ls(bin_path: Path, work: Path, max_conn: int, accounts: str = "", extra: dict | None = None) -> tuple[subprocess.Popen, int, int]:
+def start_ls(
+    bin_path: Path,
+    work: Path,
+    max_conn: int,
+    accounts: str = "",
+    extra: dict | None = None,
+    buddies: str = "",
+    guilds_toml: str = "",
+) -> tuple[subprocess.Popen, int, int]:
     work.mkdir(parents=True, exist_ok=True)
     # pick free ports
     def free_port() -> int:
@@ -112,13 +138,15 @@ def start_ls(bin_path: Path, work: Path, max_conn: int, accounts: str = "", extr
     cport = free_port()
     toml = work / "seihai-listserver.toml"
     legacy = os.environ.get("LS_LEGACY_CONFIG") == "1"
+    # Paths in the generated lab TOML stay under --out (never commit out/).
+    log_name = "listserver.log"
     lines = [
         f'bind = "{LOOP}"',
         f"gserver_port = {gport}",
         f"client_ports = [{cport}]",
         'list_name = "hard-stress"',
         f'accounts = "{accounts}"',
-        f'log_file = "{work / "listserver.log"}"',
+        f'log_file = "{log_name}"',
         f"max_connections = {max_conn}",
         "client_timeout_secs = 30",
         "gserver_timeout_secs = 300",
@@ -132,13 +160,18 @@ def start_ls(bin_path: Path, work: Path, max_conn: int, accounts: str = "", extr
             "gserver_ping_secs = 5",
             'machines = ""',
             'profiles = ""',
-            'buddies = ""',
+            f'buddies = "{buddies}"',
             'data = ""',
         ])
     if extra:
         for k, v in extra.items():
             lines.append(f"{k} = {v}")
-    toml.write_text("\n".join(lines) + "\n")
+    body = "\n".join(lines) + "\n"
+    if guilds_toml:
+        body += "\n" + guilds_toml
+        if not guilds_toml.endswith("\n"):
+            body += "\n"
+    toml.write_text(body)
     log = open(work / "console.log", "w")  # noqa: SIM115
     proc = subprocess.Popen(
         [str(bin_path), "--config", str(toml)],
@@ -166,10 +199,14 @@ def start_ls(bin_path: Path, work: Path, max_conn: int, accounts: str = "", extr
 def shape_a_login(
     cport: int,
     account: bytes | None = b"bot",
-    password: bytes = b"pw",
+    password: bytes = b"",
     timeout: float = 5.0,
 ) -> tuple[float, int, bool]:
-    """Shape A (id0 only) or B (id0+id1) in one zlib frame. Returns (ms, bytes_in, ok)."""
+    """Shape A (id0 only) or B (id0+id1) in one zlib frame. Returns (ms, bytes_in, ok).
+
+    Default password is empty: open-mode listservers accept any value. For
+    hashed accounts, pass the bytes from lab_password().
+    """
     t0 = time.perf_counter()
     s = socket.create_connection((LOOP, cport), timeout=timeout)
     s.settimeout(timeout)
@@ -537,18 +574,16 @@ def scenario_login_storm(bin_path: Path, out: Path, n: int = 500, workers: int =
     }
 
 
-def make_accounts(path: Path, n: int, password: bytes = b"labpw") -> dict:
+def make_accounts(path: Path, n: int) -> dict:
     """Seed synthetic accounts file. Hash once, reuse PHC for all rows."""
-    # Use listserver binary's add-account for one hash, or argon2 via hashlib? Prefer calling binary.
-    # Generate with a tiny Rust-less approach: invoke `seihai-listserver add-account` once then replicate.
+    password = lab_password()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".one")
     if tmp.exists():
         tmp.unlink()
-    # caller passes bin via env
     bin_path = Path(os.environ["LS_BIN"])
     env = os.environ.copy()
-    env["SEIHAI_LAB_PASSWORD"] = password.decode()
+    env[LAB_PASSWORD_ENV] = password.decode()
     subprocess.check_call(
         [
             str(bin_path),
@@ -556,7 +591,7 @@ def make_accounts(path: Path, n: int, password: bytes = b"labpw") -> dict:
             str(tmp),
             "seed0",
             "--password-env",
-            "SEIHAI_LAB_PASSWORD",
+            LAB_PASSWORD_ENV,
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -571,36 +606,79 @@ def make_accounts(path: Path, n: int, password: bytes = b"labpw") -> dict:
     write_s = time.perf_counter() - t0
     size = path.stat().st_size
     tmp.unlink(missing_ok=True)
-    return {"n": n, "path": str(path), "bytes": size, "write_secs": round(write_s, 3), "phc_reused": True}
+    # Report basename only — never absolute lab paths in metrics JSON.
+    return {
+        "n": n,
+        "file": path.name,
+        "bytes": size,
+        "write_secs": round(write_s, 3),
+        "phc_reused": True,
+    }
+
+
+def make_buddies(path: Path, n_accounts: int, buddies_each: int = 5) -> dict:
+    """Write synthetic buddies TSV: account\\tbuddy\\t… (one line per account)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+    with path.open("w") as f:
+        for i in range(n_accounts):
+            pals = "\t".join(f"pal{(i + j + 1) % n_accounts}" for j in range(buddies_each))
+            f.write(f"acc{i}\t{pals}\n")
+    return {
+        "buddy_accounts": n_accounts,
+        "buddies_each": buddies_each,
+        "file": path.name,
+        "buddy_write_secs": round(time.perf_counter() - t0, 3),
+        "bytes": path.stat().st_size,
+    }
+
+
+def make_guilds_toml(n_guilds: int, members_each: int = 20) -> tuple[str, dict]:
+    """Build a [guilds] TOML table with synthetic member accounts."""
+    lines = ["[guilds]"]
+    for g in range(n_guilds):
+        members = ", ".join(f'"acc{g * members_each + m}"' for m in range(members_each))
+        lines.append(f'"g{g}" = [{members}]')
+    text = "\n".join(lines) + "\n"
+    return text, {"guilds": n_guilds, "members_each": members_each}
 
 
 def scenario_large_accounts(bin_path: Path, out: Path, sizes: list[int]) -> dict:
     os.environ["LS_BIN"] = str(bin_path)
+    password = lab_password()
     steps = []
     for n in sizes:
         work = out / f"accounts-{n}"
         work.mkdir(parents=True, exist_ok=True)
         acc = work / "accounts.txt"
         seed = make_accounts(acc, n)
-        # startup / load
+        # Relative path from the listserver cwd (work/run).
+        acc_rel = "../accounts.txt"
         t0 = time.perf_counter()
-        proc, gport, cport = start_ls(bin_path, work / "run", max_conn=256, accounts=str(acc))
+        proc, _gport, cport = start_ls(
+            bin_path, work / "run", max_conn=256, accounts=acc_rel
+        )
         start_s = time.perf_counter() - t0
-        # wait until log mentions account count or just probe
         time.sleep(0.2)
         samp0 = sample_proc(proc.pid)
-        # lookup existing + missing
         t_ok = []
         t_miss = []
         for i in range(30):
             try:
-                ms, _, ok = shape_a_login(cport, account=f"acc{i}".encode(), password=b"labpw", timeout=30)
+                ms, _, ok = shape_a_login(
+                    cport, account=f"acc{i}".encode(), password=password, timeout=30
+                )
                 if ok:
                     t_ok.append(ms)
             except OSError:
                 pass
             try:
-                ms, _, ok = shape_a_login(cport, account=f"missing{i}".encode(), password=b"labpw", timeout=30)
+                ms, _, ok = shape_a_login(
+                    cport,
+                    account=f"missing{i}".encode(),
+                    password=password,
+                    timeout=30,
+                )
                 t_miss.append(ms)
             except OSError:
                 pass
@@ -628,6 +706,56 @@ def scenario_large_accounts(bin_path: Path, out: Path, sizes: list[int]) -> dict
     return {"scenario": "large_account_stores", "steps": steps}
 
 
+def scenario_buddy_guild(
+    bin_path: Path,
+    out: Path,
+    buddy_accounts: int = 50_000,
+    buddies_each: int = 5,
+    guilds: int = 5_000,
+    members_each: int = 20,
+) -> dict:
+    """Seed large buddy + guild stores and measure listserver startup / RSS."""
+    if os.environ.get("LS_LEGACY_CONFIG") == "1":
+        return {
+            "scenario": "buddy_guild_stores",
+            "skipped": True,
+            "reason": "buddies/guilds settings need a current listserver (unset LS_LEGACY_CONFIG)",
+        }
+    work = out / "buddy-guild"
+    work.mkdir(parents=True, exist_ok=True)
+    buddies_path = work / "buddies.tsv"
+    buddy_meta = make_buddies(buddies_path, buddy_accounts, buddies_each=buddies_each)
+    guilds_text, guild_meta = make_guilds_toml(guilds, members_each=members_each)
+    (work / "guilds-fragment.toml").write_text(guilds_text)
+
+    t0 = time.perf_counter()
+    proc, _gport, _cport = start_ls(
+        bin_path,
+        work / "run",
+        max_conn=256,
+        buddies="../buddies.tsv",
+        guilds_toml=guilds_text,
+    )
+    start_s = time.perf_counter() - t0
+    time.sleep(0.2)
+    samp = sample_proc(proc.pid)
+    proc.terminate()
+    try:
+        proc.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+    result = {
+        "scenario": "buddy_guild_stores",
+        **buddy_meta,
+        **guild_meta,
+        "startup_secs": round(start_s, 3),
+        "rss_kib": samp.get("rss_kib"),
+    }
+    (out / "buddy-guild.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, type=Path)
@@ -635,13 +763,18 @@ def main():
     ap.add_argument("--label", default="main")
     ap.add_argument(
         "--only",
-        default="flood,slowloris,malformed,login,ramp,accounts",
+        default="flood,slowloris,malformed,login,ramp,accounts,buddies",
         help="comma scenarios",
     )
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     only = {x.strip() for x in args.only.split(",") if x.strip()}
-    report = {"label": args.label, "bin": args.bin.name, "started": time.time(), "results": []}
+    report = {
+        "label": args.label,
+        "bin": args.bin.name,
+        "started": time.time(),
+        "results": [],
+    }
 
     if "flood" in only:
         report["results"].append(scenario_flood_max(args.bin, args.out, max_conn=32))
@@ -663,12 +796,25 @@ def main():
         )
     if "accounts" in only:
         # 1M may be large; do 100k then 1M if disk/time allow
-        report["results"].append(scenario_large_accounts(args.bin, args.out, sizes=[100_000, 1_000_000]))
+        report["results"].append(
+            scenario_large_accounts(args.bin, args.out, sizes=[100_000, 1_000_000])
+        )
+    if "buddies" in only:
+        report["results"].append(scenario_buddy_guild(args.bin, args.out))
 
     report["ended"] = time.time()
+    # Basename only in the print path hint — full --out stays local.
     path = args.out / f"report-{args.label}.json"
     path.write_text(json.dumps(report, indent=2))
-    print(json.dumps({"wrote": str(path), "scenarios": [r.get("scenario") for r in report["results"]]}, indent=2))
+    print(
+        json.dumps(
+            {
+                "wrote": path.name,
+                "scenarios": [r.get("scenario") for r in report["results"]],
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

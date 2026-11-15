@@ -47,6 +47,8 @@ session that built the setup did not do them:
 - [x] Listserver hard scenarios past suite defaults (flood / slowloris /
       malformed / login storm / gserver ramp / large synthetic accounts):
       `scripts/lab/listserver-hard.py`, noted in `docs/lab/suite-stress.md`.
+- [x] Buddy / guild synthetic seeder in `listserver-hard.py` (`buddies`
+      scenario; password via `SEIHAI_LAB_PASSWORD` only).
 
 ## Resource packages (`lat-core::gpak`, `docs/design/gpak.md`)
 
