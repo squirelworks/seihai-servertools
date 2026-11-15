@@ -116,6 +116,24 @@ real client under Wine in the same namespace and point it at the gserver
 port. The gserver log shows the real client's login and props next to the
 bots'. Loopback only, never a public server.
 
+## Listserver hard scenarios
+
+`seihai-suite-stress run` drives short-lived list fetches and gserver
+logins. It does not hold idle sockets, send partial frames, register
+thousands of fake gservers, or load large account files. For those, use:
+
+```
+python3 scripts/lab/listserver-hard.py --bin path/to/seihai-listserver \
+    --out out/ls-hard --label main \
+    --only flood,slowloris,malformed,login,ramp,accounts
+```
+
+`--only` selects scenarios. `ramp` registers many synthetic gservers with
+heartbeats and player-count updates (raise `max_connections` inside the
+script's lab TOML). `accounts` seeds synthetic argon2 rows (one PHC
+reused). Older listserver tags that reject newer config keys need
+`LS_LEGACY_CONFIG=1`. Loopback only; keep `out/` out of the repo.
+
 ## Rules
 
 Loopback only (`check_loopback`). Lab accounts and the lab password are
