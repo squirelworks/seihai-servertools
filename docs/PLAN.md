@@ -51,3 +51,14 @@ exists; then add only a lab kind and a texture-presence check (see
 [NEXT.md](NEXT.md)).
 
 The order of the work is in [NEXT.md](NEXT.md).
+
+## Current follow-through (2026-11-16)
+
+Roadmap issue #50's original Next list is done. Dependencies: core and
+draw are on tag `v0.4.0` (#91); `seihai-rc` is a rev pin on main after
+#95 (`90cb87f`) sharing that core, still waiting on an rc tag
+(seihai-rc#27). Remaining open work is listed in `docs/NEXT.md`: Rust
+lab original-client/login evidence, suite-stress stage reruns and RC
+bots, LAT database-NPC editor and LAT-account lab, offline gaps in
+`docs/design/classic-offline-gaps.md`, Graal3D lab/check when G3D-9
+exists, and defaulting to the Rust gserver at parity.
