@@ -1909,7 +1909,7 @@ dependencies = [
  "getrandom 0.2.17",
  "gif",
  "png",
- "seihai-core 0.4.0",
+ "seihai-core",
  "seihai-draw",
  "seihai-rc",
  "tempfile",
@@ -2941,24 +2941,6 @@ dependencies = [
 
 [[package]]
 name = "seihai-core"
-version = "0.1.0"
-source = "git+https://github.com/squirelworks/seihai-core?tag=v0.1.0#708e9e4c19e45bc3db85528e37013921fedb1f10"
-dependencies = [
- "base64",
- "bzip2",
- "chacha20poly1305",
- "ed25519-dalek",
- "flate2",
- "hkdf",
- "lewton",
- "nanomp3",
- "rand_core",
- "sha2",
- "x25519-dalek",
-]
-
-[[package]]
-name = "seihai-core"
 version = "0.4.0"
 source = "git+https://github.com/squirelworks/seihai-core?tag=v0.4.0#eb7434ac1fbddc35d127ab4bbe8717e8bf1d64e7"
 dependencies = [
@@ -2982,15 +2964,15 @@ version = "0.4.0"
 source = "git+https://github.com/squirelworks/seihai-core?tag=v0.4.0#eb7434ac1fbddc35d127ab4bbe8717e8bf1d64e7"
 dependencies = [
  "ab_glyph",
- "seihai-core 0.4.0",
+ "seihai-core",
 ]
 
 [[package]]
 name = "seihai-rc"
 version = "0.1.0"
-source = "git+https://github.com/squirelworks/seihai-rc?rev=dd103226dca1bedbeb983bc523a17259b81f118f#dd103226dca1bedbeb983bc523a17259b81f118f"
+source = "git+https://github.com/squirelworks/seihai-rc?rev=90cb87f31bfb9f81490aa7e6c8c6e082ecbab75d#90cb87f31bfb9f81490aa7e6c8c6e082ecbab75d"
 dependencies = [
- "seihai-core 0.1.0",
+ "seihai-core",
 ]
 
 [[package]]
@@ -3283,7 +3265,7 @@ name = "suite-stress"
 version = "0.0.1"
 dependencies = [
  "ctrlc",
- "seihai-core 0.4.0",
+ "seihai-core",
  "tempfile",
 ]
 
