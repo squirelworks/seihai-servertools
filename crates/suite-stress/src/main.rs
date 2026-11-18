@@ -285,10 +285,10 @@ fn go(args: &[String], compat: bool) -> Result<(), String> {
                 while !s.stop.load(Ordering::Relaxed) {
                     if Instant::now() >= next {
                         if has_list {
-                            let p = rc::servers(&rcbin, &list, "stressrc");
+                            let p = rc::servers(&rcbin, &list, suite_stress::RC_ACCOUNT);
                             probes.lock().unwrap().push(p);
                         }
-                        let p = rc::players(&rcbin, &gs, "stressrc");
+                        let p = rc::players(&rcbin, &gs, suite_stress::RC_ACCOUNT);
                         probes.lock().unwrap().push(p);
                         next = Instant::now() + Duration::from_secs(n);
                     }

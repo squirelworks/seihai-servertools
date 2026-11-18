@@ -200,6 +200,37 @@ pub fn gmap_loop(n: usize) -> Vec<(i32, i32)> {
     v
 }
 
+/// Make [`crate::RC_ACCOUNT`] in `world` with the lab password through
+/// `seihai-gserver account`, then mark it `STAFF` so its RC may log in
+/// (from loopback, the default without `IPRANGE`).
+pub fn make_rc_account(gserver: &Path, world: &Path) -> Result<(), String> {
+    let out = Command::new(gserver)
+        .arg("account")
+        .arg(crate::RC_ACCOUNT)
+        .arg("--password-env")
+        .arg("SEIHAI_STRESS_RC_PASSWORD")
+        .arg("--world")
+        .arg(world)
+        .env("SEIHAI_STRESS_RC_PASSWORD", crate::LAB_PASSWORD)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    let file = world
+        .join("accounts")
+        .join(format!("{}.txt", crate::RC_ACCOUNT));
+    let mut text = fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    if !text.lines().any(|l| l.trim() == "STAFF 1") {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str("STAFF 1\n");
+        fs::write(&file, text).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// The gserver's `config/server.txt` for this lab.
 pub fn gserver_config(cfg: &LabConfig, bins: &Bins) -> String {
     let mut s = format!(
@@ -345,6 +376,15 @@ impl Lab {
                 fs::write(world.join("levels").join(START_LEVEL), cell_level(0, 0))
                     .map_err(|e| e.to_string())?;
             }
+        }
+        // The RC probes log in as a staff account. An RC login never
+        // makes an account (`create_accounts` is for players), so without
+        // this every `players list` probe was refused.
+        if let Err(e) = make_rc_account(&bins.gserver, &world) {
+            eprintln!(
+                "RC account {}: {e}; the players-list probe will be refused",
+                crate::RC_ACCOUNT
+            );
         }
         let mut cmd = Command::new(&bins.gserver);
         cmd.arg("--world").arg(&world);
