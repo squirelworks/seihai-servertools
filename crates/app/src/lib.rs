@@ -18,17 +18,19 @@ pub enum Tab {
     Setup,
     Levels,
     Npcs,
+    Database,
     Ganis,
     Packages,
     Check,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 7] = [
+    pub const ALL: [Tab; 8] = [
         Tab::Lab,
         Tab::Setup,
         Tab::Levels,
         Tab::Npcs,
+        Tab::Database,
         Tab::Ganis,
         Tab::Packages,
         Tab::Check,
@@ -40,6 +42,7 @@ impl Tab {
             Tab::Setup => "Server setup",
             Tab::Levels => "Level editor (LAT)",
             Tab::Npcs => "NPC editor",
+            Tab::Database => "NPC-server database",
             Tab::Ganis => "Gani editor",
             Tab::Packages => "Packages",
             Tab::Check => "World check",
@@ -55,6 +58,7 @@ pub struct App {
     levels: pages::levels::Page,
     ganis: pages::ganis::Page,
     npcs: pages::npcs::Page,
+    database: pages::database::Page,
     packages: pages::packages::Page,
     check: pages::check::Page,
 }
@@ -68,6 +72,7 @@ impl Default for App {
             levels: pages::levels::Page::default(),
             ganis: pages::ganis::Page::default(),
             npcs: pages::npcs::Page::default(),
+            database: pages::database::Page::default(),
             packages: pages::packages::Page::default(),
             check: pages::check::Page::default(),
         }
@@ -92,6 +97,7 @@ impl eframe::App for App {
                 Tab::Setup => self.setup.show(ui),
                 Tab::Levels => self.levels.show(ui),
                 Tab::Npcs => self.npcs.show(ui),
+                Tab::Database => self.database.show(ui),
                 Tab::Ganis => self.ganis.show(ui),
                 Tab::Packages => self.packages.show(ui),
             }
@@ -109,14 +115,15 @@ pub struct StartOptions {
 }
 
 impl Tab {
-    /// A page by a short name: lab, setup, levels, npcs, ganis, packages,
-    /// check.
+    /// A page by a short name: lab, setup, levels, npcs, database, ganis,
+    /// packages, check.
     pub fn from_name(name: &str) -> Option<Tab> {
         Some(match name {
             "lab" => Tab::Lab,
             "setup" => Tab::Setup,
             "levels" => Tab::Levels,
             "npcs" => Tab::Npcs,
+            "database" => Tab::Database,
             "ganis" => Tab::Ganis,
             "packages" => Tab::Packages,
             "check" => Tab::Check,

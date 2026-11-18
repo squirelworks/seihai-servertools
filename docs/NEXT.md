@@ -52,9 +52,13 @@ detail: `docs/design/classic-offline-gaps.md`.
 
 ### LAT / product
 
-- [ ] NPC editor: NPC-server database objects (classes, weapons,
-      attributes write/reset/add) now that seihai-gserver has NPC Control
-      (seihai-gserver#52; npcserver#22 still tracks completeness).
+- [ ] NPC editor: NPC-server database objects. The "NPC-server database"
+      page (`gui --page database`, `lat_core::ncdb`) lists database NPCs,
+      classes and weapons over an NC login, edits and saves scripts with a
+      read-back check, adds and deletes classes and weapons, and resets an
+      NPC. Still open: a real NPC Control server run (seihai-gserver#157
+      serves classes and weapons; NPC reset needs the gserver side of
+      npcserver#47), NPC add and flags.
 - [ ] Class caches and packet 140 on a real client (`code` tool; weapon
       caches are done under `#37`).
 - [ ] Default to the Rust gserver once it reaches parity (seihai#353

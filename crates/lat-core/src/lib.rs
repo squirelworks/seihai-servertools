@@ -42,6 +42,7 @@ pub mod level;
 pub mod levelfill;
 pub mod lfscript;
 pub mod movie;
+pub mod ncdb;
 pub mod npc;
 pub mod preview;
 pub mod remote;

@@ -6,8 +6,8 @@
 //! the level page: Show changes, and a refusal when the server's copy
 //! changed since it was opened.
 //!
-//! Database NPCs, classes and weapons need an NC login (`seihai-rc` stage
-//! 5) and are not here yet.
+//! Database NPCs, classes and weapons are on the NPC-server database page
+//! (`database.rs`).
 
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
@@ -120,7 +120,7 @@ impl Page {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        ui.label("Edit the scripts of a level's NPCs, on a live server or in a world folder on this machine. Check runs the GS1 parser; Apply puts the script into the level; Upload sends the level. Database NPCs, classes and weapons need an NC login and are not here yet.");
+        ui.label("Edit the scripts of a level's NPCs, on a live server or in a world folder on this machine. Check runs the GS1 parser; Apply puts the script into the level; Upload sends the level. Database NPCs, classes and weapons are on the NPC-server database page.");
         self.place.show(ui);
         let busy = self.pending.is_some();
         ui.horizontal(|ui| {

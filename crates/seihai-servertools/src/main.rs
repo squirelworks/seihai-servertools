@@ -53,7 +53,7 @@ Usage:
   seihai-servertools gif2mng [-b] [--out DIR] [--force] GIF...
                                     each GIF as a .png (one frame) or .mng animation beside
                                     it or in DIR; -b makes palette index 2 transparent
-  seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|ganis|packages|check]
+  seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|database|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
 
@@ -433,7 +433,7 @@ fn gui(args: &[&str]) -> ExitCode {
                 Some(t) => opts.tab = Some(t),
                 None => {
                     eprintln!(
-                        "gui: no page {p} (lab, setup, levels, npcs, ganis, packages, check)"
+                        "gui: no page {p} (lab, setup, levels, npcs, database, ganis, packages, check)"
                     );
                     return ExitCode::from(2);
                 }
