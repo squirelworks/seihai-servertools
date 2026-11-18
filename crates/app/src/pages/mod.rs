@@ -2,6 +2,7 @@
 
 mod addrs;
 pub mod check;
+pub mod database;
 pub mod ganis;
 pub mod host;
 pub mod lab;
