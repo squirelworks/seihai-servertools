@@ -65,10 +65,12 @@ to do next. In short:
   `crates/app` (window) only parse input, call the cores and show results.
   If a rule is needed by both, it belongs in a core crate.
 - **One parser per format, shared with Seihai.** Levels, gmaps, ganis, GS1 and
-  the protocol come from `seihai-core` (`squirelworks/seihai`), pinned by git
-  tag in the workspace `Cargo.toml`. Do not write a second parser here. When
-  something is missing, add it in the `seihai` repo, get a tag there (ask
-  Squirrel), then bump the tag here in its own PR. The same goes for drawing
+  the protocol come from `seihai-core` (`squirelworks/seihai-core`). Do not
+  write a second parser here. When something is missing, add it in
+  seihai-core, and once it is merged there, run `cargo update -p seihai-core
+  -p seihai-draw` in the PR here that needs it. Between releases the workspace
+  follows core's `main`; a servertools release pins a published core tag
+  (VERSIONING.md, "Pinning seihai-core"). The same goes for drawing
   code (tiles, sprites) and the level editor document: they are shared through
   a crate in the `seihai` repo, never copied.
 - **The client's level editor stays in Seihai.** Its offline level editor
@@ -90,7 +92,9 @@ to do next. In short:
 - **CI:** every PR runs `cargo fmt --check`, `cargo clippy --all-targets -- -D
   warnings` and `cargo test` on Linux, Windows and macOS. Chiaki merges once
   Linux is green; keep Windows and macOS green too.
-- **No tags or releases** without Squirrel's go-ahead.
+- **No tags or releases** without Squirrel's go-ahead. A PR does not bump the
+  version: it adds a line to `docs/releases/unreleased.md`. Only a release PR
+  changes the version (VERSIONING.md, checked by `version-guard`).
 
 ## macOS builds
 

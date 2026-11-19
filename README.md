@@ -272,6 +272,7 @@ the command line needs nothing.
 
 Releases for Linux, Windows and macOS are built by GitHub Actions on each `v*`
 tag (none yet).
+When a release happens, what the version numbers mean and what 1.0.0 needs: [VERSIONING.md](VERSIONING.md).
 
 ## Licence
 
