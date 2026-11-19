@@ -9,3 +9,5 @@ crashes/
 fuzz_dts_asan
 *.o
 _seed_*.dts
+__pycache__/
+*.pyc
