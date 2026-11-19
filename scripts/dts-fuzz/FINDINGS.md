@@ -77,22 +77,41 @@ the unchecked `memcpy` / short-buffer path above. In other words, a debug-build
 `./gen_repro.py .seeds/octahedron.dts .repro` writes five files, each a valid
 version-24 shape with exactly one header field corrupted:
 
-| file | corruption | debug-build result | release-build expectation |
+| file | corruption | debug-build (libdts) result | real 4.04r2 client (lab) |
 | --- | --- | --- | --- |
-| `R1_startU8_wild.dts` | `startU8 = 0x40000000` | SEGV (wild read) | SEGV |
-| `R2_startU8_oob.dts` | `startU8 = size+4` | heap-buffer-overflow (read) | OOB read |
-| `R3_start16_gt_start8.dts` | `startU16 > startU8` | `check16` assert | negative-length `memcpy` |
-| `R4_size_huge.dts` | `sizeMemBuffer = 0x3fffffff` | `check32` assert after a 4 GB alloc | 4 GB alloc + short read |
-| `R5_numseq_huge.dts` | `num_sequences = 0x3fffffff` | allocation-size-too-big | multi-GB `resize` DoS |
+| `R1_startU8_wild.dts` | `startU8 = 0x40000000` | SEGV (wild read) | **handled** — SEH-guarded, link holds |
+| `R2_startU8_oob.dts` | `startU8 = size+4` | heap-buffer-overflow (read) | **handled** — SEH-guarded, link holds |
+| `R3_start16_gt_start8.dts` | `startU16 > startU8` | `check16` assert | **crash** — access violation (read) in the engine DLL, 3D link drops |
+| `R4_size_huge.dts` | `sizeMemBuffer = 0x3fffffff` | `check32` assert after a 4 GB alloc | **crash** — access violation on an OOB **write** while filling the buffer |
+| `R5_numseq_huge.dts` | `num_sequences = 0x3fffffff` | allocation-size-too-big | **crash (worst)** — bad count drives execution to a near-null address |
 
-These are the payloads to serve to the real client in the lab.
+These are the payloads served to the real client in the lab.
 
-## Lab follow-up (real 4.04r2 client)
+## Lab result — real 4.04r2 client
 
-Code-only results above are complete. To confirm against the real loader, the
-five reproducers are served to 4.04r2 through our own lab Graal3D server in a
-Mirae/GwenTea2 VM (never a public server), the same way the GR V1.05 packet
-fuzzing and the #105 Sky/Player work drive the client. Watch `console.log` for
-`Couldn't load shape` versus an actual crash / hang, and whether the link drops.
-Results (which reproducers crash the real client, and where) are recorded with
-the lab run, not on this branch.
+The five reproducers were served to the real 4.04r2 client (Wine, probelab VM)
+through our own lab Graal3D server — never a public server — one client session
+per file, with a clean control run first and the good shape restored between
+runs. Outcome:
+
+- **R1 and R2 are handled, not crashes.** The `startU8` header reads happen
+  inside `Graal4.exe` and are wrapped in structured exception handling, so the
+  wild / just-past-the-end read is caught: the sky still renders and the link
+  holds. So the client's own `TSShape::read` offset-trust path is SEH-guarded,
+  and the OOB-read prediction from the libdts build does **not** carry over to
+  4.04r2 for those two.
+- **R3, R4 and R5 crash the real client.** Each raises an access violation in
+  the Graal3D engine DLL that drops the 3D link. These are the fields that are
+  trusted *downstream in the engine*, past the SEH wrapper:
+  - **R3** (`startU16 > startU8`, negative `count16`) — AV on a bad **read**.
+  - **R4** (giant `sizeMemBuffer`) — not merely an allocation DoS: a short read
+    followed by an out-of-bounds **write** while the buffer is filled.
+  - **R5** (giant `num_sequences`) — the most serious: the bad count drives
+    execution to a near-null address (control-flow-hijack potential), not just a
+    DoS.
+
+Takeaway: the header **offset** trust (R1/R2) is caught by SEH in the client,
+but the **size / count** fields trusted deeper in the engine (R3/R4/R5) are not,
+and one of them (R5) corrupts control flow. Exact fault addresses / RVAs stay in
+the lab write-up in the VM (`wine-fixes/4.04r2-pr111-fuzz.md`); per `AGENTS.md`
+no binary offsets or addresses go on a branch.
