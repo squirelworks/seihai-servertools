@@ -1,0 +1,13 @@
+# Build/run artefacts, fetched third-party code, seeds, crashers -- never committed.
+.work/
+.seeds/
+.repro/
+obj/
+corpus/
+corpus*/
+crashes/
+fuzz_dts_asan
+*.o
+_seed_*.dts
+__pycache__/
+*.pyc
