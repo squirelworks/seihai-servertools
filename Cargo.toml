@@ -23,8 +23,8 @@ publish = false
 # seihai-core and seihai-draw both live in squirelworks/seihai-core and are
 # tagged together, so one tag pins both and a Level or Gani from the parser
 # is the same type seihai-draw paints.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.4.0", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.4.0" }
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.6.1", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.6.1" }
 # RC file link: list_dir, get_file, put_file. Pin main after seihai-rc#61 so
 # this workspace shares one seihai-core v0.4.0 with rc (squirelworks/seihai-core#79).
 # No rc tag yet.
