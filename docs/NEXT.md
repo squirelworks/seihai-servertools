@@ -36,12 +36,14 @@ detail: `docs/design/classic-offline-gaps.md`.
 
 ### Lab / suite
 
-- [ ] Original Windows clients and login to the Rust gserver after the
-      `#81` list-only evidence
-      (`docs/lab/2026-11-14-lab-start-rust-listserver.md`).
+- [x] Original Windows clients and login to the Rust gserver after the
+      `#81` list-only evidence: real 2.22 and 2.31 got the `lab start`
+      list and logged in (`docs/lab/2026-11-18-lab-start-real-client.md`).
 - [ ] Suite stress: rerun `compat` and a 92-bot `run` as each
       seihai-gserver stage lands (stages 4, 5 and anti-cheat have landed;
       stage 6 is built — seihai-gserver#56), with stage-specific evidence.
+      Latest: 2026-11-18, 49/49 profiles and 92/92 bots, no drops or
+      losses (`docs/lab/2026-11-18-suite-stress.md`).
       Warp-ring, gmap-crossing and file-probe behaviours already exist;
       do not recreate them.
 - [ ] RC bots now that the gserver serves RC (stage 4 closed).

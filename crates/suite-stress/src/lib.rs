@@ -30,6 +30,9 @@ pub const DEFAULT_VERSIONS: &[&str] = &[
 /// The lab password every bot account uses. The lab gserver makes each
 /// account on its first login, and the lab listserver runs in open mode.
 pub const LAB_PASSWORD: &str = "labpw";
+/// The staff account the RC probes log in with; [`lab::make_rc_account`]
+/// makes it in the lab world.
+pub const RC_ACCOUNT: &str = "stressrc";
 
 /// Refuse anything but a loopback address.
 pub fn check_loopback(addr: &str) -> Result<(), String> {
