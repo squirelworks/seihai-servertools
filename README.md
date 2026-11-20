@@ -5,25 +5,31 @@ start a lab world with one command, take a server from the lab to the public
 with a setup wizard, and the LAT (Level Administration Team) toolkit for
 editing a live server's world.
 
-Part of the Seihai server stack:
-[seihai-gserver](https://github.com/squirelworks/seihai-gserver) ·
-[seihai-npcserver](https://github.com/squirelworks/seihai-npcserver) ·
-[seihai-listserver](https://github.com/squirelworks/seihai-listserver) ·
-[seihai-rc](https://github.com/squirelworks/seihai-rc) ·
-[seihai-servertools](https://github.com/squirelworks/seihai-servertools) ·
-[seihai-gserver-v2](https://github.com/squirelworks/seihai-gserver-v2) (GPL fork of GServer-v2, ships first) ·
-client: [seihai](https://github.com/squirelworks/seihai).
+Part of the Seihai project: the client [seihai](https://github.com/squirelworks/seihai)
+and its library [seihai-core](https://github.com/squirelworks/seihai-core); the Rust
+server stack [seihai-gserver](https://github.com/squirelworks/seihai-gserver),
+[seihai-listserver](https://github.com/squirelworks/seihai-listserver),
+[seihai-npcserver](https://github.com/squirelworks/seihai-npcserver),
+[seihai-rc](https://github.com/squirelworks/seihai-rc) and
+[seihai-servertools](https://github.com/squirelworks/seihai-servertools); the GPL forks
+[seihai-gserver-v2](https://github.com/squirelworks/seihai-gserver-v2) and
+[seihai-gs2lib](https://github.com/squirelworks/seihai-gs2lib); and the research notes in
+[Graal_analysis](https://github.com/squirelworks/Graal_analysis).
 
-**Status: scaffold.** Working today: the one-step lab start, the setup
-wizard, a world checker, and the first LAT level and gani editors (open,
-change, preview, upload through the RC file link or a local folder), and
-a stress rig for the whole server suite (`seihai-suite-stress`,
-[docs/lab/suite-stress.md](docs/lab/suite-stress.md)). The
-plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the ordered to-do list in
-[docs/NEXT.md](docs/NEXT.md), operator security notes in
-[docs/security/README.md](docs/security/README.md), and the rules every
-contributor and coding agent follows in [AGENTS.md](AGENTS.md).
+## Status
+
+Nothing has been released yet, but most of the tools below work today: the
+one-step lab start, the go-public setup wizard, the world checker, the LAT
+level, gani and NPC editors (open, change, preview, and upload through the RC
+file link or to a local folder), the package and level tools, and a stress rig
+for the whole server suite (`seihai-suite-stress`,
+[docs/lab/suite-stress.md](docs/lab/suite-stress.md)).
+
+The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the to-do list in
+[docs/NEXT.md](docs/NEXT.md) and notes for server operators on security in
+[docs/security/README.md](docs/security/README.md). Contributors should read
+[AGENTS.md](AGENTS.md) for the project rules.
 
 ## What is in it
 
@@ -52,65 +58,6 @@ contributor and coding agent follows in [AGENTS.md](AGENTS.md).
 
 The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
-
-`seihai-servertools check --client-reach [--json] WORLD` adds warnings for
-level NPC and weapon images, and fixed GS1 script image names, that have PNG art but no
-GIF counterpart for pre-2.1 clients. It inventories file names and never
-converts or writes art. A matching GIF name does not certify its contents or
-original-client rendering.
-
-The same option reports parsed gani files and lists the pinned shared client
-profiles whose `ui.ganis` field is false. Those profiles need server animation
-fallback review if the file is used. This is an inventory, not a scan of
-animation call sites. The pinned data marks 1.41 unsupported and 1.42 supported;
-these are shared-profile values, not a new original-client observation. Unused
-and standard ganis are included too. A GIF copy
-of a sprite sheet does not give a client gani support, and no nearest built-in
-animation is inferred. Symbolic sheets such as `BODY` and `HEAD` are not
-treated as literal image filenames; ordinary checks still handle parse errors
-and missing images/sounds.
-
-It also lists, for each parsed gmap, the shared profiles whose
-`levels.gmap` is false (they need linked single levels if players reach
-it), and for each level the profiles that cannot open its format. The
-format comes from the level's magic (`GLEVNW01`, `GR-V1`, `Z3-V1`), not its
-extension.
-
-Scripts: each level NPC and weapon (`weapons/*.txt` files starting
-`GRAWP001`) whose script is GS2 only, or mixes GS1 and GS2, is listed with
-the shared profiles that do not run GS2, and those not known either way.
-The era is read from the
-text: GS2 event functions (`function onCreated()`), `temp.`, `player.`,
-`params[` and `new Name(`; GS1 event flags (`if (playerenters)`) and `#`
-codes outside strings. GS1-only scripts run on every client and are not
-listed. Which clients run GS2 follows seihai #430's evidence (the binary
-handles packet 131): yes from 3.153 on; no for 1.21 to 2.31 and 3.04;
-unknown for 2.10 to 2.16, 2.30, 6.015 and 6.034, which have no binary. The
-check reads seihai-core's `VersionProfile::scripts.gs2` field.
-
-Tiles: each level with tiles past column 116 of the default `pics1.png` is
-listed with the profiles whose shipped sheet is 1856×512 (1.28 beta 2 to
-1.41, and 2.00 to 2.05); they draw nothing in those cells. That sheet's 116
-columns match the left 116 of the 2048-wide 1.42 sheet cell for cell, so
-tile ids map the same way and the old sheet just ends early. 1.21 (a
-1280-wide sheet whose layout is not established) and 2.1x (no sheet in the
-archives) are not listed, and `tiledefs` sheets are not matched.
-
-Run-time image names: a script image name built with `#` codes, such as
-`setimg bomb#v(this.n).png`, is read as a pattern where each code can be
-any text, and matched (ignoring case and any folder) against the PNG and
-GIF names in the world. Each PNG it could be joins the GIF inventory and
-`--make-gif`, and the finding names the pattern it came from. A pattern
-that matches no file, or is only codes and an extension (`#s(this.pic)`,
-`#v(n).png`), is listed to check by hand. A match says which files the
-name could be, not which ones the script shows.
-
-`check --make-gif WORLD` (opt-in) first writes a GIF copy next to each PNG
-that `--client-reach` reports as having none, then runs the check. A copy
-keeps every pixel's colour; pixels with alpha below 128 become the GIF's
-transparent colour (this tool's choice, not read from a client). It never
-replaces a file, and it skips art with more than 256 colours (255 with
-transparency) and says so, rather than picking a palette for you.
 
 ## Start a lab world
 
@@ -240,6 +187,13 @@ there are errors (a missing image or sound is a warning), so it can run in CI.
 `check --json WORLD` prints the same findings as one JSON object (`format` 1,
 the counts, and each finding's `level`, `source`, `file`, `key` and `text`).
 
+`check --client-reach WORLD` also warns about content that some client
+versions cannot use: PNG art with no GIF copy for pre-2.1 clients, gmaps and
+ganis on versions without them, GS2 scripts on versions that only run GS1,
+tiles past the edge of older tile sheets, and image names built at run time.
+`check --make-gif WORLD` writes the missing GIF copies first. What each check
+reads and where its limits are: [docs/check-client-reach.md](docs/check-client-reach.md).
+
 ## Inspect client cache CRCs
 
 ```sh
@@ -270,8 +224,8 @@ cargo build --release --no-default-features   # command line only, no window
 On Linux the window needs the usual X11 or Wayland libraries at run time;
 the command line needs nothing.
 
-Releases for Linux, Windows and macOS are built by GitHub Actions on each `v*`
-tag (none yet).
+Releases for Linux, Windows and macOS will be built by GitHub Actions on each
+`v*` tag; there has been none yet.
 When a release happens, what the version numbers mean and what 1.0.0 needs: [VERSIONING.md](VERSIONING.md).
 
 ## Licence
