@@ -24,6 +24,11 @@ pub enum Step {
     Warp { level: String, x: f32, y: f32 },
     /// `enter`: send the enter-level messages again.
     Enter,
+    /// `want FILE`: ask for a file (WANTFILE).
+    Want(String),
+    /// `expect SECONDS TEXT`: fail unless a server message containing TEXT
+    /// arrives within SECONDS. Messages are matched as `probe` prints them.
+    Expect { secs: f32, text: String },
 }
 
 /// Reads a steps file. Blank lines and lines starting with `#` are skipped.
@@ -79,6 +84,19 @@ pub fn parse_steps(text: &str) -> Result<Vec<Step>, String> {
                 }
             }
             "enter" => Step::Enter,
+            "want" if !rest.is_empty() => Step::Want(rest.to_string()),
+            "want" => return Err(bad("want needs FILE")),
+            "expect" => {
+                let (secs, text) = rest.split_once(' ').unwrap_or((rest, ""));
+                let text = text.trim();
+                if text.is_empty() {
+                    return Err(bad("expect needs SECONDS TEXT"));
+                }
+                Step::Expect {
+                    secs: num(Some(secs))?,
+                    text: text.to_string(),
+                }
+            }
             _ => return Err(bad("unknown step")),
         };
         out.push(step);
@@ -94,7 +112,8 @@ mod tests {
     fn reads_every_step() {
         let s = parse_steps(
             "# c\n\nwait 3\nwalk 16 46 1\nwalk 1 2\nchat hello there\n\
-             trigger 30 40 open a,b c\nwarp npcdemo_room.nw 30 30\nenter\n",
+             trigger 30 40 open a,b c\nwarp npcdemo_room.nw 30 30\nenter\n\
+             want bomb.png\nexpect 2.5 bomb.png\n",
         )
         .unwrap();
         assert_eq!(
@@ -124,6 +143,11 @@ mod tests {
                     y: 30.0
                 },
                 Step::Enter,
+                Step::Want("bomb.png".into()),
+                Step::Expect {
+                    secs: 2.5,
+                    text: "bomb.png".into()
+                },
             ]
         );
     }
@@ -135,6 +159,13 @@ mod tests {
             .unwrap_err()
             .starts_with("line 2:"));
         assert!(parse_steps("jump").unwrap_err().contains("unknown step"));
+        assert!(parse_steps("want").unwrap_err().contains("want needs FILE"));
+        assert!(parse_steps("expect 2")
+            .unwrap_err()
+            .contains("expect needs SECONDS TEXT"));
+        assert!(parse_steps("expect x hi")
+            .unwrap_err()
+            .contains("expected a number"));
     }
 
     #[test]

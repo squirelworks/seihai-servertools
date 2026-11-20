@@ -4,7 +4,8 @@
 gserver you started yourself as one version profile (password `labpw`; a lab
 gserver with `localhost = true` takes any), runs a steps file and prints every
 message the server sends, with a timestamp. `STEP_MS` sets the wait after each
-step (default 300 ms). Only `127.0.0.1` / `localhost` are accepted.
+step (default 300 ms). The run exits non-zero if the server closes the
+connection or an `expect` step misses, so a steps file can be a smoke test. Only `127.0.0.1` / `localhost` are accepted.
 
 It came from seihai-gserver-v2's `tools/lab/npcprobe` (moved 2026-11-11), where
 it drove that fork's NPC-server lab
@@ -20,6 +21,8 @@ Steps file, one per line, `#` for comments:
 | `trigger X Y ACTION [PARAMS]` | a trigger action |
 | `warp LEVEL X Y` | a level warp |
 | `enter` | the enter-level messages again |
+| `want FILE` | a file request (WANTFILE) |
+| `expect SECONDS TEXT` | nothing; fails the run unless a server message containing TEXT arrives within SECONDS. It also sees messages that arrived during earlier steps; a match uses up that message and the ones before it. Messages are matched as printed (`id N len L` and the body, with `\xNN` for other bytes) |
 
 Files here:
 

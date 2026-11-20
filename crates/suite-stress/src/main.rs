@@ -575,16 +575,33 @@ fn probe(args: &[String]) -> Result<(), String> {
         .map_err(|e| format!("login: {e}"))?;
     let rx = s.conn.spawn_reader().map_err(|e| e.to_string())?;
     let t0 = Instant::now();
-    let drain = |until: Instant| -> Result<(), String> {
+    // Every message not yet matched by an `expect`, as printed, so an
+    // `expect` also sees what arrived during the steps before it. A match
+    // consumes that message and every one before it.
+    let mut seen: Vec<String> = Vec::new();
+    // Reads until `until`, or until a message containing `want` arrives.
+    // Returns whether it did.
+    let mut drain = |until: Instant, want: Option<&str>| -> Result<bool, String> {
+        let take = |seen: &mut Vec<String>| {
+            want.and_then(|w| seen.iter().position(|m| m.contains(w)))
+                .map(|i| {
+                    seen.drain(..=i);
+                })
+                .is_some()
+        };
+        if take(&mut seen) {
+            return Ok(true);
+        }
         while Instant::now() < until {
             match rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(Ok(body)) => {
                     for m in body.split_inclusive(|b| *b == b'\n') {
-                        println!(
-                            "[{:6.2}] S>C {}",
-                            t0.elapsed().as_secs_f32(),
-                            describe_message(m)
-                        );
+                        let d = describe_message(m);
+                        println!("[{:6.2}] S>C {d}", t0.elapsed().as_secs_f32());
+                        seen.push(d);
+                    }
+                    if take(&mut seen) {
+                        return Ok(true);
                     }
                 }
                 Ok(Err(e)) => {
@@ -594,16 +611,25 @@ fn probe(args: &[String]) -> Result<(), String> {
                 Err(_) => {}
             }
         }
-        Ok(())
+        Ok(false)
     };
-    drain(Instant::now() + Duration::from_secs(2))?;
+    drain(Instant::now() + Duration::from_secs(2), None)?;
     let _ = s.enter_level.at_login(&mut s.conn);
     for step in &steps {
         println!("[{:6.2}] STEP {step:?}", t0.elapsed().as_secs_f32());
         let sent = match step {
             Step::Wait(secs) => {
-                drain(Instant::now() + Duration::from_secs_f32(*secs))?;
+                drain(Instant::now() + Duration::from_secs_f32(*secs), None)?;
                 Ok(())
+            }
+            Step::Expect { secs, text } => {
+                let until = Instant::now() + Duration::from_secs_f32(*secs);
+                if !drain(until, Some(text))? {
+                    return Err(format!(
+                        "expected {text:?} within {secs} s; it did not arrive"
+                    ));
+                }
+                continue;
             }
             Step::Walk { x, y, dir } => s.conn.send_position(*x, *y, *dir),
             Step::Chat(text) => s.conn.send_chat(text),
@@ -615,11 +641,12 @@ fn probe(args: &[String]) -> Result<(), String> {
             } => s.conn.send_trigger_action(*x, *y, action, params),
             Step::Warp { level, x, y } => s.conn.send_levelwarp(*x, *y, level),
             Step::Enter => s.conn.send_enter_level(version, &[]).map(|_| ()),
+            Step::Want(name) => s.conn.send_wantfile(name),
         };
         if let Err(e) = sent {
             println!("send error {e}");
         }
-        drain(Instant::now() + step_wait)?;
+        drain(Instant::now() + step_wait, None)?;
     }
-    drain(Instant::now() + Duration::from_secs(1))
+    drain(Instant::now() + Duration::from_secs(1), None).map(|_| ())
 }
