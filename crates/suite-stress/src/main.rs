@@ -575,30 +575,32 @@ fn probe(args: &[String]) -> Result<(), String> {
         .map_err(|e| format!("login: {e}"))?;
     let rx = s.conn.spawn_reader().map_err(|e| e.to_string())?;
     let t0 = Instant::now();
-    // Every message since the last `expect`, as printed, so an `expect` also
-    // sees what arrived during the steps before it.
+    // Every message not yet matched by an `expect`, as printed, so an
+    // `expect` also sees what arrived during the steps before it. A match
+    // consumes that message and every one before it.
     let mut seen: Vec<String> = Vec::new();
     // Reads until `until`, or until a message containing `want` arrives.
     // Returns whether it did.
     let mut drain = |until: Instant, want: Option<&str>| -> Result<bool, String> {
-        if let Some(w) = want {
-            if seen.iter().any(|m| m.contains(w)) {
-                seen.clear();
-                return Ok(true);
-            }
+        let take = |seen: &mut Vec<String>| {
+            want.and_then(|w| seen.iter().position(|m| m.contains(w)))
+                .map(|i| {
+                    seen.drain(..=i);
+                })
+                .is_some()
+        };
+        if take(&mut seen) {
+            return Ok(true);
         }
         while Instant::now() < until {
             match rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(Ok(body)) => {
-                    let mut hit = false;
                     for m in body.split_inclusive(|b| *b == b'\n') {
                         let d = describe_message(m);
                         println!("[{:6.2}] S>C {d}", t0.elapsed().as_secs_f32());
-                        hit |= want.is_some_and(|w| d.contains(w));
                         seen.push(d);
                     }
-                    if hit {
-                        seen.clear();
+                    if take(&mut seen) {
                         return Ok(true);
                     }
                 }

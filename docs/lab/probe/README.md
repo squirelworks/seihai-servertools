@@ -22,7 +22,7 @@ Steps file, one per line, `#` for comments:
 | `warp LEVEL X Y` | a level warp |
 | `enter` | the enter-level messages again |
 | `want FILE` | a file request (WANTFILE) |
-| `expect SECONDS TEXT` | nothing; fails the run unless a server message containing TEXT arrives within SECONDS. It also counts messages since the last `expect`. Messages are matched as printed (`id N len L` and the body, with `\xNN` for other bytes) |
+| `expect SECONDS TEXT` | nothing; fails the run unless a server message containing TEXT arrives within SECONDS. It also sees messages that arrived during earlier steps; a match uses up that message and the ones before it. Messages are matched as printed (`id N len L` and the body, with `\xNN` for other bytes) |
 
 Files here:
 
