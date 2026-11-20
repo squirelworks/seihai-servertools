@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 
 use seihai_rc::nc::{
     class_delete_message, class_get_message, class_set_message, npc_reset_message,
-    npc_script_get_message, npc_script_set_message, observe_script, representable_npc_class_script,
-    representable_weapon_script, weapon_delete_message, weapon_get_message, weapon_list_message,
-    weapon_set_message, NcEvent, NcSession, ScriptSubject,
+    npc_script_get_message, npc_script_set_message, observe_script,
+    representable_npc_class_script_for, representable_weapon_script, weapon_delete_message,
+    weapon_get_message, weapon_list_message, weapon_set_message, NcEvent, NcSession, ScriptSubject,
 };
 
 pub use seihai_rc::nc::NcLists;
@@ -151,17 +151,21 @@ pub fn read(login: &Login, target: &Target) -> Result<Script, String> {
 /// Save a script and read it back. `image` is a weapon's image (ignored
 /// for NPCs and classes). `Ok` is the line to show.
 pub fn save(login: &Login, target: &Target, text: &str, image: &str) -> Result<String, String> {
+    let mut s = login.open()?;
+    // NPC and class scripts are tokenized in the server's text profile.
+    // It starts as seihai-gserver's and follows the server's `Server:` line
+    // once that arrives (seihai-rc#56).
+    let profile = s.server_profile();
     let set = match target {
-        Target::Npc(id) => npc_script_set_message(*id, text),
-        Target::Class(n) => class_set_message(n, text),
+        Target::Npc(id) => npc_script_set_message(profile, *id, text),
+        Target::Class(n) => class_set_message(profile, n, text),
         Target::Weapon(n) => weapon_set_message(n, image, text),
     }
     .map_err(|e| e.to_string())?;
     let expected = match target {
         Target::Weapon(_) => representable_weapon_script(text),
-        _ => representable_npc_class_script(text),
+        _ => representable_npc_class_script_for(profile, text),
     };
-    let mut s = login.open()?;
     s.send(&[set, target.get()?]).map_err(|e| e.to_string())?;
     let subject = target.subject();
     let deadline = Instant::now() + login.timeout();

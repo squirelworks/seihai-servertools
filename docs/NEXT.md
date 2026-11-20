@@ -19,11 +19,11 @@ detail: `docs/design/classic-offline-gaps.md`.
   kind `#48`/`#54` with list evidence `#81`; Packages `#49`/`#53`;
   pre-2.1 checker `#38`; `code` / real `GRESCR01` evidence `#37`.
 - **Dependencies:** `seihai-core` and `seihai-draw` are paired at tag
-  `v0.6.1`. `seihai-rc` is still pinned by rev
-  `90cb87f31bfb9f81490aa7e6c8c6e082ecbab75d` (`#95`), which is on core
-  `v0.4.0`, so the lock holds two cores until RC's own repin to `v0.6.1`
-  lands and this rev moves to it (squirelworks/seihai-core#79). **No `seihai-rc` tag yet**
-  (seihai-rc#27).
+  `v0.7.2`, and `seihai-rc` is pinned by rev
+  `fcfd2cc264fece3838a1acca56b1d2d3cc217a17` (its `main`, on core
+  `v0.7.2`), so the lock holds one core (squirelworks/seihai-core#79,
+  #123). **No `seihai-rc` tag on that core yet**: move to seihai-rc v0.2.0
+  when it ships (seihai-rc#66).
 - Core's `Era::V140` registration is vocabulary only here; tools keep
   explicit `V217` script checks and make no native 1.40 claim.
 
