@@ -59,6 +59,24 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
 
+## Getting started
+
+There are no release downloads yet, so build it first (see [Build](#build)).
+Then, the first time:
+
+1. Download a [seihai-gserver-v2 release](https://github.com/squirelworks/seihai-gserver-v2/releases)
+   and unpack it. That folder is your lab world.
+2. Put `seihai-servertools` and, if you want a server list,
+   [seihai-listserver](https://github.com/squirelworks/seihai-listserver)
+   in the same folder.
+3. From that folder, run `seihai-servertools lab start` and point a client at
+   `127.0.0.1:14802`. Ctrl+C stops everything.
+4. `seihai-servertools gui --world .` opens the window with the editors and the
+   setup pages; `seihai-servertools check .` reports anything broken in the world.
+
+After that, normal use is `lab start` from the world folder (or the start
+script, below) and `gui` when you want to edit.
+
 ## Start a lab world
 
 A lab world is an unpacked `seihai-gserver-v2` release: `gs2emu` and a
@@ -213,10 +231,48 @@ first word first; the tool applies the DES key-byte bit reversal itself.
 that the body is a valid GS2 container, or that the script runs. Commands
 operate on local files only.
 
+## Command line
+
+`seihai-servertools --help` lists every command, and most take `--help`
+for their own options (`setup --help`, `gpak --help`, `level fill --help` and so
+on; `lab` is covered by the main `--help`). The options you will use most:
+
+| Command | Options |
+| --- | --- |
+| `lab start [SERVER...]` / `lab plan` | `--world DIR` (default: the current folder), `--listserver PATH` or `--no-listserver`, `--gserver PATH` (the `gs2emu` to run), `--rust DIR` (repeatable) and `--rust-gserver PATH`. With no SERVER it starts `default`, `classic` and `modern`, whichever exist. |
+| `setup status\|public\|lab\|undo [SERVER]` | `--world DIR`; see [Take a server public](#take-a-server-public-and-back). |
+| `check WORLD` | `--json` for CI; `--client-reach` warns about content older clients can't use, and `--make-gif` adds GIF copies of the PNG art it flags. Exit code 1 on errors. |
+| `gui` | `--world DIR`, `--page lab\|setup\|levels\|npcs\|database\|ganis\|packages\|check` to open on a page. |
+| `gpak pack FOLDER OUT` / `gpak unpack PACKAGE DIR` | `--server DIR`, `--key HEX16` or `--keys FILE` for encrypted `.gpake`. |
+| `level convert IN OUT.nw`, `level render IN OUT.png`, `gmap render` | `--sheet PNG` (tile sheet), `--scale N`; `gmap render` also takes `--dir DIR`. |
+| `level fill THEME.nwt LEVEL...`, `theme make RECIPE.tm OUT.nwt` | `--out DIR` or `--in-place`, `--seed N`. |
+| `gmap make OUT.gmap` | `--width N LEVEL...`, `--names DIR` or `--links DIR START`. |
+| `stats ACCOUNTS OUTDIR [MODE...]` | Modes: kills, deaths, rupees, highap, lowap, maxpower, power, arrows, bombs, glovepower, swordpower, shieldpower (default all). |
+| `gif2mng GIF...` | `--out DIR`, `--force`, `-b` (palette index 2 transparent). |
+
+The tool reads no environment variables of its own; programs it starts are
+found next to it, in the world folder or on `PATH`.
+
+### seihai-suite-stress
+
+The second binary starts the whole server suite on `127.0.0.1` and drives bot
+clients at it. `seihai-suite-stress run` runs bots for `--stay` seconds and
+writes a report; `compat` tries one bot per version profile; `versions` lists
+the profiles; `probe ADDR VERSION ACCOUNT STEPS` runs one scripted client
+against a gserver you started (`STEP_MS` sets the wait after each step).
+The main options, all with defaults, are `--bin-dir DIR` (where the server
+programs are, default next to it), `--out DIR`, `--base-port N` (24800),
+`--bots N` (24), `--versions LIST|all`, `--stay SECS` (60), `--ramp N` (20)
+and `--no-npcserver` / `--no-listserver`; `seihai-suite-stress --help` has the
+full list, including the walk, chat, warp and external-client options.
+[docs/lab/suite-stress.md](docs/lab/suite-stress.md) explains the report.
+
 ## Build
 
 ```
-cargo build --release
+git clone https://github.com/squirelworks/seihai-servertools
+cd seihai-servertools
+cargo build --release      # target/release/seihai-servertools and seihai-suite-stress
 cargo test
 cargo build --release --no-default-features   # command line only, no window
 ```
