@@ -50,5 +50,5 @@ linked in, since clang's compiler-rt is often not installed). Both are standard.
 
 The memory-safety findings here are code-only and complete. Confirming that the
 minimal reproducers crash the **real** 4.04r2 client is a separate lab step: the
-client is driven in a Mirae/GwenTea2 VM and fed the mutated `.dts` through our
+client is driven in a lab host A/B VM and fed the mutated `.dts` through our
 own lab Graal3D server, never a public server. See `FINDINGS.md`.
