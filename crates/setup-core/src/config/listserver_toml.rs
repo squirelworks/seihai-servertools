@@ -1,4 +1,4 @@
-//! `seihai-listserver.toml`: a quick line scan for the lab start
+//! `seihai-listserver.toml`: typed TOML settings for the lab start
 //! ([`ListserverLab`]) and a format-preserving editor for the Host a
 //! listserver wizard ([`ListserverToml`], on `toml_edit`), which keeps
 //! comments, order and unknown keys.
@@ -119,8 +119,8 @@ pub const DEFAULT_CLIENT_PORTS: [u16; 3] = [14921, 14922, 14923];
 /// Default port gservers register on.
 pub const DEFAULT_GSERVER_PORT: u16 = 14900;
 
-/// The settings the lab start and the safety check need, read with a plain line scan so a
-/// half-edited file still starts.
+/// Settings for lab start and safety checks. Valid TOML uses typed values;
+/// malformed, half-edited files retain a best-effort line scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListserverLab {
     /// `bind`, or `127.0.0.1` when missing.
@@ -156,14 +156,46 @@ impl Default for ListserverLab {
 }
 
 impl ListserverLab {
-    /// Read `bind` and `gserver_port` from TOML text. Only top-level
-    /// `key = value` lines are looked at; tables and comments are skipped.
-    /// `gservers` needs the whole file, so it stays empty when the file is
-    /// not valid TOML.
+    /// Read top-level settings through the existing TOML parser when valid.
+    /// A malformed, half-edited file retains the best-effort line scan below;
+    /// its allow-list stays empty because that requires valid TOML.
     pub fn scan(text: &str) -> Self {
         let mut out = ListserverLab::default();
         if let Ok(doc) = text.parse::<DocumentMut>() {
+            // Use the existing TOML parser for a valid document. A raw line
+            // split cannot distinguish quoted #, escapes or numeric separators.
             out.gservers = read_gservers(&doc);
+            if let Some(s) = doc.get("bind").and_then(Item::as_str) {
+                out.bind = s.to_string();
+            }
+            if let Some(s) = doc.get("accounts").and_then(Item::as_str) {
+                out.accounts = s.to_string();
+            }
+            if let Some(s) = doc.get("gserver_ip").and_then(Item::as_str) {
+                out.gserver_ip = s.to_string();
+            }
+            if let Some(n) = doc
+                .get("gserver_port")
+                .and_then(Item::as_integer)
+                .and_then(|n| u16::try_from(n).ok())
+            {
+                out.gserver_port = n;
+            }
+            if let Some(n) = doc
+                .get("max_connections")
+                .and_then(Item::as_integer)
+                .and_then(|n| u32::try_from(n).ok())
+            {
+                out.max_connections = n;
+            }
+            if let Some(n) = doc
+                .get("silent_list_after_ms")
+                .and_then(Item::as_integer)
+                .and_then(|n| u64::try_from(n).ok())
+            {
+                out.silent_list_after_ms = n;
+            }
+            return out;
         }
         for line in text.lines() {
             let line = line.trim();

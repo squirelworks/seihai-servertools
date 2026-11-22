@@ -9,4 +9,6 @@ Notes for the next seihai-servertools release. One line per user-visible change,
 
 - Saving levels and ganis preserves parsed finite NPC, baddy, link-arrival and sound coordinates outside the i32 range instead of silently narrowing them; ordinary formatting and existing keep-arrival semantics remain unchanged.
 
+- Listserver setup reads valid TOML strings and integers consistently with its editor, preserving quoted account paths, escapes and numeric separators; malformed files retain the existing best-effort fallback.
+
 - Repacking resource packages validates and finishes a temporary output before replacement, preserving an existing package on validation/write refusal and retaining Unix file-creation modes; package and key-file updates remain separate.
