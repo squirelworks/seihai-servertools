@@ -80,3 +80,30 @@ fn refused_non_directory_input_preserves_existing_package() {
     assert!(matches!(error, gpak::Error::Io(_)));
     assert_eq!(fs::read(&output).unwrap(), before);
 }
+
+#[cfg(unix)]
+#[test]
+fn successful_repack_keeps_existing_unix_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_root, source, output, _before) = existing_package();
+    fs::set_permissions(&output, fs::Permissions::from_mode(0o640)).unwrap();
+    fs::write(source.join("own.txt"), b"replacement").unwrap();
+    gpak::pack(&source, &output, None, None).unwrap();
+    assert_eq!(
+        fs::metadata(&output).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn new_package_uses_normal_file_creation_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let (root, source, _output, _before) = existing_package();
+    let ordinary = root.path().join("ordinary.txt");
+    fs::write(&ordinary, b"mode control").unwrap();
+    let output = root.path().join("new.gpak");
+    gpak::pack(&source, &output, None, None).unwrap();
+    let mode = |p: &std::path::Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&output), mode(&ordinary));
+}
