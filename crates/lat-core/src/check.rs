@@ -40,6 +40,10 @@ use seihai_core::assets::{AssetResolver, AssetRoot};
 use seihai_core::gmap::Gmap;
 use seihai_core::protocol::ClientVersion;
 
+/// Shared build identities for explicit world checks. Use labels rather than
+/// login tokens, which can be shared by different builds/platforms.
+pub use seihai_core::protocol::ClientVersion as CheckClient;
+
 /// How serious a finding is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
@@ -105,6 +109,58 @@ fn rel(root: &Path, p: &Path) -> String {
 /// Check a world folder. Level names are matched without case and without
 /// folders, the way a gserver finds a level by file name.
 pub fn check_world(root: &Path) -> Report {
+    check_world_inner(root, None)
+}
+
+/// Inventory a world for one explicit shared client profile. Adds warnings for
+/// parsed level/gmap/gani and classified script capabilities; it does not prove
+/// run-time reachability, exact command vocabulary or package readability.
+/// The default `check_world` inventory and report shape remain unchanged.
+pub fn check_world_for(root: &Path, client: CheckClient) -> Report {
+    check_world_inner(root, Some(client))
+}
+
+fn profile_warning(report: &mut Report, file: &str, client: CheckClient, text: &str) {
+    report.findings.push(Finding {
+        severity: Severity::Warn,
+        file: file.into(),
+        text: format!("client profile {}: {text}", client.label()),
+    });
+}
+
+fn profile_script(report: &mut Report, file: &str, client: CheckClient, script: &str, what: &str) {
+    use crate::npc::ScriptEra;
+    use seihai_core::protocol::Runs;
+    let Some(era) = crate::npc::script_era(script) else {
+        return;
+    };
+    let engines = client.profile().scripts;
+    for (name, present, runs) in [
+        (
+            "GS1",
+            matches!(era, ScriptEra::Gs1 | ScriptEra::Both),
+            engines.gs1,
+        ),
+        (
+            "GS2",
+            matches!(era, ScriptEra::Gs2 | ScriptEra::Both),
+            engines.gs2,
+        ),
+    ] {
+        if present && runs != Runs::Yes {
+            let status = if runs == Runs::No {
+                "is not supported"
+            } else {
+                "support is unknown"
+            };
+            profile_warning(report, file, client, &format!(
+                "{what} contains {name}; {name} {status} in the shared profile; other script parts are assessed separately"
+            ));
+        }
+    }
+}
+
+fn check_world_inner(root: &Path, client: Option<CheckClient>) -> Report {
     let mut files = Vec::new();
     walk(root, &mut files);
     files.sort();
@@ -120,7 +176,10 @@ pub fn check_world(root: &Path) -> Report {
     // 2.22's profile accepts a `.png` where a `.gif` was named, and the
     // other way around. The question here is whether the file is in the
     // folder, not whether one older build can draw it.
-    let assets = AssetResolver::new(AssetRoot::new(root), ClientVersion::V222.profile());
+    let assets = AssetResolver::new(
+        AssetRoot::new(root),
+        client.unwrap_or(ClientVersion::V222).profile(),
+    );
     for path in &files {
         let file = rel(root, path);
         let name = path
@@ -140,6 +199,28 @@ pub fn check_world(root: &Path) -> Report {
                     text: format!("level does not parse: {e}"),
                 }),
                 Ok(level) => {
+                    if let Some(client) = client {
+                        let levels = client.profile().levels;
+                        let format = if bytes.starts_with(b"GLEVNW01") && !levels.nw {
+                            Some("NW")
+                        } else if bytes.starts_with(b"GR-V1") && !levels.graal {
+                            Some("GR-V1")
+                        } else if bytes.starts_with(b"Z3-V1") && !levels.zelda {
+                            Some("Z3-V1")
+                        } else {
+                            None
+                        };
+                        if let Some(format) = format {
+                            profile_warning(
+                                &mut report,
+                                &file,
+                                client,
+                                &format!(
+                                    "{format} level format is not supported by the shared profile"
+                                ),
+                            );
+                        }
+                    }
                     for link in &level.links {
                         if !link.dest.is_empty() && !exists(&link.dest) {
                             report.findings.push(Finding {
@@ -163,6 +244,15 @@ pub fn check_world(root: &Path) -> Report {
                             &assets,
                         );
                         check_npc_script(&mut report, &mut seen, &file, npc, &assets);
+                        if let Some(client) = client {
+                            profile_script(
+                                &mut report,
+                                &file,
+                                client,
+                                &npc.script,
+                                &format!("NPC at {},{}", npc.x, npc.y),
+                            );
+                        }
                     }
                 }
             }
@@ -175,6 +265,10 @@ pub fn check_world(root: &Path) -> Report {
                     text: "gmap does not parse (GRMAP001 header and a level grid expected)".into(),
                 }),
                 Some(gmap) => {
+                    if let Some(client) = client.filter(|c| !c.profile().levels.gmap) {
+                        profile_warning(&mut report, &file, client,
+                            "gmap is not supported by the shared profile; linked single-level fallback is not established by this inventory");
+                    }
                     for (i, cell) in gmap.names.iter().enumerate() {
                         if !cell.is_empty() && !exists(cell) {
                             report.findings.push(Finding {
@@ -199,7 +293,26 @@ pub fn check_world(root: &Path) -> Report {
                     file,
                     text: format!("gani does not parse: {e}"),
                 }),
-                Ok(gani) => check_gani(&mut report, &file, &gani, &assets),
+                Ok(gani) => {
+                    check_gani(&mut report, &file, &gani, &assets);
+                    if let Some(client) = client.filter(|c| !c.profile().ui.ganis) {
+                        profile_warning(&mut report, &file, client,
+                            "gani is not supported by the shared profile; no server animation fallback is inferred");
+                    }
+                }
+            }
+        }
+    }
+    if let Some(client) = client {
+        for path in &files {
+            if let Some(weapon) = read_weapon(path) {
+                profile_script(
+                    &mut report,
+                    &rel(root, path),
+                    client,
+                    &weapon.script,
+                    &format!("weapon {}", weapon.name),
+                );
             }
         }
     }

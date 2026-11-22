@@ -4,3 +4,5 @@ Notes for the next seihai-servertools release. One line per user-visible change,
 - Built on seihai-core and seihai-draw v0.7.2, with seihai-rc at a `main` commit on the same core, so the lock file holds one core (it held v0.6.1 and, through seihai-rc, v0.4.0). The LAT NPC-server database page now tokenizes NPC and class scripts in the server's text profile, which seihai-rc reads from the server's `Server:` line.
 
 - Movie previews no longer overflow the word-wrap width calculation when a TEXT actor has an extreme negative horizontal coordinate; ordinary wrapping and partially visible text retain their placement.
+
+- World checks can select a shared client build with `check --client LABEL` or the GUI profile picker; `check --list-clients` lists labels. Selected level/gmap/gani/script capability warnings preserve unknown support and JSON format 1. Default inventory and dependency pins are unchanged; per-build package readability and exact script vocabulary are not certified.

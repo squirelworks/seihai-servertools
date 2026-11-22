@@ -941,3 +941,56 @@ fn make_gif_writes_only_the_copies_client_reach_asks_for() {
     let again = bin().args(["check", "--make-gif"]).arg(w).output().unwrap();
     assert!(!String::from_utf8_lossy(&again.stdout).contains("wrote "));
 }
+
+#[test]
+fn check_client_selection_is_explicit_and_keeps_json_format_one() {
+    let out = bin().args(["check", "--list-clients"]).output().unwrap();
+    assert!(out.status.success());
+    let labels = String::from_utf8(out.stdout).unwrap();
+    assert!(labels.lines().any(|l| l == "2.22"));
+    assert!(labels.lines().any(|l| l == "1.39"));
+    let w = tempfile::tempdir().unwrap();
+    fs::write(w.path().join("start.nw"), "GLEVNW01\n").unwrap();
+    for (extra, selected) in [(vec![], false), (vec!["--client", "1.39"], true)] {
+        let out = bin()
+            .args(["check", "--json"])
+            .args(extra)
+            .arg(w.path())
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(text.lines().count(), 1);
+        assert!(text.starts_with("{\"format\":1,\"levels\":1,\"gmaps\":0,\"ganis\":0,"));
+        assert!(text.ends_with("]}\n"));
+        assert_eq!(text.contains("client profile 1.39"), selected, "{text}");
+        assert_eq!(text.contains("NW level format"), selected, "{text}");
+    }
+}
+
+#[test]
+fn invalid_check_client_arguments_fail_before_optional_gif_writes() {
+    let w = tempfile::tempdir().unwrap();
+    fs::write(w.path().join("art.png"), b"not decoded on invalid input").unwrap();
+    for extra in [
+        vec!["--client"],
+        vec!["--client", "unknown"],
+        vec!["--client", "2.22", "--client", "1.39"],
+        vec!["--list-clients"],
+        vec!["--client", "GNW13110"],
+    ] {
+        let out = bin()
+            .args(["check", "--make-gif"])
+            .arg(w.path())
+            .args(extra)
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(2));
+        assert!(out.stdout.is_empty());
+        assert!(!w.path().join("art.gif").exists());
+    }
+}
