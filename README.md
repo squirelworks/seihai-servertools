@@ -205,6 +205,12 @@ there are errors (a missing image or sound is a warning), so it can run in CI.
 `check --json WORLD` prints the same findings as one JSON object (`format` 1,
 the counts, and each finding's `level`, `source`, `file`, `key` and `text`).
 
+`check --list-clients` lists shared build labels. `check --client "1.39" WORLD`
+(or the World check page's profile picker) adds selected-build level, gmap, gani
+and script capability warnings. The default general inventory and JSON format
+are unchanged. Unknown support remains unknown; package readability and exact
+per-build script vocabulary are not certified.
+
 `check --client-reach WORLD` also warns about content that some client
 versions cannot use: PNG art with no GIF copy for pre-2.1 clients, gmaps and
 ganis on versions without them, GS2 scripts on versions that only run GS1,
@@ -241,7 +247,7 @@ on; `lab` is covered by the main `--help`). The options you will use most:
 | --- | --- |
 | `lab start [SERVER...]` / `lab plan` | `--world DIR` (default: the current folder), `--listserver PATH` or `--no-listserver`, `--gserver PATH` (the `gs2emu` to run), `--rust DIR` (repeatable) and `--rust-gserver PATH`. With no SERVER it starts `default`, `classic` and `modern`, whichever exist. |
 | `setup status\|public\|lab\|undo [SERVER]` | `--world DIR`; see [Take a server public](#take-a-server-public-and-back). |
-| `check WORLD` | `--json` for CI; `--client-reach` warns about content older clients can't use, and `--make-gif` adds GIF copies of the PNG art it flags. Exit code 1 on errors. |
+| `check WORLD` | `--json` for CI; `--client LABEL` selects a shared build (`check --list-clients` lists them); `--client-reach` warns about content older clients can't use, and `--make-gif` adds GIF copies of the PNG art it flags. Exit code 1 on errors. |
 | `gui` | `--world DIR`, `--page lab\|setup\|levels\|npcs\|database\|ganis\|packages\|check` to open on a page. |
 | `gpak pack FOLDER OUT` / `gpak unpack PACKAGE DIR` | `--server DIR`, `--key HEX16` or `--keys FILE` for encrypted `.gpake`. |
 | `level convert IN OUT.nw`, `level render IN OUT.png`, `gmap render` | `--sheet PNG` (tile sheet), `--scale N`; `gmap render` also takes `--dir DIR`. |

@@ -22,7 +22,8 @@ Usage:
                                [--gserver PATH] [--rust DIR]... [--rust-gserver PATH]
                                [SERVER...]
   seihai-servertools lab plan  (same options; prints what start would run)
-  seihai-servertools check [--json] [--client-reach] [--make-gif] WORLD
+  seihai-servertools check [--json] [--client LABEL] [--client-reach] [--make-gif] WORLD
+  seihai-servertools check --list-clients
   seihai-servertools setup status|public|lab|undo [--world DIR] [SERVER]
                                     take a gserver folder public or back to the lab
                                     (`setup --help` for the options)
@@ -74,7 +75,11 @@ to save is an error. Exit code 1 on errors (a missing image or sound is a
 warning). --json prints one JSON object instead, for CI: format (1), the
 counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
 (error, warning, note), source (world or settings), file, key (or null) and
-text. --client-reach also inventories level NPC image references (including
+text. --client LABEL adds shared-profile level/gmap/gani/script warnings for
+one build; check --list-clients lists the accepted labels. Unknown script
+support remains unknown; package readability and exact per-build vocabulary
+are not certified. Without --client the general inventory stays unchanged.
+--client-reach also inventories level NPC image references (including
 fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
 It flags parsed gani files for fallback review using shared profiles' gani
 support, without claiming use or choosing a built-in animation, and lists
@@ -165,12 +170,32 @@ struct Line {
 }
 
 fn check_args(args: &[&str]) -> ExitCode {
+    if args == ["--list-clients"] {
+        for client in lat_core::check::CheckClient::all_versions() {
+            println!("{}", client.label());
+        }
+        return ExitCode::SUCCESS;
+    }
     let mut world = None;
     let mut json = false;
     let mut reach = false;
     let mut make_gif = false;
-    for arg in args {
+    let mut client = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
         match *arg {
+            "--client" => {
+                let selected = args
+                    .next()
+                    .and_then(|label| lat_core::check::CheckClient::from_label(label));
+                if client.is_some() || selected.is_none() {
+                    eprintln!(
+                        "check: --client needs one known build label; use check --list-clients"
+                    );
+                    return ExitCode::from(2);
+                }
+                client = selected;
+            }
             "--json" => json = true,
             "--client-reach" => reach = true,
             "--make-gif" => make_gif = true,
@@ -197,15 +222,23 @@ fn check_args(args: &[&str]) -> ExitCode {
             }
         }
     }
-    check(Path::new(world), json, reach)
+    check(Path::new(world), json, reach, client)
 }
 
-fn check(world: &Path, json: bool, reach: bool) -> ExitCode {
+fn check(
+    world: &Path,
+    json: bool,
+    reach: bool,
+    client: Option<lat_core::check::CheckClient>,
+) -> ExitCode {
     if !world.is_dir() {
         eprintln!("check: no folder {}", world.display());
         return ExitCode::from(2);
     }
-    let mut report = lat_core::check::check_world(world);
+    let mut report = match client {
+        Some(client) => lat_core::check::check_world_for(world, client),
+        None => lat_core::check::check_world(world),
+    };
     if reach {
         report
             .findings

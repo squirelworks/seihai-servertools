@@ -3,7 +3,7 @@
 //! (`setup_core::folder::check_world_config`).
 
 use eframe::egui;
-use lat_core::check::{check_world, Report};
+use lat_core::check::{check_world, check_world_for, CheckClient, Report};
 use setup_core::folder::{check_world_config, ConfigFinding};
 
 #[derive(Default)]
@@ -11,6 +11,7 @@ pub struct Page {
     world: String,
     picker: super::picker::Picker,
     report: Option<Report>,
+    client: Option<CheckClient>,
     config: Vec<ConfigFinding>,
 }
 
@@ -20,13 +21,32 @@ impl Page {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        let previous_client = self.client;
+        egui::ComboBox::from_id_salt("world-check-client")
+            .selected_text(
+                self.client
+                    .map_or("General inventory (default)", CheckClient::label),
+            )
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.client, None, "General inventory (default)");
+                for &client in CheckClient::all_versions() {
+                    ui.selectable_value(&mut self.client, Some(client), client.label());
+                }
+            });
+        if previous_client != self.client {
+            self.report = None;
+            self.config.clear();
+        }
         ui.horizontal(|ui| {
             ui.label("World folder:");
             ui.text_edit_singleline(&mut self.world);
             self.picker.button(ui, true, &mut self.world);
             if ui.button("Check").clicked() {
                 let world = std::path::Path::new(&self.world);
-                self.report = Some(check_world(world));
+                self.report = Some(match self.client {
+                    Some(client) => check_world_for(world, client),
+                    None => check_world(world),
+                });
                 self.config = check_world_config(world);
             }
         });

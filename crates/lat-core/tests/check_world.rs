@@ -715,3 +715,112 @@ fn run_time_image_names_are_matched_to_world_files() {
         check_world(w).findings
     );
 }
+
+#[test]
+fn selected_client_checks_parsed_formats_without_changing_inventory_findings() {
+    use lat_core::check::{check_world_for, CheckClient};
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::write(w.join("start.nw"), "GLEVNW01\nLINK absent.nw 0 0 1 1 1 1\nNPC tree.gif 1 1\nif (created) { play gone.wav; }\nNPCEND\n").unwrap();
+    // Generic PNG/GIF aliases are intentionally accepted in every profile.
+    fs::write(w.join("tree.png"), b"presence only").unwrap();
+    fs::write(w.join("bad.nw"), b"not a level").unwrap();
+    fs::write(
+        w.join("world.gmap"),
+        "GRMAP001\nWIDTH 1\nHEIGHT 1\nLEVELNAMES\n\"start.nw\"\nLEVELNAMESEND\n",
+    )
+    .unwrap();
+    fs::write(
+        w.join("idle.gani"),
+        "SPRITE 0 BODY 0 0 16 16\nSINGLEDIRECTION\nANI\n0 0 0\nANIEND\n",
+    )
+    .unwrap();
+    let s = server(w, "test", "*", "");
+    fs::write(s.join("world/gpaks/art.gpake"), b"package presence").unwrap();
+    let ordinary = check_world(w);
+    assert_eq!((ordinary.levels, ordinary.gmaps, ordinary.ganis), (2, 1, 1));
+    assert_eq!(ordinary.errors(), 1);
+    assert!(ordinary
+        .findings
+        .iter()
+        .any(|f| f.text.contains("gone.wav")));
+    assert!(ordinary
+        .findings
+        .iter()
+        .any(|f| f.text.contains("absent.nw")));
+    assert!(ordinary
+        .findings
+        .iter()
+        .any(|f| f.text.contains("has no key")));
+    assert!(!ordinary
+        .findings
+        .iter()
+        .any(|f| f.text.contains("tree.gif")));
+    for client in [CheckClient::V139, CheckClient::V222] {
+        let selected = check_world_for(w, client);
+        assert_eq!((selected.levels, selected.gmaps, selected.ganis), (2, 1, 1));
+        assert_eq!(selected.errors(), ordinary.errors());
+        let inventory: Vec<_> = selected
+            .findings
+            .iter()
+            .filter(|f| !f.text.starts_with("client profile "))
+            .cloned()
+            .collect();
+        assert_eq!(inventory, ordinary.findings);
+        let specific: Vec<_> = selected
+            .findings
+            .iter()
+            .filter(|f| f.text.starts_with("client profile "))
+            .collect();
+        assert!(!specific.iter().any(|f| f.file == "bad.nw"));
+        if client == CheckClient::V139 {
+            assert!(specific.iter().any(|f| f.text.contains("NW level format")));
+            assert!(specific
+                .iter()
+                .any(|f| f.text.contains("gmap is not supported")));
+            assert!(specific
+                .iter()
+                .any(|f| f.text.contains("gani is not supported")));
+        } else {
+            assert!(specific.is_empty(), "{specific:?}");
+        }
+    }
+}
+
+#[test]
+fn selected_client_preserves_unknown_and_mixed_script_capabilities() {
+    use lat_core::check::{check_world_for, CheckClient};
+    let dir = tempfile::tempdir().unwrap();
+    let w = dir.path();
+    fs::write(w.join("start.nw"), "GLEVNW01\nNPC - 1 1\nfunction onCreated() { this.x = 1; }\nNPCEND\nNPC - 2 2\nif (created) { message hi; }\nfunction onCreated() { temp.a = 1; }\nNPCEND\n").unwrap();
+    fs::create_dir(w.join("weapons")).unwrap();
+    fs::write(
+        w.join("weapons/test.txt"),
+        "GRAWP001\nREALNAME Test\nSCRIPT\nfunction onCreated() {}\nSCRIPTEND\n",
+    )
+    .unwrap();
+    for (client, status) in [
+        (CheckClient::V222, "is not supported"),
+        (CheckClient::V210, "support is unknown"),
+        (CheckClient::V3153, ""),
+    ] {
+        let report = check_world_for(w, client);
+        let gs2: Vec<_> = report
+            .findings
+            .iter()
+            .filter(|f| f.text.starts_with("client profile ") && f.text.contains("contains GS2"))
+            .collect();
+        if status.is_empty() {
+            assert!(gs2.is_empty(), "{gs2:?}");
+        } else {
+            assert_eq!(gs2.len(), 3, "{gs2:?}");
+            assert!(gs2
+                .iter()
+                .all(|f| f.text.contains(status) && f.severity == Severity::Warn));
+            assert!(gs2.iter().any(|f| f.text.contains("NPC at 2,2")
+                && f.text
+                    .contains("other script parts are assessed separately")));
+            assert!(gs2.iter().any(|f| f.file == "weapons/test.txt"));
+        }
+    }
+}

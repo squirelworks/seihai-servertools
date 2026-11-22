@@ -78,3 +78,32 @@ keeps every pixel's colour; pixels with alpha below 128 become the GIF's
 transparent colour (this tool's choice, not read from a client). It never
 replaces a file, and it skips art with more than 256 colours (255 with
 transparency) and says so, rather than picking a palette for you.
+
+
+## Check one build
+
+`check --list-clients` prints the labels from the pinned shared core profiles.
+Use one exact label, quoted when it contains spaces:
+`seihai-servertools check --client "1.39" --json WORLD`.
+The World check page offers the same profiles alongside its default general
+inventory. Login tokens are not build selectors because some builds share them.
+
+Selection adds warnings for parsed NW/GR-V1/Z3-V1 levels, gmaps, ganis and
+classified GS1/GS2 level-NPC and weapon scripts, using the selected profile's
+capability fields. Unknown script support stays unknown; an unsupported part of
+a mixed script does not imply the other part is unsupported. Presence is an
+inventory, not proof that a player reaches the file or that a fallback is sent.
+
+With no `--client`, the existing general inventory is unchanged. `--client-reach`
+still adds its separate all-profile inventory, even with a selected build.
+JSON keeps format 1 and the existing fields; selected warnings name the build in
+their text. Warnings do not make the command fail; parse/settings errors do.
+
+The selected asset resolver still checks file presence. Generic PNG/GIF alias
+lookup is intentionally shared across profiles; a found file does not prove that
+an old build decodes it. GS1 syntax diagnostics still use the existing V217
+parser, not per-build command vocabularies. Package safety/allowed-version checks
+are unchanged: the pinned profiles have no package-readability capability field,
+so this feature does not certify packages per build. It also does not replace
+the existing tile and pre-2.1 image inventories. These limits leave #100's full
+world-compatibility criterion open.
