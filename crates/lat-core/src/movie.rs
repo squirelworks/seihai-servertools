@@ -517,7 +517,13 @@ MOVIEEND
         let movie = GaniMovie::parse(text).unwrap().unwrap();
         let frame = paint_frame(&gani, &movie, 0, (32, 16), &mut Files(|_: &str| None, none));
         assert!(frame.skipped.is_empty());
-        assert!(frame.image.pixels.chunks_exact(4).all(|p| p[3] == 0));
+        assert!(frame
+            .image
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| p[3] == 0));
     }
 
     #[test]
@@ -539,7 +545,13 @@ MOVIEEND
             seihai_draw::draw_text(&mut expected, &font, "Hello Hello Hello", x, 0, &style);
             assert!(frame.skipped.is_empty());
             assert_eq!(frame.image.pixels, expected.rgba, "origin {x}");
-            assert!(frame.image.pixels.chunks_exact(4).any(|p| p[3] != 0));
+            assert!(frame
+                .image
+                .pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|p| p[3] != 0));
         }
     }
 
