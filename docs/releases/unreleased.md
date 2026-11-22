@@ -8,3 +8,5 @@ Notes for the next seihai-servertools release. One line per user-visible change,
 - World checks can select a shared client build with `check --client LABEL` or the GUI profile picker; `check --list-clients` lists labels. Selected level/gmap/gani/script capability warnings preserve unknown support and JSON format 1. Default inventory and dependency pins are unchanged; per-build package readability and exact script vocabulary are not certified.
 
 - Saving levels and ganis preserves parsed finite NPC, baddy, link-arrival and sound coordinates outside the i32 range instead of silently narrowing them; ordinary formatting and existing keep-arrival semantics remain unchanged.
+
+- Repacking resource packages validates and finishes a temporary output before replacement, preserving an existing package on validation/write refusal and retaining Unix file-creation modes; package and key-file updates remain separate.

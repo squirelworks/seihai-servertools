@@ -389,7 +389,9 @@ pub struct Packed {
 /// Packages page share. `out` ends in `.gpake` (encrypted), `.gpak` or
 /// `.zip` (plain). A `.gpake` uses `key`, or a random one, and the key is
 /// saved in `key_file` when given ([`set_key`]). A plain package refuses a
-/// key. A failed write leaves no half-written package behind.
+/// key. Package validation, writing and flushing complete in a temporary file
+/// before replacing an existing output. The optional key-file update follows
+/// that replacement and is not part of the same transaction.
 pub fn pack(
     folder: &Path,
     out: &Path,
@@ -422,11 +424,36 @@ pub fn pack(
     if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
     }
-    let file = std::fs::File::create(out)?;
-    if let Err(e) = write(std::io::BufWriter::new(file), &entries, key.as_ref()) {
-        let _ = std::fs::remove_file(out);
-        return Err(e);
+    let parent = out
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(".servertools-gpak-").suffix(".tmp");
+    #[cfg(unix)]
+    let existing_permissions = {
+        use std::os::unix::fs::PermissionsExt;
+        // Match normal file creation for new outputs, including the umask.
+        builder.permissions(std::fs::Permissions::from_mode(0o666));
+        match std::fs::metadata(out) {
+            Ok(metadata) => Some(metadata.permissions()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    let mut tmp = builder.tempfile_in(parent)?;
+    {
+        let mut writer = std::io::BufWriter::new(tmp.as_file_mut());
+        write(&mut writer, &entries, key.as_ref())?;
+        writer.flush()?;
     }
+    #[cfg(unix)]
+    if let Some(permissions) = existing_permissions {
+        // Apply after writing, before replacement; preserve bits without
+        // filtering them through the current process's umask.
+        tmp.as_file().set_permissions(permissions)?;
+    }
+    tmp.persist(out).map_err(|e| Error::Io(e.error))?;
     if let (Some(k), Some(kf)) = (key, key_file) {
         set_key(kf, &name, &k)?;
     }
