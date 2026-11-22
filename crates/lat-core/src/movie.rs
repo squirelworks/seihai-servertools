@@ -362,7 +362,8 @@ fn paint_text(
         strikeout: flag("strikeout"),
         shaded: flag("shaded"),
         align,
-        wrap: flag("wordwrap").then(|| (buf.width as i32 - x).max(1) as u32),
+        wrap: flag("wordwrap")
+            .then(|| (i64::from(buf.width) - i64::from(x)).clamp(1, i64::from(u32::MAX)) as u32),
     };
     let font = cache.font(key(state, &["font"]).map(str::trim).unwrap_or(""));
     seihai_draw::draw_text(buf, &cache.fonts[font].1, text, x, y, &style);
@@ -507,6 +508,39 @@ MOVIEEND
         let f = paint_frame(&gani, &movie, 2, (6, 3), &mut Files(green, &mut ganis));
         assert_eq!(f.image.pixel(2, 1), Some([0, 255, 0, 255]), "wraps");
         assert_eq!(asked, ["walk.gani"; 3]);
+    }
+
+    #[test]
+    fn wrapped_text_at_minimum_coordinate_does_not_overflow() {
+        let text = "GANI0002\nFRAMES 1\nMOVIE\nACTOR TEXT edge\nFRAME 0 text=Hello,wordwrap=1,dx=-2147483648,dy=0\nACTOREND\nMOVIEEND\n";
+        let gani = Gani::parse(text).unwrap();
+        let movie = GaniMovie::parse(text).unwrap().unwrap();
+        let frame = paint_frame(&gani, &movie, 0, (32, 16), &mut Files(|_: &str| None, none));
+        assert!(frame.skipped.is_empty());
+        assert!(frame.image.pixels.chunks_exact(4).all(|p| p[3] == 0));
+    }
+
+    #[test]
+    fn wrapped_text_keeps_the_right_edge_for_visible_and_negative_origins() {
+        let font = FontVec::try_from_vec(epaint_default_fonts::UBUNTU_LIGHT.to_vec()).unwrap();
+        for (x, wrap) in [(8, 24), (-4, 36)] {
+            let text = format!(
+                "GANI0002\nFRAMES 1\nMOVIE\nACTOR TEXT title\nFRAME 0 text=Hello Hello Hello,wordwrap=1,dx={x},dy=0\nACTOREND\nMOVIEEND\n"
+            );
+            let gani = Gani::parse(&text).unwrap();
+            let movie = GaniMovie::parse(&text).unwrap().unwrap();
+            let frame = paint_frame(&gani, &movie, 0, (32, 48), &mut Files(|_: &str| None, none));
+            let mut expected = PixelBuffer::new(32, 48);
+            let style = TextStyle {
+                size: 12.0,
+                wrap: Some(wrap),
+                ..TextStyle::default()
+            };
+            seihai_draw::draw_text(&mut expected, &font, "Hello Hello Hello", x, 0, &style);
+            assert!(frame.skipped.is_empty());
+            assert_eq!(frame.image.pixels, expected.rgba, "origin {x}");
+            assert!(frame.image.pixels.chunks_exact(4).any(|p| p[3] != 0));
+        }
     }
 
     #[test]
