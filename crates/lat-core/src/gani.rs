@@ -237,7 +237,11 @@ fn steps(gani: &Gani) -> String {
 }
 
 fn float_text(n: f32) -> String {
-    if n.is_finite() && n.fract() == 0.0 {
+    if n.is_finite()
+        && n.fract() == 0.0
+        && f64::from(n) >= f64::from(i32::MIN)
+        && f64::from(n) <= f64::from(i32::MAX)
+    {
         format!("{}", n as i32)
     } else {
         n.to_string()

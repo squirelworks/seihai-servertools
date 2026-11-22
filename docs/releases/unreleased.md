@@ -6,3 +6,5 @@ Notes for the next seihai-servertools release. One line per user-visible change,
 - Movie previews no longer overflow the word-wrap width calculation when a TEXT actor has an extreme negative horizontal coordinate; ordinary wrapping and partially visible text retain their placement.
 
 - World checks can select a shared client build with `check --client LABEL` or the GUI profile picker; `check --list-clients` lists labels. Selected level/gmap/gani/script capability warnings preserve unknown support and JSON format 1. Default inventory and dependency pins are unchanged; per-build package readability and exact script vocabulary are not certified.
+
+- Saving levels and ganis preserves parsed finite NPC, baddy, link-arrival and sound coordinates outside the i32 range instead of silently narrowing them; ordinary formatting and existing keep-arrival semantics remain unchanged.
