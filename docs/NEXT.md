@@ -1,9 +1,12 @@
-# Roadmap status (issue #50)
+# Roadmap status
 
-Working mirror of [issue #50](https://github.com/squirelworks/seihai-servertools/issues/50)
-against `main` at `e662244` (after #95). Tick boxes when the matching PR
-merges. Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`. Offline gap
-detail: `docs/design/classic-offline-gaps.md`.
+Working mirror of [issue #99](https://github.com/squirelworks/seihai-servertools/issues/99)
+(first release) and [issue #100](https://github.com/squirelworks/seihai-servertools/issues/100)
+(1.0), reconciled against `main` at `6cebb682` (after #110).
+The completed [issue #50](https://github.com/squirelworks/seihai-servertools/issues/50)
+record is retained below. Tick boxes when the matching PR merges.
+Rules: `AGENTS.md`. Layout: `docs/ARCHITECTURE.md`. Offline gap detail:
+`docs/design/classic-offline-gaps.md`.
 
 ## Where it stands
 
@@ -11,7 +14,9 @@ detail: `docs/design/classic-offline-gaps.md`.
   gserver kind), go-public setup on the command line and in the window,
   Host a listserver with the gserver allow-list and HQ passwords, player
   capacity, the world checker (with `--client-reach`, including run-time
-  image names), the LAT level / gani / level-NPC editors with upload over
+  image names, and explicit shared-profile selection in the CLI and window
+  from [#110](https://github.com/squirelworks/seihai-servertools/pull/110)),
+  the LAT level / gani / level-NPC editors with upload over
   the RC file link, the Packages page, `gpak` and `code`, and the suite
   stress rig (plus listserver-hard scenarios and a buddy/guild seeder,
   `#93` / `#94`).
@@ -31,8 +36,12 @@ detail: `docs/design/classic-offline-gaps.md`.
 
 ### Dependencies
 
-- [ ] Move `seihai-rc` to a **tag** (seihai-rc#27). Still a rev pin on
-      main after `#95`; core alignment is already one `v0.4.0`.
+- [ ] Move `seihai-rc` to a **tag** when its v0.2.0 release ships
+      ([seihai-rc#66](https://github.com/squirelworks/seihai-rc/issues/66)).
+      It remains pinned to rev `fcfd2cc264fece3838a1acca56b1d2d3cc217a17`;
+      core/draw are paired at `v0.7.2`, with one core in the lock file
+      ([#106](https://github.com/squirelworks/seihai-servertools/pull/106)).
+      The alignment is done; the published-tag requirement is not.
 
 ### Lab / suite
 
@@ -54,6 +63,13 @@ detail: `docs/design/classic-offline-gaps.md`.
 
 ### LAT / product
 
+- [ ] Complete #100's all-build world-checker coverage beyond the selected
+      profile warnings delivered by
+      [#110](https://github.com/squirelworks/seihai-servertools/pull/110).
+      Generic PNG/GIF aliases remain shared; script classification is
+      heuristic and syntax checks still use V217; the pinned profiles have
+      no package-readability field. This is not runtime or native
+      compatibility certification.
 - [ ] NPC editor: NPC-server database objects. The "NPC-server database"
       page (`gui --page database`, `lat_core::ncdb`) lists database NPCs,
       classes and weapons over an NC login, edits and saves scripts with a
@@ -66,6 +82,13 @@ detail: `docs/design/classic-offline-gaps.md`.
 - [ ] Default to the Rust gserver once it reaches parity (seihai#353
       phase 7; seihai-gserver `docs/PARITY.md`). macOS polish waits for
       the owner's polishing phase.
+
+### Release / milestone
+
+- [ ] Complete the remaining [#99](https://github.com/squirelworks/seihai-servertools/issues/99)
+      first-release gates: published dependency tags (including the RC tag),
+      release builds for Linux, Windows and macOS x86_64/arm64, the release
+      PR and owner publication. Neither #106 nor #110 completes these gates.
 
 ### Offline classic tools
 
@@ -95,3 +118,15 @@ not duplicate that table here.
 - [x] Core/draw `v0.4.0` (`#91`); classic offline gaps doc (`#92`);
       listserver-hard scenarios + buddy/guild seeder (`#93`, `#94`);
       RC rev on core `v0.4.0` (`#95`).
+- [x] One-core dependency alignment:
+      [#106](https://github.com/squirelworks/seihai-servertools/pull/106)
+      pairs core/draw at `v0.7.2` and RC rev
+      `fcfd2cc264fece3838a1acca56b1d2d3cc217a17`; the published RC tag
+      remains open above.
+- [x] Selected-build world checks:
+      [#110](https://github.com/squirelworks/seihai-servertools/pull/110)
+      adds `check --client LABEL`, `check --list-clients` and the window's
+      profile picker, using shared profile fields for parsed level formats,
+      gmaps, ganis and classified GS1/GS2 level-NPC and weapon scripts.
+      Unknown support stays unknown; the default inventory and JSON format 1
+      are preserved. Full #100 coverage remains open above.

@@ -52,13 +52,39 @@ exists; then add only a lab kind and a texture-presence check (see
 
 The order of the work is in [NEXT.md](NEXT.md).
 
-## Current follow-through (2026-11-16)
+## Current follow-through (2026-11-22)
 
-Roadmap issue #50's original Next list is done. Dependencies: core and
-draw are on tag `v0.4.0` (#91); `seihai-rc` is a rev pin on main after
-#95 (`90cb87f`) sharing that core, still waiting on an rc tag
-(seihai-rc#27). Remaining open work is listed in `docs/NEXT.md`: Rust
-lab original-client/login evidence, suite-stress stage reruns and RC
-bots, LAT database-NPC editor and LAT-account lab, offline gaps in
-`docs/design/classic-offline-gaps.md`, Graal3D lab/check when G3D-9
-exists, and defaulting to the Rust gserver at parity.
+Roadmap issue #50's original Next list is done; its historical record stays
+in [NEXT.md](NEXT.md). The first-release roadmap
+[#99](https://github.com/squirelworks/seihai-servertools/issues/99) and
+the wider 1.0 roadmap
+[#100](https://github.com/squirelworks/seihai-servertools/issues/100)
+remain open.
+
+Dependencies were aligned by
+[#106](https://github.com/squirelworks/seihai-servertools/pull/106):
+`seihai-core` and `seihai-draw` are paired at `v0.7.2`, and
+`seihai-rc` is pinned to rev
+`fcfd2cc264fece3838a1acca56b1d2d3cc217a17` on that same core. The lock
+file holds one core. The RC pin still needs a published tag when its
+v0.2.0 release ships
+([seihai-rc#66](https://github.com/squirelworks/seihai-rc/issues/66));
+release builds, the release PR and owner publication are not completed by
+the dependency alignment.
+
+[#110](https://github.com/squirelworks/seihai-servertools/pull/110)
+adds explicit shared-build selection to the world checker:
+`check --client LABEL`, `check --list-clients` and the window's profile picker.
+Selected-profile warnings cover successfully parsed level formats, gmaps,
+ganis and classified GS1/GS2 level-NPC and weapon scripts. Unknown support
+stays unknown; the default inventory and JSON format 1 are unchanged.
+This is bounded progress toward #100, not completion: generic PNG/GIF
+aliases remain shared, script classification is heuristic, syntax checks
+still use V217, and the pinned profiles have no package-readability field.
+It does not certify runtime or native compatibility.
+
+Remaining work is listed in [NEXT.md](NEXT.md): the first-release gates,
+full #100 checker coverage, suite-stress stage reruns and RC bots, remaining
+NPC-server object work and the LAT-account lab, offline gaps in
+`docs/design/classic-offline-gaps.md`, Graal3D lab/check when G3D-9 exists,
+and defaulting to the Rust gserver at parity.
