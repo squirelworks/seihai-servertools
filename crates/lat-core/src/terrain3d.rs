@@ -93,17 +93,127 @@ impl Default for Terrain3dOptions {
     }
 }
 
+/// A height field ready to become a 3D world: `width` by `height` levels,
+/// `heights` with `width * 8 + 1` columns and `height * 8 + 1` rows.
+#[derive(Debug, Clone)]
+pub struct Field3d {
+    pub world: String,
+    pub width: usize,
+    pub height: usize,
+    /// Heights below this are water.
+    pub base: i32,
+    /// The first split's reach: sand and rock bands are fractions of it.
+    pub amplitude: f64,
+    /// Seeds the tree and rock placement.
+    pub seed: u32,
+    pub heights: Vec<Vec<i32>>,
+    /// Where the field came from, for the world file's header.
+    pub source: String,
+}
+
 /// The 3D files for the world `o` describes (see the module notes).
 pub fn terrain3d(o: &TerrainOptions, o3: &Terrain3dOptions) -> Result<Vec<File>, String> {
     if o.width == 0 || o.height == 0 || o.width > 64 || o.height > 64 {
         return Err("terrain worlds are 1 to 64 levels a side".into());
     }
+    let (pw, ph) = (o.width * STEP + 1, o.height * STEP + 1);
+    let field = Field3d {
+        world: o.world.clone(),
+        width: o.width,
+        height: o.height,
+        base: o.base,
+        amplitude: o.amplitude,
+        seed: o.seed,
+        heights: generate::height_field(
+            pw,
+            ph,
+            o.seed,
+            o.base,
+            o.amplitude,
+            o.chaos,
+            o.even_borders,
+        ),
+        source: format!(
+            "the gen terrain world {}.gmap (seed {}, base {}, height {}, chaos {}{})",
+            o.world,
+            o.seed,
+            o.base,
+            o.amplitude,
+            o.chaos,
+            if o.even_borders { ", islands" } else { "" }
+        ),
+    };
+    world3d(&field, o3)
+}
+
+/// The height field of a gmap that carries a `HEIGHTMAP` block, as `gen
+/// terrain` and the original TerrainGenerator write: `WIDTH` by `HEIGHT`
+/// levels and `(WIDTH * 8 + 1)` by `(HEIGHT * 8 + 1)` heights. `GENBASE`,
+/// `GENHEIGHT` and `GENSEED` set the water level, the bands and the
+/// placement seed when present (else 0, 64 and 0).
+pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
+    let mut width = 0usize;
+    let mut height = 0usize;
+    let (mut base, mut amplitude, mut seed) = (0i32, 64.0f64, 0u32);
+    let mut rows: Vec<Vec<i32>> = Vec::new();
+    let mut in_map = false;
+    for line in gmap.lines() {
+        let line = line.trim();
+        if in_map {
+            if line == "HEIGHTMAPEND" {
+                in_map = false;
+                continue;
+            }
+            let row: Result<Vec<i32>, _> = line.split_whitespace().map(str::parse).collect();
+            rows.push(row.map_err(|_| format!("HEIGHTMAP row {} is not numbers", rows.len() + 1))?);
+            continue;
+        }
+        let mut words = line.split_whitespace();
+        let (key, value) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
+        match key {
+            "WIDTH" => width = value.parse().map_err(|_| "bad WIDTH")?,
+            "HEIGHT" => height = value.parse().map_err(|_| "bad HEIGHT")?,
+            "GENBASE" => base = value.parse().unwrap_or(0),
+            "GENHEIGHT" => amplitude = value.parse().unwrap_or(64.0),
+            "GENSEED" => seed = value.parse().unwrap_or(0),
+            "HEIGHTMAP" => in_map = true,
+            _ => {}
+        }
+    }
+    if width == 0 || height == 0 || width > 64 || height > 64 {
+        return Err("the gmap needs WIDTH and HEIGHT of 1 to 64 levels".into());
+    }
+    let (pw, ph) = (width * STEP + 1, height * STEP + 1);
+    if rows.len() < ph || rows.iter().take(ph).any(|r| r.len() < pw) {
+        return Err(format!(
+            "the gmap's HEIGHTMAP must hold {ph} rows of {pw} heights ({width} x {height} levels)"
+        ));
+    }
+    let heights = rows
+        .into_iter()
+        .take(ph)
+        .map(|r| r[..pw].to_vec())
+        .collect();
+    Ok(Field3d {
+        world: world.to_string(),
+        width,
+        height,
+        base,
+        amplitude,
+        seed,
+        heights,
+        source: format!("the HEIGHTMAP of {world}.gmap (base {base}, height {amplitude})"),
+    })
+}
+
+/// The 3D files for a height field (see the module notes).
+pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> {
     if !o3.vscale.is_finite() || o3.vscale <= 0.0 {
         return Err("the vertical scale must be a positive number".into());
     }
+    let o = f;
     let (pw, ph) = (o.width * STEP + 1, o.height * STEP + 1);
-    let field =
-        generate::height_field(pw, ph, o.seed, o.base, o.amplitude, o.chaos, o.even_borders);
+    let field = &f.heights;
     let base = f64::from(o.base);
     // Sand up to an eighth of the first split's reach above the base, rock
     // from half of it.
@@ -199,16 +309,11 @@ pub fn terrain3d(o: &TerrainOptions, o3: &Terrain3dOptions) -> Result<Vec<File>,
 
     let mut text = String::new();
     text.push_str(&format!(
-        "# {world}: the 3D version of the gen terrain world {world}.gmap\n\
-         # (seed {}, base {}, height {}, chaos {}{}), from seihai-servertools.\n\
+        "# {world}: the 3D version of {}, from seihai-servertools.\n\
          # Copy it to config/graal3dworld.txt, and the .3ds files into the\n\
          # server's file folders (the clients download them over TCP).\n\
          # One Torque unit is one tile; map tile (x, y) is (x, -y) here.\n\n",
-        o.seed,
-        o.base,
-        o.amplitude,
-        o.chaos,
-        if o.even_borders { ", islands" } else { "" }
+        o.source
     ));
     text.push_str("sun 0.57 0.57 -0.57  0.85 0.85 0.8 1  0.35 0.35 0.4 1\n");
     if o3.stream {
@@ -746,5 +851,43 @@ mod tests {
         assert!(far.materials.iter().flatten().all(|&m| m == 0));
         let inside = plain(10, 4); // squares 160..176 across, 64..80 up: tiles 32..48, 48..64
         assert!(inside.heights.iter().flatten().any(|&h| h > 0));
+    }
+
+    #[test]
+    fn a_gmap_heightmap_gives_the_same_world() {
+        let o = opts();
+        let (pw, ph) = (o.width * STEP + 1, o.height * STEP + 1);
+        let field =
+            generate::height_field(pw, ph, o.seed, o.base, o.amplitude, o.chaos, o.even_borders);
+        let mut gmap = format!(
+            "GRMAP001\nWIDTH {}\nHEIGHT {}\nGENSEED {}\nGENBASE {}\nGENHEIGHT {}\nHEIGHTMAP\n",
+            o.width, o.height, o.seed, o.base, o.amplitude
+        );
+        for row in &field {
+            gmap += &row
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(" ");
+            gmap += "\n";
+        }
+        gmap += "HEIGHTMAPEND\n";
+        let f = field_from_gmap(&o.world, &gmap).unwrap();
+        assert_eq!(f.heights, field);
+        let o3 = Terrain3dOptions::default();
+        let a = terrain3d(&o, &o3).unwrap();
+        let b = world3d(&f, &o3).unwrap();
+        assert_eq!(a.len(), b.len());
+        for ((na, ba), (nb, bb)) in a.iter().zip(&b) {
+            assert_eq!(na, nb);
+            if !na.ends_with(".txt") {
+                assert_eq!(ba, bb, "{na}");
+            }
+        }
+        // Too few heights for the levels is an error, not a panic.
+        assert!(
+            field_from_gmap("x", "WIDTH 2\nHEIGHT 2\nHEIGHTMAP\n1 2 3\nHEIGHTMAPEND\n").is_err()
+        );
+        assert!(field_from_gmap("x", "HEIGHTMAP\nHEIGHTMAPEND\n").is_err());
     }
 }

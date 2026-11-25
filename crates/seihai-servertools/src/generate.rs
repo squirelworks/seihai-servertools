@@ -1,5 +1,6 @@
-//! `seihai-servertools gen terrain|image|dungeon`: world generators
-//! (`lat_core::generate`, and `lat_core::terrain3d` for `gen terrain --3d`).
+//! `seihai-servertools gen terrain|3d|image|dungeon`: world generators
+//! (`lat_core::generate`, and `lat_core::terrain3d` for `gen terrain --3d`
+//! and `gen 3d`).
 
 use lat_core::generate::{self, DungeonTiles, File, TerrainOptions};
 use lat_core::terrain3d::{self, Terrain3dOptions};
@@ -23,6 +24,12 @@ gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
     level (default 4). --stream also writes NAME_terrain/: the ground as
     streamed terrain for 4.20r6 and 5.x clients (256 heights<x>-<y>.dat
     chunks, heights.info and its textures), and the world file uses it.
+gen 3d GMAP DIR [--world NAME] [--vscale F] [--trees N] [--stream] [--force]
+    The --3d files (and with --stream, the streamed terrain) from a gmap that
+    already has a HEIGHTMAP block, such as one written by gen terrain or by
+    the original TerrainGenerator. NAME defaults to the gmap's file name.
+    GENBASE, GENHEIGHT and GENSEED in the gmap set the water level, the
+    height bands and where trees go.
 gen image PICTURE DIR --world NAME
     Levels from a .png or .gif drawn in GraalLevelGen's twelve colours
     (64 pixels a level, sampled every 6): NAME_a-01.nw ... and NAME.gmap.
@@ -126,6 +133,7 @@ pub fn run(args: &[&str]) -> ExitCode {
     };
     let result = match (cmd, o.plain.as_slice()) {
         ("terrain", [dir]) => terrain(Path::new(dir), &o),
+        ("3d", [gmap, dir]) => from_gmap(Path::new(gmap), Path::new(dir), &o),
         ("image", [pic, dir]) => image(Path::new(pic), Path::new(dir), &o),
         ("dungeon", [dir]) => dungeon(Path::new(dir), &o),
         _ => return usage(),
@@ -137,6 +145,53 @@ pub fn run(args: &[&str]) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn from_gmap(gmap: &Path, dir: &Path, o: &Opts) -> Result<(), String> {
+    let text = std::fs::read_to_string(gmap).map_err(|e| format!("{}: {e}", gmap.display()))?;
+    let world = match &o.world {
+        Some(w) => w.clone(),
+        None => gmap
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or("name the world with --world")?
+            .to_string(),
+    };
+    let field = terrain3d::field_from_gmap(&world, &text)
+        .map_err(|e| format!("{}: {e}", gmap.display()))?;
+    let files = terrain3d::world3d(
+        &field,
+        &Terrain3dOptions {
+            vscale: o.vscale,
+            trees_per_level: o.trees,
+            stream: o.stream,
+        },
+    )?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    if !o.force {
+        if let Some((name, _)) = files.iter().find(|(n, _)| dir.join(n).exists()) {
+            return Err(format!(
+                "{} already exists (use --force to replace)",
+                dir.join(name).display()
+            ));
+        }
+    }
+    for (name, bytes) in &files {
+        let path = dir.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    println!(
+        "{}: 3D world {world}_graal3dworld.txt from {} ({} x {} levels{})",
+        dir.display(),
+        gmap.display(),
+        field.width,
+        field.height,
+        if o.stream { ", streamed terrain" } else { "" }
+    );
+    Ok(())
 }
 
 fn usage() -> ExitCode {
