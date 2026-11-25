@@ -48,5 +48,6 @@ pub mod preview;
 pub mod remote;
 pub mod render;
 pub mod terrain3d;
+pub mod terrain_chunks;
 pub mod tmx;
 pub mod worldmap;

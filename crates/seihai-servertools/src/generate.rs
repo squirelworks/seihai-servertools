@@ -9,7 +9,7 @@ use std::process::ExitCode;
 pub const USAGE: &str = "\
 gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
             [--chaos F] [--islands] [--force]
-            [--3d [--vscale F] [--trees N]]
+            [--3d [--vscale F] [--trees N] [--stream]]
     A height-field world (TerrainGenerator): WxH levels (default 2x2) named
     <NAME><column><row>.nw with a 9x9 HEIGHTS block each, edge links, and
     NAME.gmap with the generator keys. --height is how far the first split
@@ -20,7 +20,9 @@ gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
     NAME_tree.3ds, NAME_rock.3ds and NAME_graal3dworld.txt (sun, ground,
     trees on grass, rocks up high, spawn in the middle). --vscale is 3D
     units of height per height unit (default 0.25), --trees the tries per
-    level (default 4).
+    level (default 4). --stream also writes NAME_terrain/: the ground as
+    streamed terrain for 4.20r6 and 5.x clients (256 heights<x>-<y>.dat
+    chunks, heights.info and its textures), and the world file uses it.
 gen image PICTURE DIR --world NAME
     Levels from a .png or .gif drawn in GraalLevelGen's twelve colours
     (64 pixels a level, sampled every 6): NAME_a-01.nw ... and NAME.gmap.
@@ -48,6 +50,7 @@ struct Opts {
     three_d: bool,
     vscale: f64,
     trees: u32,
+    stream: bool,
     layout: Option<PathBuf>,
     maze: Option<(usize, usize)>,
     path: u16,
@@ -71,6 +74,7 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
         chaos: 0.5,
         vscale: 0.25,
         trees: 4,
+        stream: false,
         wall: 1,
         ..Opts::default()
     };
@@ -96,6 +100,10 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
             "--3d" => o.three_d = true,
             "--vscale" => o.vscale = num(value()?)?,
             "--trees" => o.trees = num(value()?)?.clamp(0.0, 64.0) as u32,
+            "--stream" => {
+                o.three_d = true;
+                o.stream = true;
+            }
             "--force" => o.force = true,
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s => o.plain.push(s.to_string()),
@@ -156,6 +164,9 @@ fn save(dir: &Path, files: &[File], force: bool) -> Result<(), String> {
     }
     for (name, bytes) in files {
         let path = dir.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
         std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     }
     let levels = files.iter().filter(|(n, _)| n.ends_with(".nw")).count();
@@ -182,6 +193,7 @@ fn terrain(dir: &Path, o: &Opts) -> Result<(), String> {
             &Terrain3dOptions {
                 vscale: o.vscale,
                 trees_per_level: o.trees,
+                stream: o.stream,
             },
         )?;
         files.extend(three);

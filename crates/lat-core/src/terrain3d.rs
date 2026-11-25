@@ -19,10 +19,16 @@
 //! 0xAFFF, objects 0x4000, triangle meshes 0x4100). Graal's own loader has not
 //! been run on these files yet.
 //!
+//! With `stream`, the ground is also written as streamed terrain for a
+//! 4.20r6 or 5.x client: `<world>_terrain/` holds the 256 chunk files,
+//! `heights.info` and one 256 x 256 texture per material, and the world file
+//! uses a `terrain` line in place of the mesh ground.
+//!
 //! Map tile (x, y) is Torque (x, -y): east stays +x and north +y, so the 2D
 //! and 3D maps line up when seen from above.
 
 use crate::generate::{self, DelphiRandom, File, TerrainOptions};
+use crate::terrain_chunks;
 
 /// Tiles between two height samples (the 2D generator's step).
 const STEP: usize = 8;
@@ -72,6 +78,9 @@ pub struct Terrain3dOptions {
     pub vscale: f64,
     /// Trees to try to place per level (on grass only).
     pub trees_per_level: u32,
+    /// Also write streamed terrain (see [`crate::terrain_chunks`]) and use it
+    /// as the world's ground in place of the mesh.
+    pub stream: bool,
 }
 
 impl Default for Terrain3dOptions {
@@ -79,6 +88,7 @@ impl Default for Terrain3dOptions {
         Terrain3dOptions {
             vscale: 0.25,
             trees_per_level: 4,
+            stream: false,
         }
     }
 }
@@ -201,7 +211,48 @@ pub fn terrain3d(o: &TerrainOptions, o3: &Terrain3dOptions) -> Result<Vec<File>,
         if o.even_borders { ", islands" } else { "" }
     ));
     text.push_str("sun 0.57 0.57 -0.57  0.85 0.85 0.8 1  0.35 0.35 0.4 1\n");
-    text.push_str(&format!("object Ground {world}.3ds 0 0 0\n"));
+    if o3.stream {
+        // The terrain is 256 squares a side, centred on the origin; the world
+        // sits in its +x, -y quarter, so 128 squares cover its longer side.
+        let side = 64 * o.width.max(o.height);
+        let square = side.div_ceil(128).max(1);
+        let half = (128 * square) as f64;
+        let (w_tiles, h_tiles) = ((o.width * 64) as f64, (o.height * 64) as f64);
+        let mut heights = vec![vec![0u16; terrain_chunks::SIZE]; terrain_chunks::SIZE];
+        let mut mats = vec![vec![0u8; terrain_chunks::SIZE]; terrain_chunks::SIZE];
+        for j in 0..terrain_chunks::SIZE {
+            for i in 0..terrain_chunks::SIZE {
+                let (x, y) = (-half + (i * square) as f64, -half + (j * square) as f64);
+                let (tx, ty) = (x, -y);
+                if (0.0..=w_tiles).contains(&tx) && (0.0..=h_tiles).contains(&ty) {
+                    // Wire heights are 1/8 unit (Graal_analysis torque/terrain-512.md).
+                    heights[j][i] = (ground_z(tx, ty) * 8.0).round().clamp(0.0, 16383.0) as u16;
+                    mats[j][i] = surface(tx.min(w_tiles - 1.0), ty.min(h_tiles - 1.0)) as u8;
+                }
+            }
+        }
+        let folder = format!("{world}_terrain");
+        for (name, bytes) in terrain_chunks::chunk_files(&heights, &mats)? {
+            files.push((format!("{folder}/{name}"), bytes));
+        }
+        let names: Vec<&str> = materials.iter().map(|m| m.name).collect();
+        // One texture name a line (live, 2026-11-25); each is fetched bare.
+        files.push((
+            format!("{folder}/heights.info"),
+            (names.join("\n") + "\n").into_bytes(),
+        ));
+        for m in &materials {
+            files.push((format!("{folder}/{}.png", m.name), texture(m.rgb)?));
+        }
+        text.push_str(&format!(
+            "# Streamed terrain: copy {folder}/ into the server's world/ folder.\n\
+             # The mesh ground is still written: swap the two lines to compare.\n\
+             terrain world/{folder} {square}\n\
+             # object Ground {world}.3ds 0 0 0\n"
+        ));
+    } else {
+        text.push_str(&format!("object Ground {world}.3ds 0 0 0\n"));
+    }
 
     let mut rng = DelphiRandom(o.seed ^ 0x3D3D_3D3D);
     let (mut trees, mut rocks) = (0, 0);
@@ -250,6 +301,29 @@ pub fn terrain3d(o: &TerrainOptions, o3: &Terrain3dOptions) -> Result<Vec<File>,
     );
     files.push((format!("{world}_graal3dworld.txt"), text.into_bytes()));
     Ok(files)
+}
+
+/// A 256 x 256 24-bit PNG of one colour with a little grain, as the client
+/// wants for terrain materials.
+fn texture(rgb: [u8; 3]) -> Result<Vec<u8>, String> {
+    let mut rng =
+        DelphiRandom(u32::from(rgb[0]) << 16 | u32::from(rgb[1]) << 8 | u32::from(rgb[2]));
+    let mut pixels = Vec::with_capacity(256 * 256 * 3);
+    for _ in 0..256 * 256 {
+        let grain = rng.below(24) as i32 - 12;
+        for c in rgb {
+            pixels.push((i32::from(c) + grain).clamp(0, 255) as u8);
+        }
+    }
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, 256, 256);
+        enc.set_color(png::ColorType::Rgb);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut w = enc.write_header().map_err(|e| e.to_string())?;
+        w.write_image_data(&pixels).map_err(|e| e.to_string())?;
+    }
+    Ok(out)
 }
 
 /// A tree 6 units tall: a square trunk and a four-sided crown.
@@ -571,6 +645,7 @@ mod tests {
         let o3 = Terrain3dOptions {
             vscale: 0.5,
             trees_per_level: 12,
+            stream: false,
         };
         let mut placed_any = false;
         for seed in 1..40 {
@@ -612,8 +687,55 @@ mod tests {
         assert!(terrain3d(&o, &Terrain3dOptions::default()).is_err());
         let o3 = Terrain3dOptions {
             vscale: 0.0,
+            stream: false,
             ..Terrain3dOptions::default()
         };
         assert!(terrain3d(&opts(), &o3).is_err());
+    }
+
+    #[test]
+    fn stream_writes_chunks_that_decode_to_the_ground() {
+        let o = opts();
+        let o3 = Terrain3dOptions {
+            stream: true,
+            ..Terrain3dOptions::default()
+        };
+        let files = terrain3d(&o, &o3).unwrap();
+        let get = |n: &str| {
+            files
+                .iter()
+                .find(|(name, _)| name == n)
+                .map(|(_, b)| b.clone())
+        };
+        let chunks = files
+            .iter()
+            .filter(|(n, _)| n.starts_with("isle_terrain/heights") && n.ends_with(".dat"))
+            .count();
+        assert_eq!(chunks, 256);
+        assert_eq!(
+            get("isle_terrain/heights.info").unwrap(),
+            b"g3d_water\ng3d_sand\ng3d_grass\ng3d_rock\n".to_vec()
+        );
+        let png = get("isle_terrain/g3d_grass.png").unwrap();
+        assert_eq!(&png[16..24], &[0, 0, 1, 0, 0, 0, 1, 0]); // 256 x 256
+        assert_eq!(png[25], 2); // RGB, 24-bit
+        let text = String::from_utf8(get("isle_graal3dworld.txt").unwrap()).unwrap();
+        assert!(text.contains("\nterrain world/isle_terrain 1\n"), "{text}");
+        assert!(text.contains("# object Ground isle.3ds 0 0 0"));
+
+        // The world (2 x 2 levels, 128 tiles) sits in the +x, -y quarter:
+        // square (128 + tx, 128 - ty) is tile (tx, ty). Outside it, flat 0.
+        let plain = |cx: usize, cy: usize| {
+            let z = get(&format!("isle_terrain/heights{cx}-{cy}.dat")).unwrap();
+            let mut out = Vec::new();
+            std::io::Read::read_to_end(&mut flate2::read::ZlibDecoder::new(&z[..]), &mut out)
+                .unwrap();
+            terrain_chunks::decode(&out)
+        };
+        let far = plain(0, 15);
+        assert!(far.heights.iter().flatten().all(|&h| h == 0));
+        assert!(far.materials.iter().flatten().all(|&m| m == 0));
+        let inside = plain(10, 4); // squares 160..176 across, 64..80 up: tiles 32..48, 48..64
+        assert!(inside.heights.iter().flatten().any(|&h| h > 0));
     }
 }

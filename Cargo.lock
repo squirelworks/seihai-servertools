@@ -1906,6 +1906,7 @@ version = "0.0.1"
 dependencies = [
  "des",
  "epaint_default_fonts",
+ "flate2",
  "getrandom 0.2.17",
  "gif",
  "png",
