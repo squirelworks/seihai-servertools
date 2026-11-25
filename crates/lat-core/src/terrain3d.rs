@@ -148,9 +148,18 @@ pub fn terrain3d(o: &TerrainOptions, o3: &Terrain3dOptions) -> Result<Vec<File>,
     world3d(&field, o3)
 }
 
-/// The height field of a gmap that carries a `HEIGHTMAP` block, as `gen
-/// terrain` and the original TerrainGenerator write: `WIDTH` by `HEIGHT`
-/// levels and `(WIDTH * 8 + 1)` by `(HEIGHT * 8 + 1)` heights. `GENBASE`,
+/// The height field of a gmap that carries a `HEIGHTMAP` block, `WIDTH` by
+/// `HEIGHT` levels, in either form:
+///
+/// * `gen terrain`'s: `(WIDTH * 8 + 1)` by `(HEIGHT * 8 + 1)` heights, one per
+///   tile corner, space-separated rows;
+/// * the original TerrainGenerator's: `(WIDTH + 1) * (HEIGHT + 1)` heights,
+///   one per level corner, comma-separated, followed by a `RANDOMSEEDS` block
+///   (Graal_analysis `torque/terraingenerator-original-vs-servertools-2026-11-25.md`).
+///   They are spread over the tile corners by bilinear interpolation, since
+///   its levels carry no HEIGHTS of their own.
+///
+/// `GENBASE`,
 /// `GENHEIGHT` and `GENSEED` set the water level, the bands and the
 /// placement seed when present (else 0, 64 and 0).
 pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
@@ -166,9 +175,22 @@ pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
                 in_map = false;
                 continue;
             }
-            let row: Result<Vec<i32>, _> = line.split_whitespace().map(str::parse).collect();
-            rows.push(row.map_err(|_| format!("HEIGHTMAP row {} is not numbers", rows.len() + 1))?);
-            continue;
+            // The next block (RANDOMSEEDS in the original's gmaps) also ends it.
+            if line.starts_with(|c: char| c.is_ascii_alphabetic()) {
+                in_map = false;
+            } else {
+                let row: Result<Vec<i32>, _> = line
+                    .split(|c: char| c == ',' || c.is_whitespace())
+                    .filter(|w| !w.is_empty())
+                    .map(|w| w.parse::<f64>().map(|v| v.round() as i32))
+                    .collect();
+                let row =
+                    row.map_err(|_| format!("HEIGHTMAP row {} is not numbers", rows.len() + 1))?;
+                if !row.is_empty() {
+                    rows.push(row);
+                }
+                continue;
+            }
         }
         let mut words = line.split_whitespace();
         let (key, value) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
@@ -186,9 +208,43 @@ pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
         return Err("the gmap needs WIDTH and HEIGHT of 1 to 64 levels".into());
     }
     let (pw, ph) = (width * STEP + 1, height * STEP + 1);
+    let all: Vec<i32> = rows.iter().flatten().copied().collect();
+    if all.len() == (width + 1) * (height + 1) {
+        // The original TerrainGenerator: one height per level corner.
+        let corner = |x: usize, y: usize| f64::from(all[y * (width + 1) + x]);
+        let heights = (0..ph)
+            .map(|fy| {
+                (0..pw)
+                    .map(|fx| {
+                        let (lx, ly) = ((fx / STEP).min(width - 1), (fy / STEP).min(height - 1));
+                        let (u, v) = (
+                            (fx - lx * STEP) as f64 / STEP as f64,
+                            (fy - ly * STEP) as f64 / STEP as f64,
+                        );
+                        let top = corner(lx, ly) * (1.0 - u) + corner(lx + 1, ly) * u;
+                        let bottom = corner(lx, ly + 1) * (1.0 - u) + corner(lx + 1, ly + 1) * u;
+                        (top * (1.0 - v) + bottom * v).round() as i32
+                    })
+                    .collect()
+            })
+            .collect();
+        return Ok(Field3d {
+            world: world.to_string(),
+            width,
+            height,
+            base,
+            amplitude,
+            seed,
+            heights,
+            source: format!(
+                "the level-corner HEIGHTMAP of {world}.gmap (original TerrainGenerator form, interpolated; base {base})"
+            ),
+        });
+    }
     if rows.len() < ph || rows.iter().take(ph).any(|r| r.len() < pw) {
         return Err(format!(
-            "the gmap's HEIGHTMAP must hold {ph} rows of {pw} heights ({width} x {height} levels)"
+            "the gmap's HEIGHTMAP must hold {ph} rows of {pw} heights, or {} level-corner heights ({width} x {height} levels)",
+            (width + 1) * (height + 1)
         ));
     }
     let heights = rows
@@ -399,8 +455,13 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
         for (name, bytes) in terrain_chunks::chunk_files(&heights, &mats)? {
             files.push((format!("{folder}/{name}"), bytes));
         }
-        let names: Vec<&str> = materials.iter().map(|m| m.name).collect();
-        // One texture name a line (live, 2026-11-25); each is fetched bare.
+        // One texture name a line (live, 2026-11-25), with its extension: the
+        // Linux 4.206 client given bare names drew the terrain white, then saved
+        // the textures extension-less and drew none (lab, 2026-11-25).
+        let names: Vec<String> = materials
+            .iter()
+            .map(|m| format!("{}.png", m.name))
+            .collect();
         files.push((
             format!("{folder}/heights.info"),
             (names.join("\n") + "\n").into_bytes(),
@@ -413,8 +474,9 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
              # The mesh ground is still written: swap the two lines to compare.\n\
              terrain world/{folder} {square}\n\
              # object Ground {world}.3ds 0 0 0\n\
-             # Water over everything below the base (WaterBlock, layout not yet run live):\n\
-             # water {w0} {w0} 0.25 {ws} {ws} 10 g3d_water 0\n",
+             # Water over everything at the base: the surface is z + depth (live 5.12),\n\
+             # so a 10 deep block at -9.75 has its surface at 0.25, just over the base (0):\n\
+             # water {w0} {w0} -9.75 {ws} {ws} 10 g3d_water 0\n",
             // The client takes a water size only from 1024 a side.
             w0 = -(2.0 * half).max(2048.0) / 2.0,
             ws = (2.0 * half).max(2048.0)
@@ -919,7 +981,7 @@ mod tests {
         assert_eq!(chunks, 256);
         assert_eq!(
             get("isle_terrain/heights.info").unwrap(),
-            b"g3d_water\ng3d_sand\ng3d_grass\ng3d_rock\n".to_vec()
+            b"g3d_water.png\ng3d_sand.png\ng3d_grass.png\ng3d_rock.png\n".to_vec()
         );
         let png = get("isle_terrain/g3d_grass.png").unwrap();
         assert_eq!(&png[16..24], &[0, 0, 1, 0, 0, 0, 1, 0]); // 256 x 256
@@ -928,7 +990,7 @@ mod tests {
         assert!(text.contains("\nterrain world/isle_terrain 1\n"), "{text}");
         assert!(text.contains("# object Ground isle.3ds 0 0 0"));
         assert!(
-            text.contains("# water -1024 -1024 0.25 2048 2048 10 g3d_water 0"),
+            text.contains("# water -1024 -1024 -9.75 2048 2048 10 g3d_water 0"),
             "{text}"
         );
 
@@ -1073,5 +1135,23 @@ mod tests {
         let v: Vec<f64> = spawn[6..].split(' ').map(|s| s.parse().unwrap()).collect();
         // On dry land (above the water's height 0 plus the 1 unit lift).
         assert!(v[2] > 1.0, "{spawn}");
+    }
+
+    #[test]
+    fn an_original_terraingenerator_gmap_is_read_by_level_corner() {
+        // The original's form: comma-separated level-corner heights, then RANDOMSEEDS.
+        let gmap = "GRMAP001\nWIDTH 2\nHEIGHT 1\nHEIGHTMAP\n0,16,32,\n8,24,40,\nHEIGHTMAPEND\nRANDOMSEEDS\n11,22,\nRANDOMSEEDSEND\n";
+        let f = field_from_gmap("orig", gmap).unwrap();
+        assert_eq!((f.heights.len(), f.heights[0].len()), (9, 17));
+        assert_eq!(f.heights[0][0], 0);
+        assert_eq!(f.heights[0][8], 16);
+        assert_eq!(f.heights[0][4], 8);
+        assert_eq!(f.heights[8][16], 40);
+        assert_eq!(f.heights[4][8], 20);
+        assert!(world3d(&f, &Terrain3dOptions::default()).is_ok());
+        // Neither form: refused with both sizes named.
+        let bad = field_from_gmap("bad", "WIDTH 2\nHEIGHT 1\nHEIGHTMAP\n1,2\nHEIGHTMAPEND\n")
+            .unwrap_err();
+        assert!(bad.contains("6 level-corner"), "{bad}");
     }
 }
