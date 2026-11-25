@@ -272,7 +272,7 @@ pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
 pub fn playerworld_layout(world: &str, files: Vec<File>) -> Vec<File> {
     let lower = world.to_lowercase();
     let world_txt = format!("{world}_graal3dworld.txt");
-    files
+    let mut out: Vec<File> = files
         .into_iter()
         .map(|(name, bytes)| {
             if name == world_txt {
@@ -293,7 +293,29 @@ pub fn playerworld_layout(world: &str, files: Vec<File>) -> Vec<File> {
                 (format!("world/3d/{renamed}"), bytes)
             }
         })
-        .collect()
+        .collect();
+    // A gserver file folder covers only its own files, so world/3d/ and each
+    // folder under it (the streamed terrain) need a foldersconfig line (lab,
+    // 2026-11-25: without them the world's files were not found).
+    let mut folders: Vec<String> = out
+        .iter()
+        .filter_map(|(name, _)| name.strip_prefix("world/"))
+        .filter(|rest| rest.starts_with("3d/"))
+        .filter_map(|rest| rest.rsplit_once('/').map(|(dir, _)| dir.to_string()))
+        .collect();
+    folders.sort();
+    folders.dedup();
+    if !folders.is_empty() {
+        let mut text = String::from(
+            "# Add these lines to the server's config/foldersconfig.txt: a file\n\
+             # folder covers only its own files, not the folders under it.\n",
+        );
+        for dir in folders {
+            text.push_str(&format!("file    {dir}/*\n"));
+        }
+        out.push(("config/foldersconfig-3d.txt".to_string(), text.into_bytes()));
+    }
+    out
 }
 
 /// The 3D files for a height field (see the module notes).
@@ -1070,6 +1092,13 @@ mod tests {
             assert!(names.contains(&n), "{n} in {names:?}");
         }
         assert!(names.iter().all(|n| !n.contains("Isle")), "{names:?}");
+        let folders = files
+            .iter()
+            .find(|(n, _)| n == "config/foldersconfig-3d.txt")
+            .map(|(_, b)| String::from_utf8(b.clone()).unwrap())
+            .expect("a foldersconfig snippet");
+        assert!(folders.contains("file    3d/*\n"), "{folders}");
+        assert!(folders.contains("file    3d/isle_terrain/*\n"), "{folders}");
         let text = String::from_utf8(
             files
                 .iter()

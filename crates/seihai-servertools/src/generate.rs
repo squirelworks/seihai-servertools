@@ -25,8 +25,9 @@ gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
     streamed terrain for 4.20r6 and 5.x clients (256 heights<x>-<y>.dat
     chunks, heights.info and its textures), and the world file uses it.
     --playerworld lays DIR out as a gserver folder ready to ship:
-    config/graal3dworld.txt, the levels and gmap in world/, and the 3D files
-    in world/3d/ under real, lower-cased names.
+    config/graal3dworld.txt, the levels and gmap in world/, the 3D files
+    in world/3d/ under real, lower-cased names, and
+    config/foldersconfig-3d.txt: the lines the server's foldersconfig needs.
 gen 3d GMAP DIR [--world NAME] [--vscale F] [--trees N] [--stream] [--playerworld] [--force]
     The --3d files (and with --stream, the streamed terrain) from a gmap that
     already has a HEIGHTMAP block, such as one written by gen terrain or by
