@@ -248,7 +248,12 @@ pub fn terrain3d(o: &TerrainOptions, o3: &Terrain3dOptions) -> Result<Vec<File>,
             "# Streamed terrain: copy {folder}/ into the server's world/ folder.\n\
              # The mesh ground is still written: swap the two lines to compare.\n\
              terrain world/{folder} {square}\n\
-             # object Ground {world}.3ds 0 0 0\n"
+             # object Ground {world}.3ds 0 0 0\n\
+             # Water over everything below the base (WaterBlock, layout not yet run live):\n\
+             # water {w0} {w0} 0.25 {ws} {ws} 10 g3d_water 0\n",
+            // The client takes a water size only from 1024 a side.
+            w0 = -(2.0 * half).max(2048.0) / 2.0,
+            ws = (2.0 * half).max(2048.0)
         ));
     } else {
         text.push_str(&format!("object Ground {world}.3ds 0 0 0\n"));
@@ -722,6 +727,10 @@ mod tests {
         let text = String::from_utf8(get("isle_graal3dworld.txt").unwrap()).unwrap();
         assert!(text.contains("\nterrain world/isle_terrain 1\n"), "{text}");
         assert!(text.contains("# object Ground isle.3ds 0 0 0"));
+        assert!(
+            text.contains("# water -1024 -1024 0.25 2048 2048 10 g3d_water 0"),
+            "{text}"
+        );
 
         // The world (2 x 2 levels, 128 tiles) sits in the +x, -y quarter:
         // square (128 + tx, 128 - ty) is tile (tx, ty). Outside it, flat 0.
