@@ -1,18 +1,28 @@
 //! `seihai-servertools gen terrain|image|dungeon`: world generators
-//! (`lat_core::generate`).
+//! (`lat_core::generate`, and `lat_core::terrain3d` for `gen terrain --3d`).
 
 use lat_core::generate::{self, DungeonTiles, File, TerrainOptions};
+use lat_core::terrain3d::{self, Terrain3dOptions};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 pub const USAGE: &str = "\
 gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
             [--chaos F] [--islands] [--force]
+            [--3d [--vscale F] [--trees N] [--stream]]
     A height-field world (TerrainGenerator): WxH levels (default 2x2) named
     <NAME><column><row>.nw with a 9x9 HEIGHTS block each, edge links, and
     NAME.gmap with the generator keys. --height is how far the first split
     may move a point (default 64), --chaos the factor after each split
     (default 0.5), --islands keeps the rim at --base.
+    --3d also writes the same ground for a Graal 3D server: NAME.3ds (one
+    mesh per level, coloured water, sand, grass and rock by height),
+    NAME_tree.3ds, NAME_rock.3ds and NAME_graal3dworld.txt (sun, ground,
+    trees on grass, rocks up high, spawn in the middle). --vscale is 3D
+    units of height per height unit (default 0.25), --trees the tries per
+    level (default 4). --stream also writes NAME_terrain/: the ground as
+    streamed terrain for 4.20r6 and 5.x clients (256 heights<x>-<y>.dat
+    chunks, heights.info and its textures), and the world file uses it.
 gen image PICTURE DIR --world NAME
     Levels from a .png or .gif drawn in GraalLevelGen's twelve colours
     (64 pixels a level, sampled every 6): NAME_a-01.nw ... and NAME.gmap.
@@ -37,6 +47,10 @@ struct Opts {
     chaos: f64,
     islands: bool,
     force: bool,
+    three_d: bool,
+    vscale: f64,
+    trees: u32,
+    stream: bool,
     layout: Option<PathBuf>,
     maze: Option<(usize, usize)>,
     path: u16,
@@ -58,6 +72,9 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
     let mut o = Opts {
         height: 64.0,
         chaos: 0.5,
+        vscale: 0.25,
+        trees: 4,
+        stream: false,
         wall: 1,
         ..Opts::default()
     };
@@ -80,6 +97,13 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
             "--path" => o.path = num(value()?)?.clamp(0.0, 4095.0) as u16,
             "--wall" => o.wall = num(value()?)?.clamp(0.0, 4095.0) as u16,
             "--islands" => o.islands = true,
+            "--3d" => o.three_d = true,
+            "--vscale" => o.vscale = num(value()?)?,
+            "--trees" => o.trees = num(value()?)?.clamp(0.0, 64.0) as u32,
+            "--stream" => {
+                o.three_d = true;
+                o.stream = true;
+            }
             "--force" => o.force = true,
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s => o.plain.push(s.to_string()),
@@ -140,6 +164,9 @@ fn save(dir: &Path, files: &[File], force: bool) -> Result<(), String> {
     }
     for (name, bytes) in files {
         let path = dir.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
         std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     }
     let levels = files.iter().filter(|(n, _)| n.ends_with(".nw")).count();
@@ -149,7 +176,7 @@ fn save(dir: &Path, files: &[File], force: bool) -> Result<(), String> {
 
 fn terrain(dir: &Path, o: &Opts) -> Result<(), String> {
     let (width, height) = o.size.unwrap_or((2, 2));
-    let files = generate::terrain(&TerrainOptions {
+    let options = TerrainOptions {
         world: world(o, "--world")?,
         width,
         height,
@@ -158,8 +185,29 @@ fn terrain(dir: &Path, o: &Opts) -> Result<(), String> {
         amplitude: o.height,
         chaos: o.chaos,
         even_borders: o.islands,
-    })?;
-    save(dir, &files, o.force)
+    };
+    let mut files = generate::terrain(&options)?;
+    if o.three_d {
+        let three = terrain3d::terrain3d(
+            &options,
+            &Terrain3dOptions {
+                vscale: o.vscale,
+                trees_per_level: o.trees,
+                stream: o.stream,
+            },
+        )?;
+        files.extend(three);
+    }
+    save(dir, &files, o.force)?;
+    if o.three_d {
+        println!(
+            "{}: 3D world {}_graal3dworld.txt with {}.3ds",
+            dir.display(),
+            options.world,
+            options.world
+        );
+    }
+    Ok(())
 }
 
 fn image(pic: &Path, dir: &Path, o: &Opts) -> Result<(), String> {

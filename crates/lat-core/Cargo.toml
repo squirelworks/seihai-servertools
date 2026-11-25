@@ -22,6 +22,8 @@ epaint_default_fonts.workspace = true
 seihai-rc.workspace = true
 # .gpak/.gpake packages (gpak.rs).
 zip.workspace = true
+# Streamed 3D terrain chunks (terrain_chunks.rs).
+flate2.workspace = true
 des.workspace = true
 getrandom.workspace = true
 # GIF copies of PNG art (gifcopy.rs).

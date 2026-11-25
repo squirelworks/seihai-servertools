@@ -52,7 +52,7 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 | Level and gmap pictures (NW2PNG's job) | `seihai-servertools level render`, `gmap render` | working (board, chests, signs; NPC images and ganis with `--npcs`) |
 | LevelFiller and LFThemeMaker: theme fills, patch themes | `seihai-servertools level fill`, `theme make` | working (borders and `--across GMAP`) |
 | Gmap from levels: a list, generator names, or a linked world's edge links | `seihai-servertools gmap make` | working |
-| World generators: height field, from a picture, dungeon | `seihai-servertools gen terrain\|image\|dungeon` | working |
+| World generators: height field (2D, 3D with `--3d`, streamed client terrain with `--stream`), from a picture, dungeon | `seihai-servertools gen terrain\|image\|dungeon` | working (3D output not yet client-tested) |
 | Leaderboard pages from seihai-gserver accounts (gserverstat's job) | `seihai-servertools stats` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
