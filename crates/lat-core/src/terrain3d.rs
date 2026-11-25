@@ -474,8 +474,9 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
              # The mesh ground is still written: swap the two lines to compare.\n\
              terrain world/{folder} {square}\n\
              # object Ground {world}.3ds 0 0 0\n\
-             # Water over everything below the base (WaterBlock, layout not yet run live):\n\
-             # water {w0} {w0} 0.25 {ws} {ws} 10 g3d_water 0\n",
+             # Water over everything at the base: the surface is z + depth (live 5.12),\n\
+             # so a 10 deep block at -9.75 has its surface at 0.25, just over the base (0):\n\
+             # water {w0} {w0} -9.75 {ws} {ws} 10 g3d_water 0\n",
             // The client takes a water size only from 1024 a side.
             w0 = -(2.0 * half).max(2048.0) / 2.0,
             ws = (2.0 * half).max(2048.0)
@@ -989,7 +990,7 @@ mod tests {
         assert!(text.contains("\nterrain world/isle_terrain 1\n"), "{text}");
         assert!(text.contains("# object Ground isle.3ds 0 0 0"));
         assert!(
-            text.contains("# water -1024 -1024 0.25 2048 2048 10 g3d_water 0"),
+            text.contains("# water -1024 -1024 -9.75 2048 2048 10 g3d_water 0"),
             "{text}"
         );
 
