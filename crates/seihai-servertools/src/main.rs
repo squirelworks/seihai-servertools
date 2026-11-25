@@ -44,9 +44,9 @@ Usage:
   seihai-servertools gani movie show FILE [--frame N] | render FILE OUT.png [--frame N]
                                     GraalShop movies (GANI0002): list actors and keyframes,
                                     paint a timeline frame (`gani --help`)
-  seihai-servertools gen terrain|image|dungeon ...
-                                    generate a world: height field, from a picture, or a
-                                    dungeon from a layout or maze (`gen --help`)
+  seihai-servertools gen terrain|3d|image|dungeon ...
+                                    generate a world: height field, its 3D version from a
+                                    gmap, from a picture, or a dungeon (`gen --help`)
   seihai-servertools stats ACCOUNTS OUTDIR [MODE...]
                                     leaderboard pages (kills, deaths, rupees, highap, lowap,
                                     maxpower, power, arrows, bombs, glovepower, swordpower,

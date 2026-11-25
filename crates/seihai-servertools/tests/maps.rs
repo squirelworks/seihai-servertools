@@ -204,6 +204,23 @@ fn generators_write_worlds_that_read_back() {
         !again.status.success(),
         "refuses to replace without --force"
     );
+    // gen 3d rebuilds the same 3D world from the gmap's HEIGHTMAP.
+    run(
+        &["gen", "3d", "t3/isle.gmap", "from", "--trees", "8"],
+        d.path(),
+    );
+    assert_eq!(
+        fs::read(d.path().join("from/isle.3ds")).unwrap(),
+        fs::read(d.path().join("t3/isle.3ds")).unwrap()
+    );
+    let rebuilt = fs::read_to_string(d.path().join("from/isle_graal3dworld.txt")).unwrap();
+    let body = |t: &str| {
+        t.lines()
+            .filter(|l| !l.starts_with('#'))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    assert_eq!(body(&rebuilt), body(&world3d));
 
     fs::write(d.path().join("l.txt"), "XXXXXXXXX\nX.......X\nXXXXXXXXX\n").unwrap();
     run(
