@@ -3,14 +3,15 @@
 //!
 //! The same height field as the 2D world (same options, same seed) becomes:
 //!
-//! * `<world>.3ds`: the ground, one mesh per level (9 by 9 samples, 8 tiles
-//!   apart, so one Torque unit per tile), its faces coloured by height:
-//!   water below the base, sand just above it, then grass and rock;
+//! * `<world>.3ds`: the ground, one mesh (samples 8 tiles apart, so one
+//!   Torque unit per tile; one mesh per level when the world is too large for
+//!   one), its faces coloured by height: water (flat) at and below the base,
+//!   sand just above it, then grass and rock, as fractions of the highest point;
 //! * `<world>_tree.3ds` and `<world>_rock.3ds`: two small coloured shapes;
 //! * `<world>_graal3dworld.txt`: a world file (the format of
 //!   seihai-gserver-v2's `bin/docs/graal3d.md`) with a sun, the ground at the
 //!   origin, trees on grass and rocks on high ground, a spawn point on the
-//!   ground at the middle of the map, and the default camera.
+//!   flattest grass near the middle of the map, and the default camera.
 //!
 //! Every mesh has materials, since a 5.12 or 4.20r6 client does not draw a
 //! `.3ds` without one (seihai-gserver-v2 lab, 2026-11-20). Faces are wound
@@ -102,7 +103,8 @@ pub struct Field3d {
     pub height: usize,
     /// Heights below this are water.
     pub base: i32,
-    /// The first split's reach: sand and rock bands are fractions of it.
+    /// The first split's reach; the bands use the highest point instead, and
+    /// this only when the field is all water.
     pub amplitude: f64,
     /// Seeds the tree and rock placement.
     pub seed: u32,
@@ -247,16 +249,39 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
     let (pw, ph) = (o.width * STEP + 1, o.height * STEP + 1);
     let field = &f.heights;
     let base = f64::from(o.base);
-    // Sand up to an eighth of the first split's reach above the base, rock
-    // from half of it.
-    let sand_top = base + o.amplitude.abs() / 8.0;
-    let rock_from = base + o.amplitude.abs() / 2.0;
+    // The bands follow the land as it came out, not the requested reach: sand
+    // up to 8% of the highest point above the base, rock from 60% of it. (With
+    // the reach, a world whose peaks overshoot it came out all sand on the
+    // real 5.12, lab 2026-11-25.)
+    let top = field
+        .iter()
+        .flatten()
+        .map(|&h| f64::from(h))
+        .fold(base, f64::max);
+    let range = if top > base {
+        top - base
+    } else {
+        o.amplitude.abs().max(1.0)
+    };
+    let sand_top = base + range * 0.08;
+    let rock_from = base + range * 0.6;
     let z = |h: f64| ((h.max(base) - base) * o3.vscale) as f32;
     let height_at = |x: usize, y: usize| f64::from(field[y][x]);
+    let corners_at = |x: usize, y: usize| {
+        [
+            height_at(x, y),
+            height_at(x + 1, y),
+            height_at(x, y + 1),
+            height_at(x + 1, y + 1),
+        ]
+    };
 
     let materials = [&WATER, &SAND, &GRASS, &ROCK];
-    let pick = |avg: f64| {
-        if avg < base {
+    // A cell is water only when all four corners are at or below the base, so
+    // water is always flat; a cell rising out of it is sand.
+    let pick = |corners: [f64; 4]| {
+        let avg = corners.iter().sum::<f64>() / 4.0;
+        if corners.iter().all(|&h| h <= base) {
             0
         } else if avg < sand_top {
             1
@@ -267,42 +292,47 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
         }
     };
 
+    // One mesh for the whole ground when its points and faces fit the 3DS
+    // 16-bit counts: each mesh gets its own normals, so per-level meshes show
+    // a shading seam where they meet (real 5.12, lab 2026-11-25). Larger
+    // worlds fall back to one mesh per level.
+    let whole =
+        pw * ph <= usize::from(u16::MAX) && 2 * (pw - 1) * (ph - 1) <= usize::from(u16::MAX);
+    let blocks: Vec<(usize, usize, usize, usize)> = if whole {
+        vec![(0, 0, pw - 1, ph - 1)]
+    } else {
+        (0..o.height)
+            .flat_map(|ly| (0..o.width).map(move |lx| (lx * STEP, ly * STEP, STEP, STEP)))
+            .collect()
+    };
     let mut meshes = Vec::new();
-    for ly in 0..o.height {
-        for lx in 0..o.width {
-            let mut mesh = Mesh {
-                name: format!("g{}", ly * o.width + lx),
-                points: Vec::new(),
-                faces: Vec::new(),
-            };
-            for j in 0..=STEP {
-                for i in 0..=STEP {
-                    let (fx, fy) = (lx * STEP + i, ly * STEP + j);
-                    mesh.points.push([
-                        (fx * STEP) as f32,
-                        -((fy * STEP) as f32),
-                        z(height_at(fx, fy)),
-                    ]);
-                }
+    for (n, &(x0, y0, w, h)) in blocks.iter().enumerate() {
+        let mut mesh = Mesh {
+            name: format!("g{n}"),
+            points: Vec::new(),
+            faces: Vec::new(),
+        };
+        for j in 0..=h {
+            for i in 0..=w {
+                let (fx, fy) = (x0 + i, y0 + j);
+                mesh.points.push([
+                    (fx * STEP) as f32,
+                    -((fy * STEP) as f32),
+                    z(height_at(fx, fy)),
+                ]);
             }
-            let at = |i: usize, j: usize| (j * (STEP + 1) + i) as u16;
-            for j in 0..STEP {
-                for i in 0..STEP {
-                    let (fx, fy) = (lx * STEP + i, ly * STEP + j);
-                    let avg = (height_at(fx, fy)
-                        + height_at(fx + 1, fy)
-                        + height_at(fx, fy + 1)
-                        + height_at(fx + 1, fy + 1))
-                        / 4.0;
-                    let m = pick(avg);
-                    // Counter-clockwise from above (+z), with map y running to -y.
-                    mesh.faces.push(([at(i, j), at(i, j + 1), at(i + 1, j)], m));
-                    mesh.faces
-                        .push(([at(i + 1, j), at(i, j + 1), at(i + 1, j + 1)], m));
-                }
-            }
-            meshes.push(mesh);
         }
+        let at = |i: usize, j: usize| (j * (w + 1) + i) as u16;
+        for j in 0..h {
+            for i in 0..w {
+                let m = pick(corners_at(x0 + i, y0 + j));
+                // Counter-clockwise from above (+z), with map y running to -y.
+                mesh.faces.push(([at(i, j), at(i, j + 1), at(i + 1, j)], m));
+                mesh.faces
+                    .push(([at(i + 1, j), at(i, j + 1), at(i + 1, j + 1)], m));
+            }
+        }
+        meshes.push(mesh);
     }
 
     let world = &o.world;
@@ -332,10 +362,7 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
             ((tx / STEP as f64) as usize).min(pw - 2),
             ((ty / STEP as f64) as usize).min(ph - 2),
         );
-        pick(
-            (height_at(x, y) + height_at(x + 1, y) + height_at(x, y + 1) + height_at(x + 1, y + 1))
-                / 4.0,
-        )
+        pick(corners_at(x, y))
     };
     let n = |v: f64| format!("{:.2}", v);
 
@@ -430,7 +457,37 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
             }
         }
     }
-    let (cx, cy) = ((o.width * 32) as f64, (o.height * 32) as f64);
+    // The spawn: the flattest grass (else any land) near the middle of the map,
+    // so the default camera looks at ground, not water or a hillside.
+    let (mut cx, mut cy) = ((o.width * 32) as f64, (o.height * 32) as f64);
+    let mut best: Option<(f64, f64, f64)> = None;
+    for want_grass in [true, false] {
+        for y in 0..ph - 1 {
+            for x in 0..pw - 1 {
+                let c = corners_at(x, y);
+                let m = pick(c);
+                if m == 0 || (want_grass && m != 2) {
+                    continue;
+                }
+                let (tx, ty) = (
+                    ((x * STEP) + STEP / 2) as f64,
+                    ((y * STEP) + STEP / 2) as f64,
+                );
+                let slope = c.iter().cloned().fold(f64::MIN, f64::max)
+                    - c.iter().cloned().fold(f64::MAX, f64::min);
+                let score = (tx - cx).hypot(ty - cy) + slope * 64.0 / range;
+                if best.is_none_or(|b| score < b.0) {
+                    best = Some((score, tx, ty));
+                }
+            }
+        }
+        if best.is_some() {
+            break;
+        }
+    }
+    if let Some((_, tx, ty)) = best {
+        (cx, cy) = (tx, ty);
+    }
     text.push_str(&format!(
         "\nspawn {} {} {}\n",
         n(cx),
@@ -732,7 +789,7 @@ mod tests {
     }
 
     #[test]
-    fn ground_is_one_mesh_per_level_facing_up_with_materials() {
+    fn ground_is_one_mesh_facing_up_with_materials() {
         let files = terrain3d(&opts(), &Terrain3dOptions::default()).unwrap();
         let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(
@@ -746,20 +803,19 @@ mod tests {
         );
         let (mats, meshes) = read_meshes(&files[0].1);
         assert_eq!(mats, ["g3d_water", "g3d_sand", "g3d_grass", "g3d_rock"]);
-        assert_eq!(meshes.len(), 2);
-        for (points, faces, used) in &meshes {
-            assert_eq!(points.len(), 81);
-            assert_eq!(faces.len(), 128);
-            assert!(!used.is_empty());
-            for f in faces {
-                assert!(normal_z(points, *f) > 0.0, "ground faces point up");
-            }
+        // One mesh, so no shading seam between the two levels.
+        assert_eq!(meshes.len(), 1);
+        let (points, faces, used) = &meshes[0];
+        assert_eq!(points.len(), 17 * 9);
+        assert_eq!(faces.len(), 256);
+        assert!(!used.is_empty());
+        for f in faces {
+            assert!(normal_z(points, *f) > 0.0, "ground faces point up");
         }
-        // The second level starts where the first ends: 64 units east.
-        assert_eq!(meshes[1].0[0][0], 64.0);
-        assert_eq!(meshes[0].0[8], meshes[1].0[0], "levels share their edge");
+        // The last sample is 128 units east.
+        assert_eq!(points[16][0], 128.0);
         // Islands: the rim sits at the base, height 0.
-        assert_eq!(meshes[0].0[0][2], 0.0);
+        assert_eq!(points[0][2], 0.0);
     }
 
     #[test]
@@ -802,8 +858,15 @@ mod tests {
             assert!(text.contains("\nsun "));
             let spawn = text.lines().find(|l| l.starts_with("spawn ")).unwrap();
             let v: Vec<f64> = spawn[6..].split(' ').map(|s| s.parse().unwrap()).collect();
-            assert_eq!((v[0], v[1]), (96.0, -96.0));
+            assert!(
+                (0.0..=192.0).contains(&v[0]) && (-192.0..=0.0).contains(&v[1]),
+                "{spawn}"
+            );
             assert!(v[2] >= 1.0);
+            // On land whenever the map has any: not in the water.
+            if text.contains("object Tree") || text.contains("object Rock") {
+                assert!(v[2] > 1.0, "{spawn}");
+            }
             for l in text.lines().filter(|l| l.starts_with("object ")) {
                 let w: Vec<&str> = l.split_whitespace().collect();
                 assert!(w.len() == 6 || w.len() == 10, "{l}");
@@ -964,5 +1027,51 @@ mod tests {
                 "{shape}"
             );
         }
+    }
+
+    #[test]
+    fn bands_follow_the_land_flat_water_and_a_spawn_on_grass() {
+        // A cone rising from water at the west edge to 100 at the east, with a
+        // reach (amplitude) far above what came out.
+        let (pw, ph) = (17, 9);
+        let heights: Vec<Vec<i32>> = (0..ph)
+            .map(|_| (0..pw).map(|x: i32| (x - 4) * 100 / 12).collect())
+            .collect();
+        let f = Field3d {
+            world: "cone".into(),
+            width: 2,
+            height: 1,
+            base: 0,
+            amplitude: 4000.0,
+            seed: 1,
+            heights,
+            source: "a test cone".into(),
+        };
+        let o3 = Terrain3dOptions {
+            stream: true,
+            trees_per_level: 0,
+            ..Terrain3dOptions::default()
+        };
+        let files = world3d(&f, &o3).unwrap();
+        let (_, meshes) = read_meshes(&files[0].1);
+        // Rock shows on the high east side even though the reach is 4000.
+        assert!(
+            meshes[0].2.contains(&"g3d_rock".to_string()),
+            "{:?}",
+            meshes[0].2
+        );
+        let text = String::from_utf8(
+            files
+                .iter()
+                .find(|(n, _)| n.ends_with("graal3dworld.txt"))
+                .unwrap()
+                .1
+                .clone(),
+        )
+        .unwrap();
+        let spawn = text.lines().find(|l| l.starts_with("spawn ")).unwrap();
+        let v: Vec<f64> = spawn[6..].split(' ').map(|s| s.parse().unwrap()).collect();
+        // On dry land (above the water's height 0 plus the 1 unit lift).
+        assert!(v[2] > 1.0, "{spawn}");
     }
 }
