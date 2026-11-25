@@ -206,6 +206,38 @@ pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
     })
 }
 
+/// The files rearranged as a gserver playerworld folder (seihai-gserver-v2's
+/// `bin/docs/graal3d.md`, "Shipping a 3D world"): the world file as
+/// `config/graal3dworld.txt`, 2D levels and the gmap in `world/`, and every 3D
+/// file in `world/3d/` under its real, lower-cased name, which the world file
+/// names (the 3D clients ask for lower-cased names).
+pub fn playerworld_layout(world: &str, files: Vec<File>) -> Vec<File> {
+    let lower = world.to_lowercase();
+    let world_txt = format!("{world}_graal3dworld.txt");
+    files
+        .into_iter()
+        .map(|(name, bytes)| {
+            if name == world_txt {
+                let text = String::from_utf8_lossy(&bytes)
+                    .replace(&format!(" {world}"), &format!(" {lower}"))
+                    .replace(&format!("/{world}"), &format!("/{lower}"))
+                    .replace("terrain world/", "terrain world/3d/")
+                    .replace("into the server's world/ folder", "into the server's world/3d/ folder")
+                    .replace("Copy it to config/graal3dworld.txt, and the .3ds files into the\n# server's file folders", "This is config/graal3dworld.txt of a playerworld; the shapes and\n# terrain are in world/3d/, among the server's file folders");
+                ("config/graal3dworld.txt".to_string(), text.into_bytes())
+            } else if name.ends_with(".nw") || name.ends_with(".gmap") {
+                (format!("world/{name}"), bytes)
+            } else {
+                let renamed = match name.strip_prefix(world) {
+                    Some(rest) => format!("{lower}{rest}"),
+                    None => name,
+                };
+                (format!("world/3d/{renamed}"), bytes)
+            }
+        })
+        .collect()
+}
+
 /// The 3D files for a height field (see the module notes).
 pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> {
     if !o3.vscale.is_finite() || o3.vscale <= 0.0 {
@@ -889,5 +921,48 @@ mod tests {
             field_from_gmap("x", "WIDTH 2\nHEIGHT 2\nHEIGHTMAP\n1 2 3\nHEIGHTMAPEND\n").is_err()
         );
         assert!(field_from_gmap("x", "HEIGHTMAP\nHEIGHTMAPEND\n").is_err());
+    }
+
+    #[test]
+    fn a_playerworld_has_real_lower_case_names_where_the_world_file_says() {
+        let o = opts();
+        let o3 = Terrain3dOptions {
+            stream: true,
+            ..Terrain3dOptions::default()
+        };
+        let mut world = o.clone();
+        world.world = "Isle".into();
+        let files = playerworld_layout("Isle", terrain3d(&world, &o3).unwrap());
+        let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+        for n in [
+            "config/graal3dworld.txt",
+            "world/3d/isle.3ds",
+            "world/3d/isle_tree.3ds",
+            "world/3d/isle_terrain/heights0-0.dat",
+            "world/3d/isle_terrain/heights.info",
+            "world/3d/isle_terrain/g3d_grass.png",
+        ] {
+            assert!(names.contains(&n), "{n} in {names:?}");
+        }
+        assert!(names.iter().all(|n| !n.contains("Isle")), "{names:?}");
+        let text = String::from_utf8(
+            files
+                .iter()
+                .find(|(n, _)| n == "config/graal3dworld.txt")
+                .unwrap()
+                .1
+                .clone(),
+        )
+        .unwrap();
+        assert!(text.contains("\nterrain world/3d/isle_terrain "), "{text}");
+        assert!(text.contains("# object Ground isle.3ds 0 0 0"), "{text}");
+        // Every shape the world file names is a file in world/3d/.
+        for line in text.lines().filter(|l| l.starts_with("object ")) {
+            let shape = line.split_whitespace().nth(2).unwrap();
+            assert!(
+                names.contains(&format!("world/3d/{shape}").as_str()),
+                "{shape}"
+            );
+        }
     }
 }

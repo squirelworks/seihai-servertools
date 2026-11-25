@@ -10,7 +10,7 @@ use std::process::ExitCode;
 pub const USAGE: &str = "\
 gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
             [--chaos F] [--islands] [--force]
-            [--3d [--vscale F] [--trees N] [--stream]]
+            [--3d [--vscale F] [--trees N] [--stream] [--playerworld]]
     A height-field world (TerrainGenerator): WxH levels (default 2x2) named
     <NAME><column><row>.nw with a 9x9 HEIGHTS block each, edge links, and
     NAME.gmap with the generator keys. --height is how far the first split
@@ -24,7 +24,10 @@ gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
     level (default 4). --stream also writes NAME_terrain/: the ground as
     streamed terrain for 4.20r6 and 5.x clients (256 heights<x>-<y>.dat
     chunks, heights.info and its textures), and the world file uses it.
-gen 3d GMAP DIR [--world NAME] [--vscale F] [--trees N] [--stream] [--force]
+    --playerworld lays DIR out as a gserver folder ready to ship:
+    config/graal3dworld.txt, the levels and gmap in world/, and the 3D files
+    in world/3d/ under real, lower-cased names.
+gen 3d GMAP DIR [--world NAME] [--vscale F] [--trees N] [--stream] [--playerworld] [--force]
     The --3d files (and with --stream, the streamed terrain) from a gmap that
     already has a HEIGHTMAP block, such as one written by gen terrain or by
     the original TerrainGenerator. NAME defaults to the gmap's file name.
@@ -58,6 +61,7 @@ struct Opts {
     vscale: f64,
     trees: u32,
     stream: bool,
+    playerworld: bool,
     layout: Option<PathBuf>,
     maze: Option<(usize, usize)>,
     path: u16,
@@ -110,6 +114,10 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
             "--stream" => {
                 o.three_d = true;
                 o.stream = true;
+            }
+            "--playerworld" => {
+                o.three_d = true;
+                o.playerworld = true;
             }
             "--force" => o.force = true,
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
@@ -167,6 +175,11 @@ fn from_gmap(gmap: &Path, dir: &Path, o: &Opts) -> Result<(), String> {
             stream: o.stream,
         },
     )?;
+    let files = if o.playerworld {
+        terrain3d::playerworld_layout(&world, files)
+    } else {
+        files
+    };
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     if !o.force {
         if let Some((name, _)) = files.iter().find(|(n, _)| dir.join(n).exists()) {
@@ -252,6 +265,9 @@ fn terrain(dir: &Path, o: &Opts) -> Result<(), String> {
             },
         )?;
         files.extend(three);
+    }
+    if o.playerworld {
+        files = terrain3d::playerworld_layout(&options.world, files);
     }
     save(dir, &files, o.force)?;
     if o.three_d {
