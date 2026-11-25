@@ -12,3 +12,5 @@ Notes for the next seihai-servertools release. One line per user-visible change,
 - Listserver setup reads valid TOML strings and integers consistently with its editor, preserving quoted account paths, escapes and numeric separators; malformed files retain the existing best-effort fallback.
 
 - Repacking resource packages validates and finishes a temporary output before replacement, preserving an existing package on validation/write refusal and retaining Unix file-creation modes; package and key-file updates remain separate.
+
+- `gen terrain --3d` also writes the world for a Graal 3D server: a `.3ds` ground built from the same height field (one coloured mesh per level), tree and rock shapes, and a `graal3dworld.txt` that places them on the ground with a sun and a spawn point. `--vscale` sets the height scale and `--trees` the placements per level. Not yet loaded by a real 3D client.
