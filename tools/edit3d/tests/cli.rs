@@ -127,6 +127,12 @@ fn show_edit_and_render() {
     );
     let shown = ok(&["show", root]);
     assert!(shown.contains("0 chunks missing"), "{shown}");
+    // A brush that changes nothing saves nothing (no backups, no rewrite).
+    let said = ok(&["terrain", root, "raise", "5", "-5", "24", "0"]);
+    assert!(
+        said.contains("0 squares changed") && said.contains("nothing to save"),
+        "{said}"
+    );
     assert!(!run(&["terrain", root, "paint", "5", "-5", "24", "99"])
         .status
         .success());
