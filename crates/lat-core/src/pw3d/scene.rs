@@ -346,10 +346,14 @@ fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize, Vec<bool>) {
         .map(|i| h[i])
         .fold(f32::MAX, f32::min);
     let low = if low == f32::MAX { 0.0 } else { low };
+    // Over a wide world small disagreements between cliffs add up (an
+    // island came out 9.5 high on a real gmap): no ground stands higher
+    // than twice the tallest single face.
+    let cap = runs.iter().map(|r| r.2).fold(0.0f32, f32::max) * 2.0;
     let mut tile = vec![0.0f32; n];
     for i in 0..n {
         if free[i] {
-            tile[i] = ((h[i] - low) / 0.5).round() * 0.5;
+            tile[i] = ((h[i] - low).min(cap) / 0.5).round() * 0.5;
         }
     }
     // Regions, for the report: 4-connected free ground.
