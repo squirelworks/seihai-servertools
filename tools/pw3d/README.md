@@ -31,7 +31,7 @@ a Sun, and it runs `weapon3d` GS2 scripts. So:
 | NPCs with an image | a cut-out of the picture (or its `setimgpart`), standing up as wide and tall as in 2D, found by name in `INPUT` and `--images` folders; a figure where the NPC shows a gani or the picture is a sheet or missing | approximated; scripts dropped |
 | baddies, chests, signs | simple shapes (a red figure, a wood and gold chest, a post with a board) | approximated; baddy behaviour and chest items dropped |
 | links | tinted tiles; the walker takes them, switching world with `g3dworld` when the link leaves the world | lossless (links to levels not in the folder are listed and dropped) |
-| signs | the walker shows the text while the player stands below one | lossless text |
+| signs | the words on a board above each sign in 3D capital letters (our own 3×5 font, up to 6 lines of 22); the walker also says them in chat, which the 5.12 does not draw in 3D | text kept; lower case, colours and rare symbols lost |
 | gmap | one world, its levels side by side (Torque `x`, `-y` from tile `x`, `y`, one unit a tile) | lossless layout |
 | any other level | its own world, `config/graal3dworlds/<level>.txt`, so a TCP warp to that level also takes a 3D client there | |
 

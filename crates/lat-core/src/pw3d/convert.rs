@@ -4,6 +4,7 @@ use super::meaning::{read_object_sets, Kind, Meanings};
 use super::npc::{npc_shape, Images};
 use super::scene;
 use super::shape::{Colour, Shape};
+use super::signtext;
 use super::walker;
 use seihai_core::assets::{read_png_rgba, Level, TileTypes, EMPTY_UPPER_TILE};
 use seihai_core::gmap::Gmap;
@@ -1068,6 +1069,8 @@ fn level_shape(
             SIGN_FACE,
             WOOD,
         );
+        // The words on a board above it: a 3D client draws no 2D text.
+        s.extend(&signtext::board(&sg.text, x + 0.5, -y - 0.62, z + 1.4));
     }
     (s, made)
 }
