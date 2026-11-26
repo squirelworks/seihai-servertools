@@ -92,6 +92,11 @@ pub struct ListserverPlan {
     /// An accounts file (only its accounts get in) instead of open mode
     /// (every account and password gets in).
     pub accounts_file: bool,
+    /// Let only this layout's gservers register: a `gservers` allow-list
+    /// with a random HQ password per gserver, which each gserver sends
+    /// (`listserver_hq_password`). Off: any link to `gserver_port` may
+    /// register.
+    pub allow_list: bool,
 }
 
 /// One gserver in the layout (seihai-gserver).
@@ -200,6 +205,7 @@ impl ListserverPlan {
             gserver_port: LIST_GSERVER_PORT + step,
             client_ports: LIST_CLIENT_PORTS.iter().map(|p| p + step).collect(),
             accounts_file: !lab,
+            allow_list: !lab,
         }
     }
 }
@@ -313,6 +319,7 @@ impl Plan {
             t["gserver_port"] = value(i64::from(l.gserver_port));
             t["client_ports"] = value(ports_array(&l.client_ports));
             t["accounts"] = value(if l.accounts_file { "file" } else { "open" });
+            t["allow_list"] = value(l.allow_list);
             ls.push(t);
         }
         if !ls.is_empty() {
@@ -381,6 +388,9 @@ impl Plan {
             }
             if let Some(v) = t.get("client_ports") {
                 l.client_ports = port_list(v, "client_ports")?;
+            }
+            if let Some(v) = bool_key(t, "allow_list")? {
+                l.allow_list = v;
             }
             if let Some(v) = str_key(t, "accounts")? {
                 l.accounts_file = match v.as_str() {

@@ -238,14 +238,42 @@ pub fn write(
     let bin_dir = bins.dir();
     put(dir, "layout.toml", &plan.to_toml(), &mut w)?;
     put(dir, "README.txt", &render::readme(plan), &mut w)?;
+    // An HQ password for each gserver on a listserver with an allow-list.
+    let mut hq: Vec<(String, String)> = Vec::new();
+    for g in &plan.gservers {
+        if let ListRef::Local(n) = &g.listserver {
+            if plan.listserver(n).is_some_and(|l| l.allow_list) {
+                hq.push((g.name.clone(), random_password()?));
+            }
+        }
+    }
+    let hq_of = |g: &str| {
+        hq.iter()
+            .find(|(n, _)| n == g)
+            .map(|(_, p)| p.as_str())
+            .unwrap_or("")
+    };
     for l in &plan.listservers {
         let ld = render::listserver_dir(&l.name);
+        let allowed: Vec<(String, String)> = plan
+            .gservers
+            .iter()
+            .filter(
+                |g| matches!(&g.listserver, ListRef::Local(n) if n.eq_ignore_ascii_case(&l.name)),
+            )
+            .filter(|g| !hq_of(&g.name).is_empty())
+            .map(|g| (g.name.clone(), hq_of(&g.name).to_string()))
+            .collect();
+        let file = format!("{ld}/seihai-listserver.toml");
         put(
             dir,
-            &format!("{ld}/seihai-listserver.toml"),
-            &render::listserver_toml(plan, l),
+            &file,
+            &render::listserver_toml(plan, l, &allowed),
             &mut w,
         )?;
+        if !allowed.is_empty() {
+            chmod(&dir.join(&file), 0o600);
+        }
     }
     let npc_bin = bins
         .npcserver
@@ -267,10 +295,10 @@ pub fn write(
         put(
             dir,
             &cfg,
-            &render::gserver_txt(plan, g, &npc_bin, &token),
+            &render::gserver_txt(plan, g, &npc_bin, &token, hq_of(&g.name)),
             &mut w,
         )?;
-        if !token.is_empty() {
+        if !token.is_empty() || !hq_of(&g.name).is_empty() {
             chmod(&dir.join(&cfg), 0o600);
         }
         put(

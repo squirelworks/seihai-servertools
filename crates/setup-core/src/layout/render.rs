@@ -52,7 +52,15 @@ fn line_value(s: &str) -> String {
 }
 
 /// `seihai-listserver.toml` for one listserver.
-pub fn listserver_toml(plan: &Plan, l: &ListserverPlan) -> String {
+/// The address a gserver of this layout registers from: the one it
+/// connects to the listserver on, as both run on this machine.
+pub fn register_ip(plan: &Plan) -> String {
+    local_addr(&plan.bind)
+}
+
+/// `seihai-listserver.toml` for one listserver. `allowed` is its
+/// allow-list, `(gserver name, HQ password)` (empty unless `allow_list`).
+pub fn listserver_toml(plan: &Plan, l: &ListserverPlan, allowed: &[(String, String)]) -> String {
     let ports = l
         .client_ports
         .iter()
@@ -82,17 +90,37 @@ pub fn listserver_toml(plan: &Plan, l: &ListserverPlan) -> String {
          # comes from) or \"sent\" (the listserver_ip the gserver sends).\n\
          gserver_ip = {gip}\n\
          \n\
-         # `gservers = [...]` limits who may register to those addresses with\n\
-         # an HQ password. seihai-gserver sends no HQ password, so leave it\n\
-         # empty for seihai-gserver and keep gserver_port behind a firewall.\n\
-         \n\
          status_log_secs = 60\n\
-         secure_login_key = \"seihai-login.key\"\n",
+         secure_login_key = \"seihai-login.key\"\n\
+         \n\
+         {allow}",
         bind = toml_str(&plan.bind),
         gp = l.gserver_port,
         title = toml_str(&l.title),
         accounts = toml_str(if l.accounts_file { "accounts.txt" } else { "" }),
         gip = toml_str(if sent { "sent" } else { "peer" }),
+        allow = allow_list_toml(plan, allowed),
+    )
+}
+
+fn allow_list_toml(plan: &Plan, allowed: &[(String, String)]) -> String {
+    if allowed.is_empty() {
+        return "# `gservers = [...]` would let only those addresses register, each\n\
+                # with its HQ password (listserver_hq_password on the gserver).\n\
+                # Empty: any link to gserver_port may register.\n"
+            .into();
+    }
+    let ip = toml_str(&register_ip(plan));
+    let rows: Vec<String> = allowed
+        .iter()
+        .map(|(g, pw)| format!("  {{ ip = {ip}, hq_password = {} }}, # {g}", toml_str(pw)))
+        .collect();
+    format!(
+        "# Only these may register: each of this layout's gservers, with the HQ\n\
+         # password it sends (listserver_hq_password in its config/server.txt).\n\
+         # Keep this file private. Another gserver needs its own row.\n\
+         gservers = [\n{}\n]\n",
+        rows.join("\n")
     )
 }
 
@@ -109,8 +137,9 @@ pub fn listserver_addr(plan: &Plan, g: &GserverPlan) -> Option<String> {
 
 /// `config/server.txt` for one gserver. `npc_bin` is the NPC-server
 /// program for `auto` (empty: next to seihai-gserver); `token` the shared
-/// token for `external`.
-pub fn gserver_txt(plan: &Plan, g: &GserverPlan, npc_bin: &str, token: &str) -> String {
+/// token for `external`; `hq` the HQ password its listserver's allow-list
+/// expects (empty: none).
+pub fn gserver_txt(plan: &Plan, g: &GserverPlan, npc_bin: &str, token: &str, hq: &str) -> String {
     let mut s = format!(
         "# Written by `seihai-servertools setup new`. Every setting, with its\n\
          # default and a comment: seihai-gserver's sample world/config/server.txt.\n\
@@ -143,6 +172,14 @@ pub fn gserver_txt(plan: &Plan, g: &GserverPlan, npc_bin: &str, token: &str) -> 
                     "# The address the list shows for this server (gserver_ip = \"sent\").\nlistserver_ip = {}\n",
                     line_value(plan.public_host.trim())
                 ));
+            }
+            if !hq.is_empty() {
+                s.push_str(&format!(
+                    "# Sent before registering; the listserver's gservers allow-list has\n# the same text for this server. Keep it private.\nlistserver_hq_password = {}\n",
+                    line_value(hq)
+                ));
+            } else if matches!(g.listserver, ListRef::Remote(_)) {
+                s.push_str("# If that listserver has an allow-list, its operator gives you an HQ\n# password: listserver_hq_password = ...\n");
             }
             if matches!(g.listserver, ListRef::Remote(_)) {
                 s.push_str("# The link is encrypted; set listserver_secure = false only for a\n# listserver that does not know the handshake (GServer-v2's).\n");
@@ -482,12 +519,12 @@ mod tests {
             ..Default::default()
         });
         p.gservers[1].listserver = ListRef::Local("list2".into());
-        let a = gserver_txt(&p, &p.gservers[0], "/bin/seihai-npcserver", "");
+        let a = gserver_txt(&p, &p.gservers[0], "/bin/seihai-npcserver", "", "");
         assert!(a.contains("listserver = 127.0.0.1:14900\n"), "{a}");
         assert!(a.contains("npcserver = auto\n"));
         assert!(a.contains("npcserver_port = 14810\n"));
         assert!(a.contains("npcserver_path = /bin/seihai-npcserver\n"));
-        let b = gserver_txt(&p, &p.gservers[1], "", "");
+        let b = gserver_txt(&p, &p.gservers[1], "", "", "");
         assert!(b.contains("listserver = 127.0.0.1:14950\n"), "{b}");
         assert!(b.contains("port = 14812\n"));
     }
@@ -500,13 +537,24 @@ mod tests {
             ..Default::default()
         });
         p.gservers[0].title = "Bad # name\nx".into();
-        let g = gserver_txt(&p, &p.gservers[0], "", "tok-0123456789abcdef");
+        let g = gserver_txt(&p, &p.gservers[0], "", "tok-0123456789abcdef", "hq-secret");
         assert!(g.contains("bind = 0.0.0.0\n"));
         assert!(g.contains("listserver = 127.0.0.1:14900\n"));
         assert!(g.contains("listserver_ip = <public-host>\n"));
         assert!(g.contains("npcserver_token = tok-0123456789abcdef\n"));
         assert!(g.contains("name = Bad  name x\n"));
-        let l = listserver_toml(&p, &p.listservers[0]);
+        assert!(g.contains("listserver_hq_password = hq-secret\n"));
+        let l = listserver_toml(
+            &p,
+            &p.listservers[0],
+            &[("world".into(), "hq-secret".into())],
+        );
+        assert!(
+            l.contains("{ ip = \"127.0.0.1\", hq_password = \"hq-secret\" }, # world"),
+            "{l}"
+        );
+        let open = listserver_toml(&p, &p.listservers[0], &[]);
+        assert!(!open.contains("\ngservers ="));
         assert!(l.contains("gserver_ip = \"sent\""));
         assert!(l.contains("accounts = \"accounts.txt\""));
         assert!(l.contains("bind = \"0.0.0.0\""));

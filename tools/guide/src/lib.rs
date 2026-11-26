@@ -173,7 +173,9 @@ A SERVER FROM SCRATCH: setup new
    - lab or public. Lab listens on 127.0.0.1, so only this machine can join.
      Public listens on every address and asks for the address players use
      (your host name or public IP); the listserver then lists the gservers
-     there (gserver_ip = \"sent\", listserver_ip on each gserver).
+     there (gserver_ip = \"sent\", listserver_ip on each gserver). A public
+     listserver also gets an allow-list: only this layout's gservers may
+     register, each with its own random HQ password (listserver_hq_password).
    - how many listservers to run here. Usually one. 0 uses a listserver
      someone else runs (give its gserver port, HOST:PORT) or none at all.
    - how many gservers. They take the listservers in turn.
@@ -217,7 +219,8 @@ Without questions (scripts, CI):
   setup new --print-plan [options]       print the layout.toml, write nothing
 
 layout.toml keys: bind, public_host; [[listserver]] name, title,
-gserver_port, client_ports, accounts (\"open\" or \"file\"); [[gserver]] name,
+gserver_port, client_ports, accounts (\"open\" or \"file\"), allow_list;
+[[gserver]] name,
 title, description, port, listserver (a name, HOST:PORT or \"none\"),
 listserver_accounts, npcserver (auto, external, off), npcserver_port,
 create_accounts; [[staff]] account, gservers (empty: all), ip_ranges, folders.
@@ -244,9 +247,14 @@ a restart.
                    \"sent\": at the listserver_ip the gserver sends. Use \"sent\"
                    when gservers run on the listserver's machine but players
                    are elsewhere (else the list shows 127.0.0.1)
-  gservers         an allow-list with HQ passwords, for gservers that send
-                   one (the fork, `setup host-listserver --allow-gserver`).
-                   seihai-gserver sends none, so leave it empty for it
+  gservers         an allow-list: only these addresses may register, each
+                   with its HQ password, e.g.
+                   gservers = [{ ip = \"127.0.0.1\", hq_password = \"...\" }]
+                   seihai-gserver sends it from listserver_hq_password in
+                   its config/server.txt; the fork from hq_password in
+                   config/adminconfig.txt (`setup host-listserver
+                   --allow-gserver`). `setup new` fills both sides with a
+                   random password per gserver for a public layout
 
 Pointing a gserver at a listserver: in the gserver's config/server.txt,
 `listserver = HOST:GSERVER_PORT` (seihai-gserver) or listip/listport in
@@ -268,6 +276,7 @@ seihai-gserver's sample world lists every key), config/allowedversions.txt
   listserver_accounts check passwords with the listserver (needs its accounts
                       file; open mode would let any password in)
   listserver_ip       the address the list shows (with gserver_ip = \"sent\")
+  listserver_hq_password  the HQ password for a listserver's allow-list
   npcserver           off, auto or external (`guide npcserver`)
   max_players, start_level, anticheat, ...   see the sample server.txt
 
@@ -349,8 +358,10 @@ Common tasks (each takes --server HOST:PORT --account NAME):
   seihai-rc server flags
 
 NPC Control (with an NPC-server running). seihai-gserver takes NC logins on
-its own port:
+its own port, and tells an RC where that is:
 
+  seihai-rc nc discover --server 127.0.0.1:14802 --account admin
+  seihai-rc nc npcs --discover 127.0.0.1:14802 --account admin
   seihai-rc nc npcs --server 127.0.0.1:14802 --account admin
   seihai-rc nc npc get 12 --server 127.0.0.1:14802 --account admin
   seihai-rc nc weapons --server 127.0.0.1:14802 --account admin
@@ -385,8 +396,11 @@ The gserver is not on the list
   - Its log should say `listserver link to HOST:PORT: registered`. If it says
     `retrying`, the listserver is not up or `listserver =` names the wrong
     port: it is the listserver's gserver_port (14900), not a client port.
-  - The listserver has a `gservers` allow-list: seihai-gserver sends no HQ
-    password, so it is never listed. Empty the list for it.
+  - The listserver has a `gservers` allow-list: the gserver's address must
+    have a row there, and its listserver_hq_password must be the row's
+    hq_password. The listserver's log says when a link is dropped or a
+    password does not match. (A seihai-gserver older than the HQ password
+    setting sends none and is never listed by such a listserver.)
   - `listserver_secure`: seihai-listserver needs the encrypted link (the
     default). A GServer-v2 style listserver needs listserver_secure = false.
   - A changed listserver key: delete the gserver's config/listserver.pin only
@@ -409,8 +423,10 @@ The RC cannot log in
   - Refused from your address: add it to IPRANGE (loopback is the default).
   - With listserver_accounts = true the password is checked by the listserver:
     the account must be in its accounts file.
-  - `seihai-rc nc discover` gets no answer from seihai-gserver yet; connect NC
-    to the gserver's own port instead (`nc npcs --server HOST:PORT`).
+  - `seihai-rc nc discover` says no NPC-server address arrived: the gserver
+    has no NPC-server connected (npcserver = off, or it has not connected
+    yet), or it is a seihai-gserver older than NC discovery. Connect NC to
+    the gserver's own port instead (`nc npcs --server HOST:PORT`).
 
 Players cannot connect from other machines
   - bind is 127.0.0.1 (a lab). Use `setup new --public HOST`, or set bind

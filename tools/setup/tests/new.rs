@@ -62,6 +62,7 @@ title = "Side list"
 gserver_port = {}
 client_ports = [{}]
 accounts = "file"
+allow_list = true
 [[gserver]]
 name = "hub"
 title = "Hub World"
@@ -163,6 +164,21 @@ fn writes_a_full_layout_without_the_programs() {
     );
     assert!(quiet.contains("npcserver = off\n"));
     assert!(side.contains("accounts = \"accounts.txt\""));
+    // side's allow-list names quiet with the HQ password quiet sends; main has none.
+    let hq = quiet
+        .lines()
+        .find_map(|l| l.strip_prefix("listserver_hq_password = "))
+        .expect("quiet sends an HQ password");
+    assert!(
+        side.contains(&format!(
+            "{{ ip = \"127.0.0.1\", hq_password = \"{hq}\" }}, # quiet"
+        )),
+        "{side}"
+    );
+    let main = fs::read_to_string(dir.join("listservers/main/seihai-listserver.toml")).unwrap();
+    assert!(!main.contains("\ngservers ="));
+    let hub = fs::read_to_string(dir.join("gservers/hub/config/server.txt")).unwrap();
+    assert!(!hub.contains("listserver_hq_password"));
     // The programs were not found: the passwords are still printed, with
     // the commands that make the accounts.
     let pw = passwords(&out);
@@ -220,7 +236,7 @@ fn asks_step_by_step() {
     // the defaults: listserver name, title, ports, accounts; each gserver's
     // name, title, port, listserver, NPC mode (and link port); then yes.
     let answers = format!(
-        "{}\nlab\n1\n2\nboss\n127.0.0.1\nno\nhublist\n\n{}\n{}\nopen\nalpha\nAlpha\n{}\nhublist\nexternal\n{}\nbeta\n\n{}\nnone\noff\nyes\n",
+        "{}\nlab\n1\n2\nboss\n127.0.0.1\nno\nhublist\n\n{}\n{}\nopen\nno\nalpha\nAlpha\n{}\nhublist\nexternal\n{}\nbeta\n\n{}\nnone\noff\nyes\n",
         dir.display(), p[0], p[1], p[2], p[3], p[4]
     );
     let (code, out) = setup(&["new", "--no-port-check"], &answers, Some(""));
@@ -385,6 +401,25 @@ mod boot {
         assert!(!rc("admin", "not-the-password", &port_of("hub"))
             .status
             .success());
+
+        // NC discovery names the NPC-server of a gserver that has one.
+        let o = Command::new(bin.join("seihai-rc"))
+            .args([
+                "nc",
+                "discover",
+                "--server",
+                &format!("127.0.0.1:{}", port_of("hub")),
+                "--account",
+                "admin",
+            ])
+            .env("SEIHAI_RC_PASSWORD", admin)
+            .output()
+            .unwrap();
+        assert!(
+            o.status.success(),
+            "nc discover: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
 
         // The RC list of the main listserver shows its two gservers.
         let main = fs::read_to_string(dir.join("listservers/main/seihai-listserver.toml")).unwrap();

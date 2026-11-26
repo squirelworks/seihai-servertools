@@ -318,6 +318,14 @@ fn interview(io: &mut Io, a: &NewArgs) -> Result<(PathBuf, Plan), String> {
                     io.ask("  Accounts: open (any account gets in) or file", Some(d))?
                         .eq_ignore_ascii_case("file")
                 },
+                allow_list: {
+                    let d = if l.allow_list { "yes" } else { "no" };
+                    let a = io.ask(
+                        "  Only this layout's gservers may register, each with an HQ password (yes/no)",
+                        Some(d),
+                    )?;
+                    matches!(a.to_ascii_lowercase().as_str(), "y" | "yes")
+                },
             };
         }
         let names: Vec<String> = plan.listservers.iter().map(|l| l.name.clone()).collect();
@@ -359,7 +367,7 @@ fn show_review(io: &mut Io, dir: &std::path::Path, plan: &Plan) {
     io.say(&format!("Review: {}", dir.display()));
     for l in &plan.listservers {
         io.say(&format!(
-            "  listserver {:<10} gservers register on {}, clients on {}{}",
+            "  listserver {:<10} gservers register on {}, clients on {}{}{}",
             l.name,
             l.gserver_port,
             l.client_ports
@@ -371,7 +379,8 @@ fn show_review(io: &mut Io, dir: &std::path::Path, plan: &Plan) {
                 ", accounts file"
             } else {
                 ", open mode"
-            }
+            },
+            if l.allow_list { ", allow-list" } else { "" }
         ));
     }
     for g in &plan.gservers {
