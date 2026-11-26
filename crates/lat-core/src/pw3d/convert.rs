@@ -1,6 +1,7 @@
 //! A 2D playerworld as 3D worlds (see the crate notes in `lib.rs`).
 
 use super::meaning::{read_object_sets, Kind, Meanings};
+use super::npc::{npc_shape, Images};
 use super::scene;
 use super::shape::{Colour, Shape};
 use super::walker;
@@ -37,6 +38,9 @@ pub struct Options {
     /// Also write a picture of each level's tile meanings
     /// (`PW3D-MAPS/<level>.png`).
     pub meaning_maps: bool,
+    /// More folders to look for NPC pictures in (`.png`, `.gif`, `.mng`),
+    /// after the playerworld folder itself.
+    pub images: Vec<PathBuf>,
     /// How tall a wall tile stands, in tiles.
     pub wall_height: f32,
     /// Bits a colour channel keeps (1 to 8): fewer bits, fewer materials.
@@ -53,6 +57,7 @@ impl Default for Options {
             tiledefs: None,
             objects: None,
             meaning_maps: false,
+            images: Vec::new(),
             wall_height: 1.5,
             colour_bits: 3,
         }
@@ -210,6 +215,9 @@ pub struct LevelReport {
     pub links_unresolved: Vec<String>,
     pub npcs: usize,
     pub npc_scripts: usize,
+    /// NPCs drawn as a cut-out of their picture, as a figure in their
+    /// picture's colours, and as a figure without a picture.
+    pub npc_made: [usize; 3],
     pub signs: usize,
     pub chests: usize,
     pub baddies: usize,
@@ -276,6 +284,7 @@ struct Palette {
     rgba: Vec<u8>,
     bits: u8,
     cache: HashMap<u16, Colour>,
+    solid: HashMap<u16, Colour>,
 }
 
 impl Palette {
@@ -287,6 +296,7 @@ impl Palette {
             rgba,
             bits: bits.clamp(1, 8),
             cache: HashMap::new(),
+            solid: HashMap::new(),
         })
     }
 
@@ -328,6 +338,39 @@ impl Palette {
         c
     }
 
+    /// The tile's colour without its grass: the average of the pixels
+    /// that are not green, so a house front drawn over grass gives the
+    /// colour of its wood or stone. The whole average if all is green.
+    fn solid(&mut self, id: u16) -> Colour {
+        if let Some(c) = self.solid.get(&id) {
+            return *c;
+        }
+        let t = u32::from(id);
+        let (sx, sy) = ((t % 16 + (t / 512) * 16) * 16, ((t / 16) % 32) * 16);
+        let mut sum = [0u32; 3];
+        let mut n = 0u32;
+        if sx + 16 <= self.w && sy + 16 <= self.h {
+            for y in sy..sy + 16 {
+                for x in sx..sx + 16 {
+                    let i = ((y * self.w + x) * 4) as usize;
+                    let [r, g, b] = [0, 1, 2].map(|k| u32::from(self.rgba[i + k]));
+                    if g > r + 12 && g > b + 12 {
+                        continue;
+                    }
+                    sum = [sum[0] + r, sum[1] + g, sum[2] + b];
+                    n += 1;
+                }
+            }
+        }
+        let c = if n < 32 {
+            self.tile(id)
+        } else {
+            self.quantise(sum.map(|s| s / n))
+        };
+        self.solid.insert(id, c);
+        c
+    }
+
     fn blend(&self, a: Colour, b: [u8; 3], f: f32) -> Colour {
         let mix =
             [0, 1, 2].map(|k| (f32::from(a.0[k]) * (1.0 - f) + f32::from(b[k]) * f).round() as u32);
@@ -336,7 +379,6 @@ impl Palette {
 }
 
 const LINK_TINT: [u8; 3] = [70, 200, 255];
-const NPC_COLOUR: Colour = Colour([200, 60, 220]);
 const BADDY_COLOUR: Colour = Colour([230, 40, 40]);
 const WOOD: Colour = Colour([140, 95, 50]);
 const GOLD: Colour = Colour([230, 190, 40]);
@@ -349,6 +391,8 @@ struct Loaded {
     /// Layer-0 kind and top colour per tile.
     ground: Vec<Ground>,
     colour: Vec<Colour>,
+    /// The top tile's colour without grass, for house walls.
+    solid: Vec<Colour>,
     /// What each tile is part of (from the top-most tile, else layer 0).
     kinds: Vec<Kind>,
     report: LevelReport,
@@ -369,6 +413,7 @@ fn load_level(
     };
     let mut ground = Vec::with_capacity(4096);
     let mut colour = Vec::with_capacity(4096);
+    let mut solid = Vec::with_capacity(4096);
     let mut kinds = Vec::with_capacity(4096);
     for y in 0..64 {
         for x in 0..64 {
@@ -394,6 +439,7 @@ fn load_level(
             }
             ground.push(g);
             colour.push(pal.tile(top));
+            solid.push(pal.solid(top));
             // An upper layer's thing on plain ground wins; else layer 0's.
             let k0 = meanings.kind(id, types);
             let kt = meanings.kind(top, types);
@@ -419,6 +465,7 @@ fn load_level(
         level,
         ground,
         colour,
+        solid,
         kinds,
         report,
     }
@@ -469,6 +516,11 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     // Every level and gmap under the input folder, by lower-cased file name.
     let mut paths = Vec::new();
     walk(&o.input, 0, &mut paths);
+    let mut image_files = paths.clone();
+    for d in &o.images {
+        walk(d, 0, &mut image_files);
+    }
+    let mut images = Images::new(image_files);
     let mut level_paths: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut gmap_paths: BTreeMap<String, PathBuf> = BTreeMap::new();
     for p in paths {
@@ -631,6 +683,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
         let mut ground = vec![None; tw * th];
         let mut kinds = vec![Kind::Ground; tw * th];
         let mut colours = vec![Colour([0, 0, 0]); tw * th];
+        let mut solids = colours.clone();
         let mut links = Vec::new();
         let mut signs = Vec::new();
         for (cx, cy, key) in world.levels.clone() {
@@ -642,6 +695,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
                     ground[i] = Some(l.ground[y * 64 + x]);
                     kinds[i] = l.kinds[y * 64 + x];
                     colours[i] = l.colour[y * 64 + x];
+                    solids[i] = l.solid[y * 64 + x];
                 }
             }
             for link in &l.level.links {
@@ -687,6 +741,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
                 ground: &ground,
                 kind: &kinds,
                 colour: &colours,
+                solid: &solids,
             },
             o.wall_height,
         );
@@ -738,7 +793,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
         let mut text = world_header(w);
         for (n, (cx, cy, key)) in w.levels.iter().enumerate() {
             let l = &loaded[key];
-            let shape = level_shape(w, *cx, *cy, l, &pal);
+            let (shape, npc_made) = level_shape(w, *cx, *cy, l, &pal, &mut images);
             let colours = shape.colours();
             // A gmap's levels carry the gmap's name too.
             let file = if w.levels.len() == 1 {
@@ -755,6 +810,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             let mut r = l.report.clone();
             r.world = w.name.clone();
             r.colours = colours.len();
+            r.npc_made = npc_made;
             out.levels.push(r);
         }
         let z = w.walk_at(w.spawn.0 as i32, w.spawn.1 as i32).unwrap_or(0.0) + 1.0;
@@ -845,7 +901,14 @@ fn world_header(w: &World) -> String {
 /// sides where a tile stands higher than its neighbour, and markers for its
 /// NPCs, signs, chests and baddies. In level-local units; the world file
 /// puts the object at the level's corner.
-fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, pal: &Palette) -> Shape {
+fn level_shape(
+    w: &World,
+    cx: usize,
+    cy: usize,
+    l: &Loaded,
+    pal: &Palette,
+    images: &mut Images,
+) -> (Shape, [usize; 3]) {
     let (ox, oy) = ((cx * 64) as i32, (cy * 64) as i32);
     let mut s = Shape::default();
     let wi = |x: usize, y: usize| (oy as usize + y) * w.tiles_w() + ox as usize + x;
@@ -941,28 +1004,32 @@ fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, pal: &Palette) -> Sh
         );
         h(tx, ty)
     };
-    // Markers. An NPC stands where its image's corner is; a box a tile
-    // across is the best guess without its image.
+    // NPCs: a cut-out of their picture, or a figure (npc.rs).
+    let mut made = [0usize; 3];
+    let q = |c: [u32; 3]| pal.quantise(c);
     for n in &l.level.npcs {
         if n.image.trim().is_empty() && n.ani.is_none() {
             continue;
         }
         let z = floor_at(n.x + 0.5, n.y + 0.5);
-        s.block(
-            [n.x + 0.1, -n.y - 0.9, z],
-            [n.x + 0.9, -n.y - 0.1, z + 1.2],
-            NPC_COLOUR,
-            NPC_COLOUR.shade(0.7),
-        );
+        let img = if n.ani.is_some() {
+            None
+        } else {
+            images.get(&n.image)
+        };
+        let (shape, how) = npc_shape(img, n.image_part, n.x, n.y, z, &q);
+        made[how as usize] += 1;
+        s.extend(&shape);
     }
     for b in &l.level.baddies {
         let z = floor_at(b.x + 0.5, b.y + 0.5);
-        s.block(
-            [b.x + 0.15, -b.y - 0.85, z],
-            [b.x + 0.85, -b.y - 0.15, z + 1.0],
+        s.extend(&super::npc::figure(
+            b.x + 1.0,
+            -b.y - 1.5,
+            z,
             BADDY_COLOUR,
-            BADDY_COLOUR.shade(0.7),
-        );
+            BADDY_COLOUR.shade(0.6),
+        ));
     }
     for c in &l.level.chests {
         let (x, y) = (c.x as f32, c.y as f32);
@@ -990,7 +1057,7 @@ fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, pal: &Palette) -> Sh
             WOOD,
         );
     }
-    s
+    (s, made)
 }
 
 /// The player: a blue body with a light head, 1.6 tall, its feet on its
@@ -1074,10 +1141,10 @@ fn report(c: &Converted, o: &Options) -> String {
             w.spawn.1
         ));
     }
-    t.push_str("\n## Levels\n\n| level | world | floor | water | lava | walls | upper-layer tiles | colours | links (unresolved) | NPCs (with scripts) | signs | chests | baddies |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    t.push_str("\n## Levels\n\n| level | world | floor | water | lava | walls | upper-layer tiles | colours | links (unresolved) | NPCs (with scripts) | NPCs as picture / figure / guess | signs | chests | baddies |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     for l in &c.levels {
         t.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} | {} | {} | {} ({}) | {} ({}) | {} | {} | {} |\n",
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} ({}) | {} ({}) | {} / {} / {} | {} | {} | {} |\n",
             l.file,
             l.world,
             l.floor,
@@ -1090,6 +1157,9 @@ fn report(c: &Converted, o: &Options) -> String {
             l.links_unresolved.len(),
             l.npcs,
             l.npc_scripts,
+            l.npc_made[0],
+            l.npc_made[1],
+            l.npc_made[2],
             l.signs,
             l.chests,
             l.baddies
@@ -1123,9 +1193,10 @@ fn report(c: &Converted, o: &Options) -> String {
          where NPCs, chests and baddies stand, and the gmap layout.\n\
          - Approximated: each tile is one flat colour (its average on the tileset); \
          walls are raised blocks, low walls half as tall, water and lava sunk; upper \
-         tile layers give only the colour; NPCs, baddies, chests and signs are \
-         coloured boxes; links are tinted tiles.\n\
-         - Dropped: NPC images and scripts, baddy behaviour, chest items, level \
+         tile layers give only the colour; NPCs are cut-outs of their picture \
+         (or figures where the picture is a sheet, a gani or not found), baddies, \
+         chests and signs simple shapes; links are tinted tiles.\n\
+         - Dropped: NPC scripts, baddy behaviour, chest items, level \
          music and the tileset's own pictures. The 2D levels are copied beside the \
          3D worlds unchanged, so 2D players still get all of it.\n",
     );

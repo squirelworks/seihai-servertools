@@ -37,6 +37,8 @@ pub struct Tiles<'a> {
     pub ground: &'a [Option<Ground>],
     pub kind: &'a [Kind],
     pub colour: &'a [Colour],
+    /// Each tile's colour without its grass pixels (house walls).
+    pub solid: &'a [Colour],
 }
 
 impl Tiles<'_> {
@@ -501,6 +503,7 @@ pub fn build(t: &Tiles, wall: f32) -> Scene {
         ground: t.ground,
         kind: &kinds2,
         colour: t.colour,
+        solid: t.solid,
     };
     for g in groups(&t2, &[Kind::Building, Kind::Door]) {
         if g.len() < 6 {
@@ -512,20 +515,20 @@ pub fn build(t: &Tiles, wall: f32) -> Scene {
             .copied()
             .filter(|&(x, y)| t2.ok(x, y).is_some_and(|i| kinds2[i] == Kind::Door))
             .collect();
-        if doors.is_empty() {
-            // No door by name: a doorstep is the bottom row standing out
-            // from a wider front.
-            let step: Vec<(i32, i32)> = g.iter().copied().filter(|p| p.1 == y1).collect();
-            if !step.is_empty() && (step.len() as i32) * 2 <= x1 - x0 + 1 {
-                doors = step;
-            }
+        // A doorstep: the bottom row standing out from a wider front. It
+        // is the porch, not the house.
+        let step: Vec<(i32, i32)> = g.iter().copied().filter(|p| p.1 == y1).collect();
+        let porch = !step.is_empty() && (step.len() as i32) * 2 <= x1 - x0 + 1;
+        if doors.is_empty() && porch {
+            doors = step;
         }
-        let depth = y1 - y0 + 1;
+        let by1 = if porch { y1 - 1 } else { y1 };
+        let depth = by1 - y0 + 1;
         let front = doors
             .iter()
             .map(|d| d.1)
             .min()
-            .map_or(3, |dy| y1 - dy + 1)
+            .map_or(3, |dy| by1 - dy + 1)
             .clamp(2, 4)
             .min(depth);
         // Ground under the building, and its walls and door.
@@ -535,27 +538,35 @@ pub fn build(t: &Tiles, wall: f32) -> Scene {
                 colour[i] = grass;
             }
         }
-        let e = (y0..=y1)
+        let e = (y0..=by1)
             .flat_map(|y| (x0..=x1).map(move |x| (x, y)))
             .filter_map(|(x, y)| t.ok(x, y))
             .map(|i| base[i])
             .fold(f32::MAX, f32::min);
         let e = if e == f32::MAX { 0.0 } else { e };
+        // The front wall's colour: the house's own tiles in the front rows,
+        // without the grass drawn round them.
+        let greenish = |c: &Colour| {
+            let [r, g, b] = c.0.map(i32::from);
+            g > r + 12 && g > b + 12
+        };
+        let in_front = |p: &&(i32, i32)| p.1 > by1 - front && p.1 <= by1;
         let wall_c = avg(g
             .iter()
-            .filter(|p| p.1 > y1 - front)
+            .filter(in_front)
             .filter_map(|&(x, y)| t.ok(x, y))
-            .map(|i| t.colour[i]))
-        .unwrap_or(Colour([150, 120, 90]));
+            .map(|i| t.solid[i])
+            .filter(|c| !greenish(c)))
+        .unwrap_or(Colour([150, 110, 75]));
         let roof_c = avg(g
             .iter()
-            .filter(|p| p.1 <= y1 - front)
+            .filter(|p| p.1 <= by1 - front)
             .filter_map(|&(x, y)| t.ok(x, y))
             .map(|i| t.colour[i]))
         .unwrap_or(wall_c.shade(0.6));
         let hgt = front as f32 * 0.9 + 0.4;
         let (fx0, fx1) = (x0 as f32, (x1 + 1) as f32);
-        let (fy0, fy1) = (-((y1 + 1) as f32), -(y0 as f32));
+        let (fy0, fy1) = (-((by1 + 1) as f32), -(y0 as f32));
         let mut s = Shape::default();
         s.block([fx0, fy0, e], [fx1, fy1, e + hgt], roof_c, wall_c);
         s.gable(
@@ -627,6 +638,7 @@ mod tests {
                 ground: &g,
                 kind: &k,
                 colour: &c,
+                solid: &c,
             },
             1.5,
         );
@@ -656,12 +668,23 @@ mod tests {
                 ground: &g,
                 kind: &k,
                 colour: &c,
+                solid: &c,
             },
             1.5,
         );
         assert_eq!((s.counts.buildings, s.counts.doors), (1, 1));
         // The ground under it stays where it was; the house is a thing.
         assert_eq!(s.top[5 * 20 + 5], 0.0);
+        // Its walls are not the grass drawn round the house, and the
+        // doorstep is the porch, outside its south wall.
+        assert!(s.things[0].1.colours().contains(&Colour([150, 110, 75])));
+        let south = s.things[0]
+            .1
+            .points
+            .iter()
+            .map(|p| p[1])
+            .fold(0.0, f32::min);
+        assert!(south >= -9.0 - 0.26, "{south}");
         let roof = s.things[0]
             .1
             .points
@@ -691,6 +714,7 @@ mod tests {
                 ground: &g,
                 kind: &k,
                 colour: &c,
+                solid: &c,
             },
             1.5,
         );

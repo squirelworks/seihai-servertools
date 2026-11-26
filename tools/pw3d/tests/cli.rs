@@ -148,7 +148,7 @@ fn converts_a_small_world() {
 
     let report = std::fs::read_to_string(out.join("PW3D-REPORT.md")).unwrap();
     assert!(report.contains("| start.nw | default |"), "{report}");
-    assert!(report.contains("Dropped: NPC images and scripts"));
+    assert!(report.contains("Dropped: NPC scripts"));
 
     // A second run refuses to overwrite; --force replaces.
     let again = bin()

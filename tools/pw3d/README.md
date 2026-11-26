@@ -6,7 +6,7 @@ and their gmaps) into 3D worlds that seihai-gserver serves to the 3D clients
 
 ```
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
-            [--tiledefs FILE] [--objects DIR] [--meaning-maps]
+            [--tiledefs FILE] [--objects DIR] [--images DIR]... [--meaning-maps]
             [--wall-height F] [--colour-bits N] [--force]
 seihai-servertools pw3d ...        # the same, from the front door
 seihai-pw3d --help | --version
@@ -28,7 +28,8 @@ a Sun, and it runs `weapon3d` GS2 scripts. So:
 | walls (tiledefs type 22 and up) | raised blocks `--wall-height` tall; type 20 (bushes, low walls) half as tall | approximated |
 | water, lava | sunk 0.35 and 0.15 | approximated |
 | upper tile layers | the top-most tile gives the colour; layer 0 decides walking, as in 2D | approximated |
-| NPCs with an image, baddies, chests, signs | coloured boxes (purple, red, wood and gold, a post with a board) | approximated; NPC images, scripts, baddy behaviour and chest items dropped |
+| NPCs with an image | a cut-out of the picture (or its `setimgpart`), standing up as wide and tall as in 2D, found by name in `INPUT` and `--images` folders; a figure where the NPC shows a gani or the picture is a sheet or missing | approximated; scripts dropped |
+| baddies, chests, signs | simple shapes (a red figure, a wood and gold chest, a post with a board) | approximated; baddy behaviour and chest items dropped |
 | links | tinted tiles; the walker takes them, switching world with `g3dworld` when the link leaves the world | lossless (links to levels not in the folder are listed and dropped) |
 | signs | the walker shows the text while the player stands below one | lossless text |
 | gmap | one world, its levels side by side (Torque `x`, `-y` from tile `x`, `y`, one unit a tile) | lossless layout |

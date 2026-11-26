@@ -9,7 +9,7 @@ use std::process::ExitCode;
 
 pub const USAGE: &str = "\
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
-            [--tiledefs FILE] [--objects DIR] [--meaning-maps]
+            [--tiledefs FILE] [--objects DIR] [--images DIR]... [--meaning-maps]
             [--wall-height F] [--colour-bits N] [--force]
     Turn the 2D playerworld in INPUT (levels and gmaps, searched in
     subfolders too) into 3D worlds in OUT, a seihai-gserver world folder:
@@ -29,7 +29,10 @@ seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
     each tile shows (tree, house, door, cliff, path, ...), and the 3D
     world is built from that: hills from cliffs, trees, roofed houses,
     shrubs, rocks. Without it only the tiledefs types are used.
-    --meaning-maps also writes PW3D-MAPS/<level>.png, each tile coloured
+    NPCs stand up as cut-outs of their picture (a door as a door, a lamp
+    as a lamp), found by name in INPUT and any --images folder; an NPC
+    shown as a gani, or whose picture is a sheet or missing, becomes a
+    figure. --meaning-maps also writes PW3D-MAPS/<level>.png, each tile coloured
     by what it was read as. --wall-height is in tiles (default 1.5); --colour-bits per
     channel (1 to 8, default 3) sets how many materials there are.
     Without --force, files already in OUT are not replaced.
@@ -69,6 +72,7 @@ fn parse(args: &[&str]) -> Result<Args, String> {
             "--tiledefs" => o.tiledefs = Some(PathBuf::from(value()?)),
             "--objects" => o.objects = Some(PathBuf::from(value()?)),
             "--meaning-maps" => o.meaning_maps = true,
+            "--images" => o.images.push(PathBuf::from(value()?)),
             "--wall-height" => {
                 let v = value()?;
                 o.wall_height = v
