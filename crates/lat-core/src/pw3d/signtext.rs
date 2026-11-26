@@ -2,25 +2,30 @@
 //!
 //! A 3D client draws neither 2D signs nor chat bubbles over its own player
 //! (5.12 lab re-run, 2026-11-26), so a sign's words stand on a board above
-//! the sign as small square pixels, in our own 3×5 capital font, facing the
+//! the sign as small square pixels, in our own 3×5 capital font (N, M and W wider), facing the
 //! camera (south).
 
 use super::shape::{Colour, Shape};
 
 /// One pixel's size, in tiles.
-const PX: f32 = 0.06;
-/// Letters on one line at most, before wrapping at a space.
-const WIDTH: usize = 22;
+const PX: f32 = 0.05;
+/// Pixels on one line at most (about 26 letters), before wrapping at a space.
+const WIDTH: usize = 104;
 /// Lines shown; longer text ends with "...".
 const LINES: usize = 8;
 
 const BOARD: Colour = Colour([225, 205, 150]);
 const INK: Colour = Colour([40, 30, 20]);
 
-/// A glyph: five rows of three bits, the top row first, the left column
-/// the high bit.
-fn glyph(c: char) -> Option<[u8; 5]> {
-    Some(match c.to_ascii_uppercase() {
+/// A glyph: five rows of bits, the top row first, the left column the
+/// high bit, and its width (3, or 4 and 5 for N, M and W, which three
+/// pixels cannot tell apart).
+fn glyph(c: char) -> Option<([u8; 5], usize)> {
+    let wide = |r: [u8; 5], w: usize| Some((r, w));
+    let g = match c.to_ascii_uppercase() {
+        'M' => return wide([0b10001, 0b11011, 0b10101, 0b10001, 0b10001], 5),
+        'W' => return wide([0b10001, 0b10001, 0b10101, 0b11011, 0b10001], 5),
+        'N' => return wide([0b1001, 0b1101, 0b1011, 0b1001, 0b1001], 4),
         'A' => [0b010, 0b101, 0b111, 0b101, 0b101],
         'B' => [0b110, 0b101, 0b110, 0b101, 0b110],
         'C' => [0b011, 0b100, 0b100, 0b100, 0b011],
@@ -33,8 +38,6 @@ fn glyph(c: char) -> Option<[u8; 5]> {
         'J' => [0b001, 0b001, 0b001, 0b101, 0b010],
         'K' => [0b101, 0b101, 0b110, 0b101, 0b101],
         'L' => [0b100, 0b100, 0b100, 0b100, 0b111],
-        'M' => [0b101, 0b111, 0b101, 0b101, 0b101],
-        'N' => [0b101, 0b111, 0b111, 0b111, 0b101],
         'O' => [0b010, 0b101, 0b101, 0b101, 0b010],
         'P' => [0b110, 0b101, 0b110, 0b100, 0b100],
         'Q' => [0b010, 0b101, 0b101, 0b110, 0b011],
@@ -43,7 +46,6 @@ fn glyph(c: char) -> Option<[u8; 5]> {
         'T' => [0b111, 0b010, 0b010, 0b010, 0b010],
         'U' => [0b101, 0b101, 0b101, 0b101, 0b111],
         'V' => [0b101, 0b101, 0b101, 0b101, 0b010],
-        'W' => [0b101, 0b101, 0b111, 0b111, 0b101],
         'X' => [0b101, 0b101, 0b010, 0b101, 0b101],
         'Y' => [0b101, 0b101, 0b010, 0b010, 0b010],
         'Z' => [0b111, 0b001, 0b010, 0b100, 0b111],
@@ -73,13 +75,25 @@ fn glyph(c: char) -> Option<[u8; 5]> {
         '>' => [0b100, 0b010, 0b001, 0b010, 0b100],
         '=' => [0b000, 0b111, 0b000, 0b111, 0b000],
         _ => return None,
-    })
+    };
+    Some((g, 3))
+}
+
+/// Pixels a letter takes on a line, with the gap after it.
+fn advance(c: char) -> usize {
+    glyph(c).map_or(4, |(_, w)| w + 1)
+}
+
+/// Pixels a line takes.
+fn px_len(t: &str) -> usize {
+    t.chars().map(advance).sum()
 }
 
 /// The sign's words in lines: `#b` and line breaks become spaces, `#` codes
 /// with arguments are dropped, letters the font lacks become spaces.
+/// `width` is in pixels.
 pub fn lines(text: &str, width: usize) -> Vec<String> {
-    let width = width.clamp(4, WIDTH);
+    let width = width.clamp(24, WIDTH);
     let mut clean = String::new();
     let mut it = text.chars().peekable();
     while let Some(c) = it.next() {
@@ -108,15 +122,24 @@ pub fn lines(text: &str, width: usize) -> Vec<String> {
     let mut line = String::new();
     for word in clean.split_whitespace() {
         let mut word = word.to_string();
-        while word.len() > width {
+        while px_len(&word) > width {
             if !line.is_empty() {
                 out.push(std::mem::take(&mut line));
             }
-            let rest = word.split_off(width);
+            let mut cut = 0;
+            let mut used = 0;
+            for (i, c) in word.char_indices() {
+                if used + advance(c) > width {
+                    break;
+                }
+                used += advance(c);
+                cut = i + c.len_utf8();
+            }
+            let rest = word.split_off(cut.max(1));
             out.push(word);
             word = rest;
         }
-        if !line.is_empty() && line.len() + 1 + word.len() > width {
+        if !line.is_empty() && px_len(&line) + 4 + px_len(&word) > width {
             out.push(std::mem::take(&mut line));
         }
         if !line.is_empty() {
@@ -130,7 +153,7 @@ pub fn lines(text: &str, width: usize) -> Vec<String> {
     if out.len() > LINES {
         out.truncate(LINES);
         let last = &mut out[LINES - 1];
-        while last.len() + 3 > width {
+        while px_len(last) + 12 > width {
             last.pop();
         }
         last.push_str("...");
@@ -143,13 +166,13 @@ pub fn lines(text: &str, width: usize) -> Vec<String> {
 /// signs side by side do not overlap). Nothing for a sign with no words.
 pub fn board(text: &str, cx: f32, y: f32, z: f32, max_w: f32) -> Shape {
     let mut s = Shape::default();
-    let fit = ((max_w / PX - 1.0) / 4.0).floor().max(0.0) as usize;
+    let fit = (max_w / PX - 1.0).floor().max(0.0) as usize;
     let lines = lines(text, fit);
     if lines.is_empty() {
         return s;
     }
-    let cols = lines.iter().map(|l| l.len()).max().unwrap_or(0);
-    let w = (cols * 4 + 1) as f32 * PX;
+    let cols = lines.iter().map(|l| px_len(l)).max().unwrap_or(0);
+    let w = cols as f32 * PX + PX;
     let h = (lines.len() * 6 + 1) as f32 * PX;
     let x0 = cx - w / 2.0;
     s.block([x0, y, z], [x0 + w, y + 0.06, z + h], BOARD, BOARD);
@@ -157,21 +180,24 @@ pub fn board(text: &str, cx: f32, y: f32, z: f32, max_w: f32) -> Shape {
     for (li, line) in lines.iter().enumerate() {
         // The top pixel row of this line, counted down from the board's top.
         let top = z + h - PX * (1 + li * 6) as f32;
-        for (ci, c) in line.chars().enumerate() {
-            let Some(g) = glyph(c) else { continue };
-            let lx = x0 + PX * (1 + ci * 4) as f32;
+        let mut at = 1;
+        for c in line.chars() {
+            let lx = x0 + PX * at as f32;
+            at += advance(c);
+            let Some((g, gw)) = glyph(c) else { continue };
             for (r, bits) in g.iter().enumerate() {
                 let z1 = top - PX * r as f32;
                 let z0 = z1 - PX;
                 // Runs of lit pixels in the row, one quad each.
                 let mut col = 0;
-                while col < 3 {
-                    if bits & (0b100 >> col) == 0 {
+                let lit = |col: usize| bits & (1 << (gw - 1 - col)) != 0;
+                while col < gw {
+                    if !lit(col) {
                         col += 1;
                         continue;
                     }
                     let start = col;
-                    while col < 3 && bits & (0b100 >> col) != 0 {
+                    while col < gw && lit(col) {
                         col += 1;
                     }
                     let a = lx + PX * start as f32;
@@ -196,7 +222,7 @@ mod tests {
         );
         assert_eq!(lines("a #c(red)b", WIDTH), vec!["A B"]);
         let l = lines("one two three four five six seven eight nine", WIDTH);
-        assert!(l.len() > 1 && l.iter().all(|x| x.len() <= WIDTH));
+        assert!(l.len() > 1 && l.iter().all(|x| px_len(x) <= WIDTH));
         assert!(lines("", WIDTH).is_empty());
         let long = "word ".repeat(100);
         let l = lines(&long, WIDTH);
@@ -220,6 +246,9 @@ mod tests {
         let t = "a long sign that has to wrap into a narrow board";
         let n = board(t, 0.0, 0.0, 0.0, 2.0);
         assert!(n.points.iter().all(|p| p[0].abs() <= 1.0 + 1e-4));
-        assert!(lines(t, 7).iter().all(|l| l.len() <= 7));
+        assert!(lines(t, 30).iter().all(|l| px_len(l) <= 30));
+        // N, M and W are wider than the rest.
+        assert_eq!(px_len("NMW"), 5 + 6 + 6);
+        assert_eq!(px_len("ABC"), 12);
     }
 }

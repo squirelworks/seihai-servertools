@@ -1069,7 +1069,9 @@ fn level_shape(
             SIGN_FACE,
             WOOD,
         );
-        // The words on a board above it: a 3D client draws no 2D text.
+        // The words on a board over its top, low enough that a wall
+        // behind it does not hide the first line (5.12 lab): a 3D client
+        // draws no 2D text.
         // As wide as the gap to the nearest sign beside it allows.
         let room = l
             .level
@@ -1082,7 +1084,7 @@ fn level_shape(
             &sg.text,
             x + 0.5,
             -y - 0.62,
-            z + 1.4,
+            z + 0.9,
             room,
         ));
     }
