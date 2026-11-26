@@ -1,6 +1,6 @@
 # Suite stress rig (`seihai-suite-stress`)
 
-`crates/suite-stress` starts the whole Rust server suite on `127.0.0.1` and
+`tools/suite-stress` starts the whole Rust server suite on `127.0.0.1` and
 drives bot clients at it, so each part can be stress-tested on its own and
 together, and the same run can be repeated as the parts grow.
 
@@ -60,7 +60,7 @@ cargo build --release   # in seihai-gserver, -listserver, -npcserver, -rc
 mkdir -p ~/suite-bin && cp */target/release/seihai-{gserver,listserver,npcserver,rc} ~/suite-bin/
 
 # this repo
-cargo build --release -p suite-stress
+cargo build --release -p seihai-suite-stress
 ./target/release/seihai-suite-stress versions          # every version profile
 ./target/release/seihai-suite-stress compat --bin-dir ~/suite-bin --out out/compat
 ./target/release/seihai-suite-stress run --bin-dir ~/suite-bin --versions all \

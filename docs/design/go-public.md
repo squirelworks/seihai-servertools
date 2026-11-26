@@ -206,13 +206,15 @@ crates/
     src/net.rs                    interfaces, TCP "test connection" to a typed address only, UPnP opt-in
     src/run.rs                    start processes, console to files, stop together (shared with `lab`)
     src/lab.rs                    one-step lab start (listserver + gservers)
-  seihai-servertools/      # the command line; `setup` is the design's "setup-cli"
+  seihai-servertools/      # the all-in-one command line; dispatches to tools/
+tools/
+  setup/                   # seihai-setup, the design's "setup-cli" (also `seihai-servertools setup`)
   app/                     # the window; the setup wizard is one page that calls setup-core
 ```
 
-The design called the command line `setup-cli`; it is the `setup`
-subcommand of the one `seihai-servertools` binary, so owners download one
-program.
+The design called the command line `setup-cli`; it is `seihai-setup`
+(`tools/setup`), also reachable as the `setup` subcommand of the
+all-in-one `seihai-servertools`, so owners can download one program.
 
 Build order, one PR each:
 

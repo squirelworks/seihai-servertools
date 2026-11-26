@@ -1,17 +1,9 @@
-//! `seihai-servertools`: the command line. It parses options, calls
-//! `setup-core` / `lat-core`, prints, and sets the exit code. It is the only
-//! place that prints or reads the environment (see docs/ARCHITECTURE.md).
+//! `seihai-servertools`: every server tool in one program. Each command is
+//! its own crate and binary under `tools/` (`seihai-lab`, `seihai-check`,
+//! ...); this file only hands the words after the command name to that
+//! tool's `run`, so `seihai-servertools gpak pack ...` and `seihai-gpak pack
+//! ...` are the same thing (see docs/ARCHITECTURE.md).
 
-mod code;
-mod fill;
-mod gani;
-mod generate;
-mod gpak;
-mod lab;
-mod maps;
-mod setup;
-
-use std::path::Path;
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -58,39 +50,12 @@ Usage:
                                     open the window
   seihai-servertools --version | --help
 
-lab start: starts the listserver (if one is found) and then the gservers of a
-lab world (default: servers/default, classic and modern, those that exist), each console in a
-log file, and stops them all on Ctrl+C. --world defaults to the current folder.
---rust DIR also starts seihai-gserver on that world folder (config/server.txt;
-relative to --world), found beside the world, this tool or on PATH unless
---rust-gserver is given. With --rust and no SERVER named, the fork's folders
-start too when gs2emu is there.
-
-check: reads every level, gmap and gani under WORLD and reports parse errors,
-links or gmap cells that point at missing levels, and images or sounds a
-level NPC or a gani names that are not in the folder. It also runs the setup
-checks on every servers/<name>/config/serveroptions.txt (and the accounts/ of
-public folders) and on seihai-listserver.toml: a setting `setup` would refuse
-to save is an error. Exit code 1 on errors (a missing image or sound is a
-warning). --json prints one JSON object instead, for CI: format (1), the
-counts (levels, gmaps, ganis, errors, warnings) and findings, each with level
-(error, warning, note), source (world or settings), file, key (or null) and
-text. --client LABEL adds shared-profile level/gmap/gani/script warnings for
-one build; check --list-clients lists the accepted labels. Unknown script
-support remains unknown; package readability and exact per-build vocabulary
-are not certified. Without --client the general inventory stays unchanged.
---client-reach also inventories level NPC image references (including
-fixed GS1 script names) with PNG art but no GIF counterpart for pre-2.1 clients.
-It flags parsed gani files for fallback review using shared profiles' gani
-support, without claiming use or choosing a built-in animation, and lists
-the profiles without gmap support or the level's format. It lists level NPC
-and weapon (weapons/*.txt) scripts that are GS2 only or mix GS1 and GS2, with
-the shared profiles that do not run GS2 (before 3.153), and levels with tiles
-past column 116 of pics1.png, which the 1856-wide sheet of 1.28b2 to 2.05
-lacks. It does not certify script, animation, tile or gmap compatibility.
---make-gif (opt-in) first writes a GIF copy next to each PNG that
---client-reach would report, keeping every pixel; it never replaces a file
-and skips art with over 256 colours.";
+Every command is also its own program, built and run on its own:
+seihai-lab, seihai-setup, seihai-check, seihai-code, seihai-gpak,
+seihai-level, seihai-theme, seihai-gmap, seihai-gani, seihai-gen,
+seihai-stats, seihai-gif2mng and seihai-servertools-gui take the same
+words after the command name (`seihai-gpak pack ...`). `seihai-servertools
+COMMAND --help` and `seihai-COMMAND --help` print a command's options.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -104,405 +69,43 @@ fn main() -> ExitCode {
             println!("seihai-servertools {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        ["lab", "start", rest @ ..] => lab::run(rest, true),
-        ["lab", "plan", rest @ ..] => lab::run(rest, false),
-        ["check", rest @ ..] => check_args(rest),
-        ["setup", rest @ ..] => setup::run(rest),
-        ["code", "--help" | "-h"] => {
-            println!("{}", code::USAGE);
-            ExitCode::SUCCESS
-        }
-        ["code", rest @ ..] => code::run(rest),
-        ["gpak", "--help" | "-h"] => {
-            println!("{}", gpak::USAGE);
-            ExitCode::SUCCESS
-        }
-        ["gpak", rest @ ..] => gpak::run(rest),
-        ["level", "--help" | "-h"] => {
-            println!("{}", maps::LEVEL_USAGE);
-            ExitCode::SUCCESS
-        }
-        ["level", "fill", "--help" | "-h"] => {
-            println!("{}", fill::FILL_USAGE);
-            ExitCode::SUCCESS
-        }
-        ["level", "fill", rest @ ..] => fill::run_fill(rest),
-        ["level", rest @ ..] => maps::run_level(rest),
-        ["theme", "--help" | "-h"] => {
-            println!("{}", fill::THEME_USAGE);
-            ExitCode::SUCCESS
-        }
-        ["theme", rest @ ..] => fill::run_theme(rest),
-        ["gmap", "--help" | "-h"] => {
-            println!("{}", maps::GMAP_USAGE);
-            ExitCode::SUCCESS
-        }
-        ["gmap", rest @ ..] => maps::run_gmap(rest),
-        ["gani", "--help" | "-h"] => {
-            println!("{}", gani::USAGE);
-            ExitCode::SUCCESS
-        }
-        ["gani", rest @ ..] => gani::run(rest),
-        ["gen", "--help" | "-h"] => {
-            println!("{}", generate::USAGE);
-            ExitCode::SUCCESS
-        }
-        ["gen", rest @ ..] => generate::run(rest),
-        ["stats", accounts, out, modes @ ..] => stats(accounts, out, modes),
-        ["gif2mng", rest @ ..] => gif2mng(rest),
-        ["gui", rest @ ..] => gui(rest),
-        _ => {
-            eprintln!("{USAGE}");
-            ExitCode::from(2)
-        }
-    }
-}
-
-/// One line of the `check` report.
-struct Line {
-    /// `error`, `warning` or `note`.
-    level: &'static str,
-    /// `world` (levels, gmaps, ganis) or `settings` (the setup checks).
-    source: &'static str,
-    file: String,
-    key: Option<String>,
-    text: String,
-}
-
-fn check_args(args: &[&str]) -> ExitCode {
-    if args == ["--list-clients"] {
-        for client in lat_core::check::CheckClient::all_versions() {
-            println!("{}", client.label());
-        }
-        return ExitCode::SUCCESS;
-    }
-    let mut world = None;
-    let mut json = false;
-    let mut reach = false;
-    let mut make_gif = false;
-    let mut client = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match *arg {
-            "--client" => {
-                let selected = args
-                    .next()
-                    .and_then(|label| lat_core::check::CheckClient::from_label(label));
-                if client.is_some() || selected.is_none() {
-                    eprintln!(
-                        "check: --client needs one known build label; use check --list-clients"
-                    );
-                    return ExitCode::from(2);
-                }
-                client = selected;
-            }
-            "--json" => json = true,
-            "--client-reach" => reach = true,
-            "--make-gif" => make_gif = true,
-            value if !value.starts_with('-') && world.is_none() => world = Some(value),
-            _ => {
+        [tool, rest @ ..] => match dispatch(tool, rest) {
+            Some(code) => code,
+            None => {
                 eprintln!("{USAGE}");
-                return ExitCode::from(2);
+                ExitCode::from(2)
             }
-        }
-    }
-    let Some(world) = world else {
-        eprintln!("{USAGE}");
-        return ExitCode::from(2);
-    };
-    if make_gif && json {
-        eprintln!("check: --make-gif prints what it wrote; run --json without it");
-        return ExitCode::from(2);
-    }
-    if make_gif && Path::new(world).is_dir() {
-        for c in lat_core::gifcopy::make_gifs(Path::new(world)) {
-            match c.result {
-                Ok(()) => println!("wrote {}", c.gif.display()),
-                Err(e) => println!("skipped {}: {e}", c.png.display()),
-            }
-        }
-    }
-    check(Path::new(world), json, reach, client)
-}
-
-fn check(
-    world: &Path,
-    json: bool,
-    reach: bool,
-    client: Option<lat_core::check::CheckClient>,
-) -> ExitCode {
-    if !world.is_dir() {
-        eprintln!("check: no folder {}", world.display());
-        return ExitCode::from(2);
-    }
-    let mut report = match client {
-        Some(client) => lat_core::check::check_world_for(world, client),
-        None => lat_core::check::check_world(world),
-    };
-    if reach {
-        report
-            .findings
-            .extend(lat_core::check::check_image_reach(world));
-        report
-            .findings
-            .extend(lat_core::check::check_level_reach(world));
-        report
-            .findings
-            .extend(lat_core::check::check_script_reach(world));
-        report
-            .findings
-            .extend(lat_core::check::check_tile_reach(world));
-    }
-    let mut lines: Vec<Line> = report
-        .findings
-        .iter()
-        .map(|f| Line {
-            level: match f.severity {
-                lat_core::check::Severity::Error => "error",
-                lat_core::check::Severity::Warn => "warning",
-            },
-            source: "world",
-            file: f.file.clone(),
-            key: None,
-            text: f.text.clone(),
-        })
-        .collect();
-    // The setup checks: a setting `setup` would refuse to save is an error.
-    for c in setup_core::folder::check_world_config(world) {
-        lines.push(Line {
-            level: match c.finding.severity {
-                setup_core::checks::Severity::Block => "error",
-                setup_core::checks::Severity::Warn => "warning",
-                setup_core::checks::Severity::Info => "note",
-            },
-            source: "settings",
-            file: c.file,
-            key: c.finding.key,
-            text: c.finding.text,
-        });
-    }
-    let count = |level: &str| lines.iter().filter(|l| l.level == level).count();
-    let (errors, warnings) = (count("error"), count("warning"));
-    if json {
-        let findings: Vec<String> = lines
-            .iter()
-            .map(|l| {
-                format!(
-                    "{{\"level\":{},\"source\":{},\"file\":{},\"key\":{},\"text\":{}}}",
-                    json_str(l.level),
-                    json_str(l.source),
-                    json_str(&l.file),
-                    l.key.as_deref().map(json_str).unwrap_or("null".into()),
-                    json_str(&l.text)
-                )
-            })
-            .collect();
-        println!(
-            "{{\"format\":1,\"levels\":{},\"gmaps\":{},\"ganis\":{},\"errors\":{errors},\"warnings\":{warnings},\"findings\":[{}]}}",
-            report.levels,
-            report.gmaps,
-            report.ganis,
-            findings.join(",")
-        );
-    } else {
-        for l in &lines {
-            let key = l
-                .key
-                .as_deref()
-                .map(|k| format!(" [{k}]"))
-                .unwrap_or_default();
-            println!("{}: {}{key}: {}", l.level, l.file, l.text);
-        }
-        println!(
-            "checked {} levels, {} gmaps, {} ganis and the server settings: {errors} errors, {warnings} warnings",
-            report.levels, report.gmaps, report.ganis,
-        );
-    }
-    if errors > 0 {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+        },
     }
 }
 
-/// A JSON string literal.
-fn json_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-/// `stats ACCOUNTS OUTDIR [MODE...]`: one `<mode>.html` per mode.
-fn gif2mng(args: &[&str]) -> ExitCode {
-    let (mut body, mut force, mut out, mut gifs) = (false, false, None, Vec::new());
-    let mut it = args.iter();
-    while let Some(&a) = it.next() {
-        match a {
-            "-b" => body = true,
-            "--force" => force = true,
-            "--out" => match it.next() {
-                Some(d) => out = Some(Path::new(*d)),
-                None => {
-                    eprintln!("gif2mng: --out needs a folder");
-                    return ExitCode::from(2);
-                }
-            },
-            s if s.starts_with('-') => {
-                eprintln!("gif2mng: unknown option {s}\n{USAGE}");
-                return ExitCode::from(2);
-            }
-            s => gifs.push(Path::new(s)),
-        }
-    }
-    if gifs.is_empty() {
-        eprintln!("{USAGE}");
-        return ExitCode::from(2);
-    }
-    let mut failed = false;
-    for gif in gifs {
-        let result = std::fs::read(gif)
-            .map_err(|e| e.to_string())
-            .and_then(|bytes| lat_core::anim::gif_to_anim(&bytes, body))
-            .and_then(|anim| {
-                let name = gif.with_extension(anim.extension);
-                let dst = match out {
-                    Some(dir) => {
-                        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-                        dir.join(name.file_name().unwrap_or_default())
-                    }
-                    None => name,
-                };
-                if dst.exists() && !force {
-                    return Err(format!(
-                        "{} already exists (use --force to replace)",
-                        dst.display()
-                    ));
-                }
-                std::fs::write(&dst, &anim.bytes).map_err(|e| e.to_string())?;
-                println!(
-                    "{} -> {}: {} by {}, {} frame{}",
-                    gif.display(),
-                    dst.display(),
-                    anim.width,
-                    anim.height,
-                    anim.frames,
-                    if anim.frames == 1 { "" } else { "s" }
-                );
-                Ok(())
-            });
-        if let Err(e) = result {
-            eprintln!("gif2mng: {}: {e}", gif.display());
-            failed = true;
-        }
-    }
-    if failed {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
-}
-
-fn stats(accounts: &str, out: &str, modes: &[&str]) -> ExitCode {
-    use setup_core::stats;
-    let chosen: Vec<stats::Mode> = if modes.is_empty() {
-        stats::MODES.to_vec()
-    } else {
-        let mut v = Vec::new();
-        for m in modes {
-            match stats::mode(m) {
-                Some(m) => v.push(m),
-                None => {
-                    eprintln!("stats: unknown mode {m}");
-                    return ExitCode::from(2);
-                }
-            }
-        }
-        v
-    };
-    let entries = match stats::read_accounts(Path::new(accounts)) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("stats: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-    if let Err(e) = std::fs::create_dir_all(out) {
-        eprintln!("stats: {out}: {e}");
-        return ExitCode::FAILURE;
-    }
-    for m in chosen {
-        let path = Path::new(out).join(format!("{}.html", m.name));
-        let html = stats::page(m, &stats::rank(&entries, m));
-        if let Err(e) = std::fs::write(&path, html) {
-            eprintln!("stats: {}: {e}", path.display());
-            return ExitCode::FAILURE;
-        }
-        println!("{}", path.display());
-    }
-    println!("{} accounts ranked", entries.len());
-    ExitCode::SUCCESS
+/// Runs `tool` with the words after it, or `None` for no such command.
+fn dispatch(tool: &str, rest: &[&str]) -> Option<ExitCode> {
+    Some(match tool {
+        "lab" => seihai_lab::run(rest),
+        "setup" => seihai_setup::run(rest),
+        "check" => seihai_check::run(rest),
+        "code" => seihai_code::run(rest),
+        "gpak" => seihai_gpak::run(rest),
+        "level" => seihai_level::run(rest),
+        "theme" => seihai_theme::run(rest),
+        "gmap" => seihai_gmap::run(rest),
+        "gani" => seihai_gani::run(rest),
+        "gen" => seihai_gen::run(rest),
+        "stats" => seihai_stats::run(rest),
+        "gif2mng" => seihai_gif2mng::run(rest),
+        "gui" => gui(rest),
+        _ => return None,
+    })
 }
 
 #[cfg(feature = "gui")]
 fn gui(args: &[&str]) -> ExitCode {
-    let mut opts = servertools_app::StartOptions::default();
-    let mut it = args.iter();
-    while let Some(&a) = it.next() {
-        match (a, it.next()) {
-            ("--world", Some(w)) => opts.world = Some(w.into()),
-            ("--page", Some(p)) => match servertools_app::Tab::from_name(p) {
-                Some(t) => opts.tab = Some(t),
-                None => {
-                    eprintln!(
-                        "gui: no page {p} (lab, setup, levels, npcs, database, ganis, packages, check)"
-                    );
-                    return ExitCode::from(2);
-                }
-            },
-            _ => {
-                eprintln!("gui [--world DIR] [--page NAME]");
-                return ExitCode::from(2);
-            }
-        }
-    }
-    match servertools_app::run(opts) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("gui: {e}");
-            ExitCode::FAILURE
-        }
-    }
+    seihai_servertools_gui::run(args)
 }
 
 #[cfg(not(feature = "gui"))]
 fn gui(_: &[&str]) -> ExitCode {
     eprintln!("gui: this build has no window (built without the `gui` feature)");
     ExitCode::from(2)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::json_str;
-
-    #[test]
-    fn json_strings_are_escaped() {
-        assert_eq!(json_str("plain"), "\"plain\"");
-        assert_eq!(
-            json_str("a \"b\" c\\d\ne\tf\u{1}"),
-            "\"a \\\"b\\\" c\\\\d\\ne\\tf\\u0001\""
-        );
-        assert_eq!(json_str("Grüße"), "\"Grüße\"");
-    }
 }

@@ -1,0 +1,22 @@
+[package]
+name = "seihai-servertools-gui"
+description = "The seihai-servertools window: lab, setup and LAT editor pages."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_servertools_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-servertools-gui"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through servertools-app -> lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+servertools-app.workspace = true
+

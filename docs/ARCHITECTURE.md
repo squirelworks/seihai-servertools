@@ -6,7 +6,13 @@ How `seihai-servertools` is put together and where new work goes. Read
 ## Crates
 
 ```
-crates/seihai-servertools   the binary: command line, `gui` opens the window
+tools/<tool>                one crate and one program per tool (seihai-lab,
+                            seihai-check, seihai-gpak, ... seihai-servertools-gui):
+                            parses its command line, calls the cores, prints.
+                            Each builds, tests and runs on its own
+                            (tools/README.md has the rules)
+crates/seihai-servertools   the all-in-one program: `seihai-servertools <tool>`
+                            hands the rest to that tool's `run`
 crates/app                  servertools-app: the egui window, one page per tool
    │            │
 crates/setup-core           lab start, process runner, serveroptions.txt,
@@ -21,7 +27,7 @@ seihai-draw                 squirelworks/seihai-core, same tag: tile and gani
 seihai-rc                   squirelworks/seihai-rc, pinned commit: RC session
                             and the file link (list, get, put)
 
-crates/suite-stress         seihai-suite-stress: its own binary, not part of the
+tools/suite-stress          seihai-suite-stress: its own binary, not part of the
                             window. Starts the server suite on loopback, drives
                             bot clients through seihai-core, writes a report
                             (docs/lab/suite-stress.md)
@@ -31,8 +37,10 @@ Rules for the layers:
 
 - `setup-core` and `lat-core` have no UI and no printing. They return values
   and errors; tests call them directly.
-- `seihai-servertools` (command line) is the only place that prints, reads
-  the environment or sets exit codes.
+- The tools in `tools/` (command line) are the only place that prints,
+  reads the environment or sets exit codes. A tool never depends on another
+  tool; what two tools share goes into a core crate (`lat_core::files`
+  holds the file index and loaders `level`, `gmap` and `gani` share).
 - `app` holds UI state only. Long work (starting servers, a live RC link)
   runs on a worker thread and talks to the page through channels, so the
   window never blocks.
@@ -146,15 +154,17 @@ a page never parses a file itself.
 
 ## Command line
 
-`src/main.rs` dispatches and runs `check` and `gui`; `src/code.rs` is
-`code show|crc|dump|pack`; `src/gpak.rs` is `gpak pack|unpack`;
-`src/lab.rs` is `lab start|plan`; `src/setup.rs` is the setup wizard as
-prompts (`status`, `public`, `lab`, `undo`, `start`, `test-connection`,
+Each command is a tool in `tools/<tool>/src/lib.rs` (`pub fn run` and
+`USAGE`), with a `src/main.rs` that makes it its own program;
+`crates/seihai-servertools/src/main.rs` only dispatches to them.
+`tools/code` is `code show|crc|dump|pack`; `tools/gpak` is `gpak
+pack|unpack`; `tools/lab` is `lab start|plan`; `tools/setup` is the setup
+wizard as prompts (`status`, `public`, `lab`, `undo`, `start`, `test-connection`,
 `hq-password`, `capacity`, `host-listserver`, `listserver-lab`,
 `listserver-undo`). Prompts go
 through a small `Io` (input, output, `--yes`) so tests drive the wizard by
-piping answers to the binary (`tests/cli.rs`). The parser is hand-written in `crates/seihai-servertools/src/main.rs`, like the other
-stack repos. When `setup` grows its subcommands, switching to `clap`
+piping answers to the binary (`tools/setup/tests/setup.rs`). Each parser
+is hand-written in its tool, like the other stack repos. When `setup` grows its subcommands, switching to `clap`
 (MIT/Apache) is fine; keep the documented option names.
 
 Passwords (RC logins for the LAT tools, listserver accounts) only ever come
@@ -165,14 +175,17 @@ from an environment variable or a prompt, never from the command line.
 - Unit tests next to the code; integration tests in each crate's `tests/`.
 - `setup-core/tests/run_group.rs` uses the system shell (`sh`, `cmd`) as a
   stand-in server so process handling is tested on all three OSes.
-- `seihai-servertools/tests/cli.rs` runs the binary.
+- `tools/<tool>/tests/` runs that tool's own program;
+  `crates/seihai-servertools/tests/workflows.rs` runs the all-in-one program
+  and the flows that use more than one tool.
 - Loopback lab runs (real `seihai-listserver`, the fork's `gs2emu` or a
   stand-in) are written up in `docs/lab/`. Only `127.0.0.1`.
 
 ## CI and releases
 
 `.github/workflows/ci.yml`: fmt, clippy (`-D warnings`), test on Linux,
-Windows and macOS, plus a command-line-only build. `.github/workflows/release.yml`:
+Windows and macOS, plus a command-line-only build, and on Linux every tool
+built and tested on its own (`scripts/ci/each-tool.sh`). `.github/workflows/release.yml`:
 on a `v*` tag, four targets (Linux x86_64, Windows x86_64, macOS x86_64 and
 aarch64), each archive with the binary, `README.md`, the licences and
 `scripts/lab/`. No tag without Squirrel's go-ahead.

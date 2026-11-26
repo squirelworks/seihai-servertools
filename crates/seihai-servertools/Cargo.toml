@@ -1,6 +1,6 @@
 [package]
 name = "seihai-servertools"
-description = "Seihai server tools: one-step lab start, go-public setup, LAT level/NPC/gani editors and a world checker."
+description = "Seihai server tools in one program: dispatches each command to its standalone tool crate under tools/."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,15 +15,23 @@ path = "src/main.rs"
 # The window (`seihai-servertools gui`). On by default; build with
 # `--no-default-features` for a command-line-only binary on a headless server.
 default = ["gui"]
-gui = ["dep:servertools-app"]
+gui = ["dep:seihai-servertools-gui"]
 
 [dependencies]
-setup-core.workspace = true
-lat-core.workspace = true
-servertools-app = { workspace = true, optional = true }
-ctrlc.workspace = true
+# One line per tool; each is also its own binary (tools/<tool>/README.md).
+seihai-lab.workspace = true
+seihai-setup.workspace = true
+seihai-check.workspace = true
+seihai-code.workspace = true
+seihai-gpak.workspace = true
+seihai-level.workspace = true
+seihai-theme.workspace = true
+seihai-gmap.workspace = true
+seihai-gani.workspace = true
+seihai-gen.workspace = true
+seihai-stats.workspace = true
+seihai-gif2mng.workspace = true
+seihai-servertools-gui = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
-# Builds a real PNG for the --make-gif test.
-png.workspace = true

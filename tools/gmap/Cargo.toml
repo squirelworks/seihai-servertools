@@ -1,0 +1,25 @@
+[package]
+name = "seihai-gmap"
+description = "Gmap make (from a level list, generator names or edge links) and gmap render to PNG."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_gmap"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-gmap"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+png.workspace = true
