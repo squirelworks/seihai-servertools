@@ -148,6 +148,8 @@ Building a world
   theme        LFThemeMaker: patch themes for `level fill`.
   gani         GraalShop movie ganis: list actors, paint a frame.
   gif2mng      GIF art as PNG or MNG for clients that want those.
+  pw3d         a 2D playerworld as 3D worlds for seihai-gserver: reads what
+               the tiles show (--objects) and builds hills, trees and houses.
   gpak         resource packages (.gpak, encrypted .gpake) for 4.20 and 6.x.
   code         the client's .code caches: show, CRC, dump, pack.
 
