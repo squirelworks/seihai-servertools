@@ -142,6 +142,9 @@ pub fn check(plan: &Plan, machine: bool) -> Vec<Finding> {
         if !plan.is_lab() && !l.accounts_file {
             out.push(f(Warn, "accounts", format!("listserver {} is open to other machines in open mode: every account and password gets in. Use accounts = \"file\" unless that is meant", l.name)));
         }
+        if !plan.is_lab() && !l.allow_list {
+            out.push(f(Warn, "allow_list", format!("listserver {} lets any program that reaches its gserver port register a server; use allow_list = true unless the port is firewalled", l.name)));
+        }
         if !plan
             .gservers
             .iter()
@@ -345,10 +348,12 @@ mod tests {
         });
         p.public_host.clear();
         p.listservers[0].accounts_file = false;
+        p.listservers[0].allow_list = false;
         p.gservers[0].create_accounts = true;
         let text: Vec<_> = check(&p, false).into_iter().map(|f| f.text).collect();
         assert!(text.iter().any(|t| t.contains("open mode")));
         assert!(text.iter().any(|t| t.contains("no public host")));
         assert!(text.iter().any(|t| t.contains("create_accounts")));
+        assert!(text.iter().any(|t| t.contains("allow_list = true")));
     }
 }
