@@ -176,8 +176,9 @@ pub fn script(worlds: &[World]) -> String {
          \x20 player.position = {{this.px, 0 - this.py, temp.z}};\n\
          \x20 pw3dCamera(this.px, 0 - this.py, temp.z);\n\
          }}\n\n\
-         // The camera 5 behind (south of) the player and 3 above, looking\n\
-         // north and down (the lab #458 walker's camera).\n\
+         // The camera 6 behind (south of) the player and 2.5 above, looking\n\
+         // north and a little down: a steeper look made upright things\n\
+         // lean outward on a real 5.12 (lab, 2026-11-26).\n\
          function pw3dCamera(x, y, z) {{\n\
          \x20 temp.x = x + 0;\n\
          \x20 temp.y = y + 0;\n\
@@ -185,8 +186,8 @@ pub fn script(worlds: &[World]) -> String {
          \x20 temp.cam = ServerConnection.camera;\n\
          \x20 if (temp.cam == NULL) return;\n\
          \x20 temp.cam.cameramode = \"free\";\n\
-         \x20 temp.cam.position = format(\"%f %f %f\", temp.x, temp.y - 5, temp.z + 3);\n\
-         \x20 temp.cam.eulerrotation = \"0.5 0 0\";\n\
+         \x20 temp.cam.position = format(\"%f %f %f\", temp.x, temp.y - 6, temp.z + 2.5);\n\
+         \x20 temp.cam.eulerrotation = \"0.3 0 0\";\n\
          \x20 temp.cam.updatePosition();\n\
          }}\n\n\
          function pw3dLinks() {{\n\

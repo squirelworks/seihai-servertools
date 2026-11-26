@@ -201,8 +201,9 @@ fn split(g: &[(i32, i32)], per: usize) -> Vec<Vec<(i32, i32)>> {
 }
 
 /// Region heights from cliff runs.
-/// Cliff tiles that make a face: part of a band at least two tiles wide.
-/// A lone cliff tile (a patterned floor, a single post) is ground.
+/// Cliff tiles that make a face: part of a band at least two tiles wide,
+/// with the unnamed walls at its foot. A lone cliff tile (a patterned
+/// floor, a single post) is ground.
 fn faces(t: &Tiles) -> Vec<bool> {
     let cliff = |x: i32, y: i32| t.ok(x, y).is_some_and(|i| t.kind[i] == Kind::Cliff);
     let mut f = vec![false; t.w * t.h];
@@ -210,6 +211,27 @@ fn faces(t: &Tiles) -> Vec<bool> {
         for x in 0..t.w as i32 {
             if cliff(x, y) && (cliff(x - 1, y) || cliff(x + 1, y)) {
                 f[y as usize * t.w + x as usize] = true;
+            }
+        }
+    }
+    // The foot of a face is often drawn with tiles no stamp calls a cliff
+    // (a coast's water edge, named only in water stamps): up to 3 unnamed
+    // wall tiles straight below a face belong to it.
+    let wall = |x: i32, y: i32| t.ok(x, y).filter(|&i| t.kind[i] == Kind::Wall);
+    for x in 0..t.w as i32 {
+        for y in (0..t.h as i32).rev() {
+            if !f[y as usize * t.w + x as usize] {
+                continue;
+            }
+            let mut yy = y + 1;
+            while yy <= y + 3 {
+                match wall(x, yy) {
+                    Some(i) if !f[i] => {
+                        f[i] = true;
+                        yy += 1;
+                    }
+                    _ => break,
+                }
             }
         }
     }
@@ -224,7 +246,7 @@ fn faces(t: &Tiles) -> Vec<bool> {
 /// that is not closed still makes a hill. Heights are rounded to half
 /// units, so gentle slopes are a few clear steps. Returns the heights, the number of separate
 /// ground regions and how many of them stand raised.
-fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize) {
+fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize, Vec<bool>) {
     let face = faces(t);
     let barrier = |i: usize| face[i] || t.kind[i] == Kind::Stairs;
     let n = t.w * t.h;
@@ -400,7 +422,7 @@ fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize) {
             };
         }
     }
-    (tile, nr, raised)
+    (tile, nr, raised, face)
 }
 
 /// Build the scene of a world.
@@ -416,7 +438,7 @@ fn near_water(t: &Tiles, i: usize) -> bool {
 
 pub fn build(t: &Tiles, wall: f32) -> Scene {
     let n = t.w * t.h;
-    let (base, regions, raised) = elevation(t);
+    let (base, regions, raised, face) = elevation(t);
     let grass = mode(
         (0..n)
             .filter(|&i| t.ground[i].is_some() && t.kind[i] == Kind::Ground)
@@ -438,6 +460,8 @@ pub fn build(t: &Tiles, wall: f32) -> Scene {
             Kind::Fence => e + 1.0,
             Kind::CastleWall => e + wall * 2.0,
             // A rim round a pond is a low edge, not a wall.
+            // A wall at the foot of a cliff is part of its face.
+            Kind::Wall if face[i] => e,
             Kind::Wall if near_water(t, i) => e + 0.3,
             Kind::Wall => {
                 e + if g == Ground::LowWall {
@@ -747,6 +771,32 @@ mod tests {
         );
         // Heights are walker steps.
         assert!(s.top.iter().all(|v| (v * 4.0).fract() == 0.0));
+    }
+
+    #[test]
+    fn a_coast_stands_above_the_sea() {
+        // Land, a face of 2 cliff rows over 1 unnamed water-edge wall, sea.
+        let (g, k, c) = world(20, 20, |_, y| match y {
+            0..=7 => Kind::Ground,
+            8 | 9 => Kind::Cliff,
+            10 => Kind::Wall,
+            _ => Kind::Water,
+        });
+        let s = build(
+            &Tiles {
+                w: 20,
+                h: 20,
+                ground: &g,
+                kind: &k,
+                colour: &c,
+                solid: &c,
+            },
+            1.5,
+        );
+        let (land, edge, sea) = (s.top[4 * 20 + 5], s.top[10 * 20 + 5], s.top[15 * 20 + 5]);
+        assert!(land - sea >= 2.0, "{land} {sea}");
+        // The water edge is the face's foot, not a wall standing on the land.
+        assert!(edge <= land, "{edge} {land}");
     }
 
     #[test]
