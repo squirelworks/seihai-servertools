@@ -8,9 +8,11 @@
 //!
 //! * reads the arrow keys every tick (`keydown2`), as the lab #458 walker
 //!   did on a real 5.12;
-//! * moves a quarter tile a step unless the tile ahead is a wall, and sets
+//! * moves about 5 tiles a second (by the clock, so a slow tick rate does
+//!   not slow the walk) unless the tile ahead is a wall, and sets
 //!   `player.position` (5.12 sends its own object's transform on);
-//! * keeps a free camera behind and above the player;
+//! * keeps a free camera behind and above the player, in front of any wall
+//!   behind it;
 //! * on a link, switches world (`g3dworld`) when the link leaves it and puts
 //!   the player where the link lands;
 //! * shows a sign's text while the player stands below it.
@@ -118,6 +120,15 @@ pub fn script(worlds: &[World]) -> String {
          \x20 if (keydown2(39, true)) temp.dx = temp.dx + 1;\n\
          \x20 if (keydown2(38, true)) temp.dy = temp.dy - 1;\n\
          \x20 if (keydown2(40, true)) temp.dy = temp.dy + 1;\n\
+         \x20 // About 5 tiles a second whatever the tick rate (a loaded 5.12\n\
+         \x20 // ticks at 7 to 13 Hz, not 20); a quarter tile a tick if the\n\
+         \x20 // clock is not there.\n\
+         \x20 temp.now = timevar2;\n\
+         \x20 this.step = 0.25;\n\
+         \x20 if (temp.now > 0 && this.last > 0) this.step = (temp.now - this.last) * 5;\n\
+         \x20 this.last = temp.now;\n\
+         \x20 if (this.step > 0.5) this.step = 0.5;\n\
+         \x20 if (this.step < 0.05) this.step = 0.05;\n\
          \x20 temp.moved = 0;\n\
          \x20 if (temp.dx != 0) temp.moved = temp.moved + pw3dStep(temp.dx, 0);\n\
          \x20 if (temp.dy != 0) temp.moved = temp.moved + pw3dStep(0, temp.dy);\n\
@@ -174,19 +185,32 @@ pub fn script(worlds: &[World]) -> String {
          function pw3dPlace() {{\n\
          \x20 temp.z = pw3dZ(pw3dKind(int(this.px), int(this.py)));\n\
          \x20 player.position = {{this.px, 0 - this.py, temp.z}};\n\
-         \x20 pw3dCamera(this.px, 0 - this.py, temp.z);\n\
+         \x20 // The camera comes in front of the first wall (or ground over\n\
+         \x20 // 2 higher) behind the player, so it is never inside one.\n\
+         \x20 temp.back = 6;\n\
+         \x20 for (temp.d = 1; temp.d <= 6; temp.d++) {{\n\
+         \x20   temp.k = pw3dKind(int(this.px), int(this.py + temp.d));\n\
+         \x20   if (temp.k == \"#\" || pw3dZ(temp.k) > temp.z + 2) {{\n\
+         \x20     temp.back = int(this.py) + temp.d - this.py - 0.2;\n\
+         \x20     break;\n\
+         \x20   }}\n\
+         \x20 }}\n\
+         \x20 if (temp.back < 0.8) temp.back = 0.8;\n\
+         \x20 pw3dCamera(this.px, 0 - this.py, temp.z, temp.back);\n\
          }}\n\n\
-         // The camera 6 behind (south of) the player and 2.5 above, looking\n\
+         // The camera up to 6 behind (south of) the player and 2.5 above, looking\n\
          // north and a little down: a steeper look made upright things\n\
          // lean outward on a real 5.12 (lab, 2026-11-26).\n\
-         function pw3dCamera(x, y, z) {{\n\
+         function pw3dCamera(x, y, z, back) {{\n\
          \x20 temp.x = x + 0;\n\
          \x20 temp.y = y + 0;\n\
          \x20 temp.z = z + 0;\n\
+         \x20 temp.back = back + 0;\n\
+         \x20 temp.up = 1.2 + temp.back * 0.22;\n\
          \x20 temp.cam = ServerConnection.camera;\n\
          \x20 if (temp.cam == NULL) return;\n\
          \x20 temp.cam.cameramode = \"free\";\n\
-         \x20 temp.cam.position = format(\"%f %f %f\", temp.x, temp.y - 6, temp.z + 2.5);\n\
+         \x20 temp.cam.position = format(\"%f %f %f\", temp.x, temp.y - temp.back, temp.z + temp.up);\n\
          \x20 temp.cam.eulerrotation = \"0.3 0 0\";\n\
          \x20 temp.cam.updatePosition();\n\
          }}\n\n\
