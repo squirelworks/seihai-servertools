@@ -328,7 +328,7 @@ fn average(img: &crate::preview::Rgba) -> Option<[u8; 3]> {
         return None;
     }
     let mut sum = [0u64; 3];
-    for p in img.pixels.chunks_exact(4) {
+    for p in img.pixels.as_chunks::<4>().0 {
         for c in 0..3 {
             sum[c] += u64::from(p[c]);
         }
@@ -426,7 +426,13 @@ mod tests {
         let cam = w.default_camera();
         let frame = view::render(&scene, &cam, 96, 64);
         // Something other than sky is in view.
-        assert!(frame.image.pixels.chunks_exact(4).any(|p| p[1] > p[2] + 20));
+        assert!(frame
+            .image
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[1] > p[2] + 20));
 
         // A ray straight down from above the spawn meets the ground there.
         let s = w.doc.spawn().unwrap();
