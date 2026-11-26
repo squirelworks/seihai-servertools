@@ -1,0 +1,19 @@
+[package]
+name = "seihai-guide"
+description = "The guide: how a Seihai server fits together, every tool and when to use it, setting up from scratch, RC and troubleshooting."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_guide"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-guide"
+path = "src/main.rs"
+
+# No dependencies: the guide is text.
+[dependencies]

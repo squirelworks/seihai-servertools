@@ -3,6 +3,7 @@
 //! rule and every write goes through `setup-core`.
 //!
 //! ```text
+//! setup new    [DIR] [options]                            (a folder from scratch: new.rs)
 //! setup status [--world DIR] [SERVER]
 //! setup public [--world DIR] [SERVER] [answers...] [--yes]   (also: --public)
 //! setup lab    [--world DIR] [SERVER] [--yes]                (also: --lab)
@@ -12,6 +13,8 @@
 //! A value not given as an option is asked for on standard input. With
 //! `--yes` nothing is asked: a missing required value is an error, and the
 //! review is saved without asking (a blocking finding still stops it).
+
+mod new;
 
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -23,7 +26,12 @@ use setup_core::folder::{ListserverConfig, ListserverPreview, Preview, ServerFol
 use setup_core::profile::{Profile, PublicAnswers};
 
 pub const USAGE: &str = "\
-seihai-servertools setup: take a gserver folder from the lab to the public and back
+seihai-servertools setup: set up a server from scratch, or take a gserver folder
+from the lab to the public and back
+
+  setup new    [DIR] [options]   a new server folder from scratch: listservers,
+               gservers pointed at them, NPC-servers, staff accounts for RC,
+               start and stop scripts; asks step by step (`setup new --help`)
 
   setup status [--world DIR] [SERVER]
   setup public [--world DIR] [SERVER] [--listserver HOST[:PORT]] [--account NAME]
@@ -1085,6 +1093,17 @@ fn capacity(
 }
 
 fn run_with(args: &[&str], input: &mut dyn BufRead, out: &mut dyn Write) -> ExitCode {
+    if let ["new", rest @ ..] = args {
+        let mut io = Io {
+            input,
+            out,
+            yes: false,
+        };
+        return new::new(rest, &mut io).unwrap_or_else(|e| {
+            eprintln!("setup new: {e}");
+            ExitCode::FAILURE
+        });
+    }
     if let ["capacity", rest @ ..] = args {
         return capacity(rest, input, out).unwrap_or_else(|e| {
             eprintln!("setup capacity: {e}");

@@ -35,6 +35,8 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 
 | Tool | Command | State |
 |---|---|---|
+| The guide: how the servers fit together, every tool and when to use it, RC, troubleshooting | `seihai-servertools guide [TOPIC]` (also with no words) | working |
+| A server from scratch: listservers, gservers pointed at them, NPC-servers, staff accounts for RC, start/stop scripts (seihai-gserver stack) | `seihai-servertools setup new [DIR]` | working |
 | One-step lab start: listserver + gservers, stopped together | `seihai-servertools lab start` | working |
 | Go-public setup: Join a listserver, Back to lab, undo | `seihai-servertools setup public\|lab\|undo\|status` | command line working ([design](docs/design/go-public.md)) |
 | Go-public setup in the window (same steps, Start and check lights) | `seihai-servertools gui --page setup` | working |
@@ -58,7 +60,7 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 | The window | `seihai-servertools gui` | pages laid out |
 
 Every command is also its own program, built, tested and run on its own:
-`seihai-lab`, `seihai-setup`, `seihai-check`, `seihai-code`, `seihai-gpak`,
+`seihai-guide`, `seihai-lab`, `seihai-setup`, `seihai-check`, `seihai-code`, `seihai-gpak`,
 `seihai-level`, `seihai-theme`, `seihai-gmap`, `seihai-gani`, `seihai-gen`,
 `seihai-stats`, `seihai-gif2mng` and `seihai-servertools-gui` take the same
 words after their name (`seihai-gpak pack ...` is `seihai-servertools gpak
@@ -85,6 +87,26 @@ Then, the first time:
 
 After that, normal use is `lab start` from the world folder (or the start
 script, below) and `gui` when you want to edit.
+
+## A server from scratch
+
+With the Rust servers (seihai-gserver, seihai-listserver, seihai-npcserver,
+seihai-rc) in one folder, `setup new` asks a few questions and writes a whole
+server folder: the listservers, each gserver pointed at one, an NPC-server
+for each gserver that wants one, staff accounts for RC with random passwords
+(printed once), and `start.sh`/`stop.sh` (`start.bat`/`stop.bat` on Windows).
+It checks every port for clashes before it writes anything.
+
+```
+seihai-servertools setup new myserver --bin-dir path/to/server/programs
+seihai-servertools setup new myserver --yes --gservers 2 --npcserver external
+seihai-servertools setup new myserver --yes --plan layout.toml
+cd myserver && ./start.sh
+```
+
+`seihai-servertools guide setup` walks through it, `guide rc` covers the RC
+and `guide troubleshooting` what to check when something does not connect.
+Running `seihai-servertools` with no words prints the overview.
 
 ## Start a lab world
 

@@ -15,6 +15,8 @@ path = "src/lib.rs"
 if-addrs.workspace = true
 toml_edit.workspace = true
 tempfile.workspace = true
+# Random staff passwords and NPC-server tokens for `setup new`.
+getrandom.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 # SIGTERM, so gservers get a clean shutdown before the hard kill.

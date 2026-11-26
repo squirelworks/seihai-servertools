@@ -7,6 +7,7 @@
 //! |---|---|---|
 //! | [`browse`] | The folder picker's listing: subfolders, and which look like world folders | working |
 //! | [`folder`] | One server folder: open, preview a change, check, save with backup, undo | working |
+//! | [`layout`] | A new server folder from scratch: listservers, gservers, NPC-servers, staff, start scripts (`setup new`) | working |
 //! | [`lab`] | Find the binaries of a lab world and plan the one-step start | working |
 //! | [`lab_run`] | Run a lab plan on a worker thread for the window, with status and stop | working |
 //! | [`run`] | Start a set of processes, log their consoles, stop them together | working |
@@ -27,6 +28,7 @@ pub mod config;
 pub mod folder;
 pub mod lab;
 pub mod lab_run;
+pub mod layout;
 pub mod lights;
 pub mod net;
 pub mod profile;

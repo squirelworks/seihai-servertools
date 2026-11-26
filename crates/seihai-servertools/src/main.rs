@@ -10,6 +10,11 @@ const USAGE: &str = "\
 seihai-servertools: Seihai server tools
 
 Usage:
+  seihai-servertools guide [TOPIC]  how the servers fit together, every tool, setting up
+                                    from scratch, RC, troubleshooting (`guide --help`)
+  seihai-servertools setup new [DIR] [options]
+                                    a new server folder from scratch: listservers, gservers,
+                                    NPC-servers, staff accounts for RC, start/stop scripts
   seihai-servertools lab start [--world DIR] [--listserver PATH | --no-listserver]
                                [--gserver PATH] [--rust DIR]... [--rust-gserver PATH]
                                [SERVER...]
@@ -54,7 +59,7 @@ Usage:
   seihai-servertools --version | --help
 
 Every command is also its own program, built and run on its own:
-seihai-lab, seihai-setup, seihai-check, seihai-code, seihai-gpak,
+seihai-guide, seihai-lab, seihai-setup, seihai-check, seihai-code, seihai-gpak,
 seihai-level, seihai-theme, seihai-gmap, seihai-gani, seihai-gen,
 seihai-stats, seihai-gif2mng, seihai-pw3d and seihai-servertools-gui take the same
 words after the command name (`seihai-gpak pack ...`). `seihai-servertools
@@ -64,7 +69,13 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
     match words.as_slice() {
-        [] | ["--help" | "-h"] => {
+        // No words: the guide's overview, so a first run explains itself.
+        [] => {
+            let code = seihai_guide::run(&[]);
+            println!("\nEvery command: seihai-servertools --help");
+            code
+        }
+        ["--help" | "-h"] => {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
@@ -85,6 +96,7 @@ fn main() -> ExitCode {
 /// Runs `tool` with the words after it, or `None` for no such command.
 fn dispatch(tool: &str, rest: &[&str]) -> Option<ExitCode> {
     Some(match tool {
+        "guide" => seihai_guide::run(rest),
         "lab" => seihai_lab::run(rest),
         "setup" => seihai_setup::run(rest),
         "check" => seihai_check::run(rest),

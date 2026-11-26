@@ -85,6 +85,7 @@ edit listserver TOML or start/restart a service.
 | Module | What | State |
 |---|---|---|
 | `folder` | `ListserverConfig` (the listserver's TOML: preview host / lab, findings incl. a missing accounts file, save, undo) and `ServerFolder`: open, `profile`, `status_findings`, `preview_public` / `preview_lab` (`Preview` with diff and findings), `save` (refuses blocked), `undo`. The command line and the window both use it | working |
+| `layout` | `setup new`: the `Plan` (`layout.toml`), `check` (names, links, ports taken twice or busy), `render` (listserver TOML, gserver `server.txt`, start/stop scripts, README), `write` (the folder, staff accounts through `seihai-gserver account` and `seihai-listserver add-account`, random passwords and NPC-server tokens) | working |
 | `lab` | Lab world layout, finding `gs2emu` and `seihai-listserver`, the start `Plan` | working |
 | `lab_run` | `LabRun`: the same `Plan` on a worker thread for the window's Lab page, a `Status` per frame, stop together | working |
 | `capacity` | Gserver player limit: fork `maxplayers` / Rust `max_players`, preview, save, undo | working |
