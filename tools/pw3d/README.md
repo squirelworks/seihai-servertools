@@ -6,7 +6,8 @@ and their gmaps) into 3D worlds that seihai-gserver serves to the 3D clients
 
 ```
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
-            [--tiledefs FILE] [--wall-height F] [--colour-bits N] [--force]
+            [--tiledefs FILE] [--objects DIR] [--meaning-maps]
+            [--wall-height F] [--colour-bits N] [--force]
 seihai-servertools pw3d ...        # the same, from the front door
 seihai-pw3d --help | --version
 ```
@@ -39,6 +40,42 @@ arrow keys (`keydown2`), moves a quarter tile unless the tile ahead is a
 wall, sets `player.position` and keeps a free camera behind and above the
 player. This is the walker shape a real 5.12 walked with in an earlier lab.
 
+## What the tiles show, and the 3D built from it
+
+A tile number says nothing about what it is a picture of, but the
+playerworld's object sets do: every stamp in a `GOBJSET01` file or a 1.x
+`objects.dat` has a name ("big tree", "house roof", "cave entrance",
+"rock platform", "fence", "stone way") and the tiles it is made of. With
+`--objects DIR` each tile gets the kind most of its stamps' names vote for
+(tree, shrub, rock, house, door, castle wall, fence, cliff, path, water,
+bridge, stairs, furniture), checked against its tiledefs type: a walkable
+tile under a tree's name is the crown's ground, a non-water tile in a pond
+stamp is the shore. Tiles no stamp uses keep their tiledefs type.
+`--meaning-maps` writes `PW3D-MAPS/<level>.png`, one pixel square a tile
+coloured by its kind, to check the reading against the 2D level.
+
+From the kinds the 3D is extrapolated:
+
+- **Height.** A 3/4-view level draws a drop as a cliff face below the
+  higher ground. The ground is split into regions at cliffs, each vertical
+  run of cliff tiles votes that the region above stands `run x 0.75` higher
+  than the one below, and the heights are solved from the largest region
+  out. Stairs sit half way; water and lava are sunk; a pond's rim is a low
+  edge.
+- **Trees.** Each patch of tree tiles is split into trees of about 45 tiles
+  (a 2D tree is about 6 x 7); each gets a trunk at the bottom of the 2D
+  sprite and a rounded crown in the tiles' colour, as tall as the sprite.
+- **Houses.** House and door tiles, with the unnamed walls touching them,
+  become a house: walls as tall as the 2D front (the rows below the door's
+  top), a gabled roof in the roof tiles' colour along the longer side, and
+  a door on the south face where the door tiles are (or a doorstep stands
+  out of the front).
+- **Shrubs, rocks, furniture, fences, castle walls.** Low rounded lumps,
+  boxes, a 1-tile and a two-wall-heights rail.
+
+Without `--objects` only the tiledefs types are used, which gives the flat
+layout with raised walls described above.
+
 ## Output
 
 `OUT` is a seihai-gserver world folder:
@@ -68,9 +105,12 @@ cargo build -p seihai-pw3d
 cargo test -p seihai-pw3d
 ```
 
-It depends on no other tool, only on `seihai-core` (pinned once in the root
-`Cargo.toml` by tag, v0.7.2) for
-the level, gmap and tiledefs parsers, the built-in tileset and the GS2
-compiler the tests check the walker with, and `png` for the sky. The tests
+The conversion lives in `crates/lat-core` (`lat_core::pw3d`: `meaning`,
+`scene`, `shape`, `convert`, `walker`), with its unit tests (cliff heights,
+houses, trees, outward faces, 16-bit splits); this crate reads the command
+line and writes the files. It depends on no other tool, only on `lat-core`,
+and on `seihai-core` (pinned once in the root `Cargo.toml` by tag, v0.7.2)
+for the tests, which build levels with its tile codes and compile the
+walker with its GS2 compiler. The tests
 run the binary on a made-up playerworld and check the worlds, shapes, links
 and that seihai-core compiles the walker, as the gserver does at link time.

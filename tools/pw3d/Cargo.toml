@@ -16,11 +16,11 @@ name = "seihai-pw3d"
 path = "src/main.rs"
 
 [dependencies]
-# Level, gmap and tile-type parsers, and the built-in Seihai tileset and
-# tiledefs. The same ones the Seihai client uses.
-seihai-core.workspace = true
-# Sky faces.
-png.workspace = true
+# The conversion (AGENTS.md: logic in the core crates).
+lat-core.workspace = true
 
 [dev-dependencies]
+# The tests build levels with seihai-core's tile codes and compile the
+# walker with its GS2 compiler.
+seihai-core.workspace = true
 tempfile.workspace = true

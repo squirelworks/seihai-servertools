@@ -1,34 +1,16 @@
-//! `seihai-pw3d`: a 2D Graal playerworld as 3D worlds that seihai-gserver
-//! serves to the 4.20r6, 4.20r8 and 5.x 3D clients.
-//!
-//! A 3D client draws none of a level's tiles, signs or NPCs
-//! (Graal_analysis `torque/3d-win10-sky-prefs-scripting-512-2026-11-26.md`,
-//! T3D-138), so everything has to become 3D content the client does draw:
-//! `.3ds` GameObjects with colour materials, a Sky and a Sun. Each level
-//! becomes one coloured `.3ds` ground (floor flat, water and lava sunk,
-//! walls raised, NPCs, chests, signs and baddies as boxes), each gmap one
-//! world with its levels side by side and every other level a world of its
-//! own, and the `PW3DWalk` weapon ([`walker`]) walks the player, stops it at
-//! walls, follows links between worlds and shows signs.
-//!
-//! The output is a seihai-gserver world folder: `config/graal3dworld.txt`
-//! (the start level), `config/graal3dworlds/<name>.txt` (each other world,
-//! named after its level or gmap so a TCP warp to that level takes a 3D
-//! client along), `files/` (shapes and sky), `weapons/pw3dwalk.gs2` and the
-//! 2D levels unchanged in `levels/`, plus `PW3D-REPORT.md`.
-//! Everything generated is our own; the playerworld's levels are copied, so
-//! the folder stays local.
+//! `seihai-pw3d`: a 2D Graal playerworld as 3D worlds for seihai-gserver.
+//! The conversion lives in `lat_core::pw3d`; this crate reads the command
+//! line and prints the result.
 
-pub mod convert;
-pub mod shape;
-pub mod walker;
+use lat_core::pw3d::{convert, write_files};
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub const USAGE: &str = "\
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
-            [--tiledefs FILE] [--wall-height F] [--colour-bits N] [--force]
+            [--tiledefs FILE] [--objects DIR] [--meaning-maps]
+            [--wall-height F] [--colour-bits N] [--force]
     Turn the 2D playerworld in INPUT (levels and gmaps, searched in
     subfolders too) into 3D worlds in OUT, a seihai-gserver world folder:
     config/graal3dworld.txt for the start level, config/graal3dworlds/ for
@@ -42,7 +24,13 @@ seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
     the nearest floor). Tile colours come from Seihai's built-in tileset
     unless --tileset names a pics1.png-layout sheet; walls and water from
     Seihai's built-in tiledefs unless --tiledefs names one (text or
-    arrays.dat). --wall-height is in tiles (default 1.5); --colour-bits per
+    arrays.dat). --objects names a folder of object sets (GOBJSET01 files
+    or objects.dat, also in its tileobjects/): their stamp names say what
+    each tile shows (tree, house, door, cliff, path, ...), and the 3D
+    world is built from that: hills from cliffs, trees, roofed houses,
+    shrubs, rocks. Without it only the tiledefs types are used.
+    --meaning-maps also writes PW3D-MAPS/<level>.png, each tile coloured
+    by what it was read as. --wall-height is in tiles (default 1.5); --colour-bits per
     channel (1 to 8, default 3) sets how many materials there are.
     Without --force, files already in OUT are not replaced.
     OUT holds copies of the playerworld's levels: keep it local.";
@@ -79,6 +67,8 @@ fn parse(args: &[&str]) -> Result<Args, String> {
             }
             "--tileset" => o.tileset = Some(PathBuf::from(value()?)),
             "--tiledefs" => o.tiledefs = Some(PathBuf::from(value()?)),
+            "--objects" => o.objects = Some(PathBuf::from(value()?)),
+            "--meaning-maps" => o.meaning_maps = true,
             "--wall-height" => {
                 let v = value()?;
                 o.wall_height = v
@@ -108,26 +98,6 @@ fn parse(args: &[&str]) -> Result<Args, String> {
         out: PathBuf::from(out),
         force,
     })
-}
-
-/// Write `files` under `out`; without `force`, refuse if any exists.
-pub fn write_files(out: &Path, files: &[convert::File], force: bool) -> Result<(), String> {
-    if !force {
-        if let Some((name, _)) = files.iter().find(|(n, _)| out.join(n).exists()) {
-            return Err(format!(
-                "{} already exists (use --force to replace)",
-                out.join(name).display()
-            ));
-        }
-    }
-    for (name, bytes) in files {
-        let p = out.join(name);
-        if let Some(d) = p.parent() {
-            std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
-        }
-        std::fs::write(&p, bytes).map_err(|e| format!("{}: {e}", p.display()))?;
-    }
-    Ok(())
 }
 
 /// The command line: `seihai-pw3d ...` or `seihai-servertools pw3d ...`.

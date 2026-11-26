@@ -47,6 +47,7 @@ pub mod movie;
 pub mod ncdb;
 pub mod npc;
 pub mod preview;
+pub mod pw3d;
 pub mod remote;
 pub mod render;
 pub mod terrain3d;

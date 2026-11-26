@@ -1,7 +1,9 @@
 //! A 2D playerworld as 3D worlds (see the crate notes in `lib.rs`).
 
-use crate::shape::{Colour, Shape};
-use crate::walker;
+use super::meaning::{read_object_sets, Kind, Meanings};
+use super::scene;
+use super::shape::{Colour, Shape};
+use super::walker;
 use seihai_core::assets::{read_png_rgba, Level, TileTypes, EMPTY_UPPER_TILE};
 use seihai_core::gmap::Gmap;
 use std::collections::{BTreeMap, HashMap};
@@ -28,6 +30,13 @@ pub struct Options {
     /// A tiledefs file (text or `arrays.dat`) for walls and water. Without
     /// it, Seihai's built-in table of the standard tile layout.
     pub tiledefs: Option<PathBuf>,
+    /// The client's object sets (a folder with `objects*.txt` GOBJSET01
+    /// files or a `tileobjects/` folder, or an `objects.dat`): they say what
+    /// the tiles are, so trees, houses, cliffs and hedges come out as such.
+    pub objects: Option<PathBuf>,
+    /// Also write a picture of each level's tile meanings
+    /// (`PW3D-MAPS/<level>.png`).
+    pub meaning_maps: bool,
     /// How tall a wall tile stands, in tiles.
     pub wall_height: f32,
     /// Bits a colour channel keeps (1 to 8): fewer bits, fewer materials.
@@ -42,6 +51,8 @@ impl Default for Options {
             start_pos: None,
             tileset: None,
             tiledefs: None,
+            objects: None,
+            meaning_maps: false,
             wall_height: 1.5,
             colour_bits: 3,
         }
@@ -143,6 +154,13 @@ pub struct World {
     pub links: Vec<WalkLink>,
     pub signs: Vec<WalkSign>,
     pub spawn: (f32, f32),
+    /// The 3D scene: top height and colour of every tile, where a walker
+    /// stands, and the things (trees, buildings ...) standing on tiles.
+    pub top: Vec<f32>,
+    pub colour: Vec<Colour>,
+    pub walk: Vec<Option<f32>>,
+    pub things: Vec<((i32, i32), Shape)>,
+    pub counts: scene::Counts,
 }
 
 impl World {
@@ -152,6 +170,24 @@ impl World {
     pub fn tiles_h(&self) -> usize {
         self.height * 64
     }
+    fn index(&self, x: i32, y: i32) -> Option<usize> {
+        (x >= 0 && y >= 0 && (x as usize) < self.tiles_w() && (y as usize) < self.tiles_h())
+            .then(|| y as usize * self.tiles_w() + x as usize)
+    }
+
+    /// Where a walker stands on tile `(x, y)`, if it can.
+    pub fn walk_at(&self, x: i32, y: i32) -> Option<f32> {
+        self.index(x, y)
+            .and_then(|i| self.walk.get(i).copied().flatten())
+    }
+
+    /// The top of tile `(x, y)`; `None` off the world and in holes.
+    pub fn top_at(&self, x: i32, y: i32) -> Option<f32> {
+        self.index(x, y)
+            .filter(|&i| self.ground[i].is_some())
+            .map(|i| self.top[i])
+    }
+
     pub fn at(&self, x: i32, y: i32) -> Option<Ground> {
         if x < 0 || y < 0 || x as usize >= self.tiles_w() || y as usize >= self.tiles_h() {
             return None;
@@ -313,10 +349,18 @@ struct Loaded {
     /// Layer-0 kind and top colour per tile.
     ground: Vec<Ground>,
     colour: Vec<Colour>,
+    /// What each tile is part of (from the top-most tile, else layer 0).
+    kinds: Vec<Kind>,
     report: LevelReport,
 }
 
-fn load_level(file: &str, level: Level, types: &TileTypes, pal: &mut Palette) -> Loaded {
+fn load_level(
+    file: &str,
+    level: Level,
+    types: &TileTypes,
+    pal: &mut Palette,
+    meanings: &Meanings,
+) -> Loaded {
     let ids = level.tile_ids();
     let layers: Vec<i32> = level.tile_layers().into_iter().filter(|&l| l > 0).collect();
     let mut report = LevelReport {
@@ -325,6 +369,7 @@ fn load_level(file: &str, level: Level, types: &TileTypes, pal: &mut Palette) ->
     };
     let mut ground = Vec::with_capacity(4096);
     let mut colour = Vec::with_capacity(4096);
+    let mut kinds = Vec::with_capacity(4096);
     for y in 0..64 {
         for x in 0..64 {
             let id = ids[y * 64 + x];
@@ -349,6 +394,14 @@ fn load_level(file: &str, level: Level, types: &TileTypes, pal: &mut Palette) ->
             }
             ground.push(g);
             colour.push(pal.tile(top));
+            // An upper layer's thing on plain ground wins; else layer 0's.
+            let k0 = meanings.kind(id, types);
+            let kt = meanings.kind(top, types);
+            kinds.push(if top != id && kt != Kind::Ground {
+                kt
+            } else {
+                k0
+            });
         }
     }
     report.npcs = level.npcs.len();
@@ -366,6 +419,7 @@ fn load_level(file: &str, level: Level, types: &TileTypes, pal: &mut Palette) ->
         level,
         ground,
         colour,
+        kinds,
         report,
     }
 }
@@ -397,6 +451,20 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             .to_vec(),
     };
     let mut pal = Palette::new(&sheet, o.colour_bits)?;
+    let sets = match &o.objects {
+        Some(p) => {
+            let sets = read_object_sets(p)?;
+            if sets.is_empty() {
+                return Err(format!(
+                    "no object sets (GOBJSET01 or objects.dat) in {}",
+                    p.display()
+                ));
+            }
+            sets
+        }
+        None => Vec::new(),
+    };
+    let meanings = Meanings::new(&sets, &types);
 
     // Every level and gmap under the input folder, by lower-cased file name.
     let mut paths = Vec::new();
@@ -432,7 +500,10 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
         match Level::load(p) {
             Ok(level) => {
                 let file = p.file_name().unwrap().to_string_lossy().to_string();
-                loaded.insert(key.clone(), load_level(&file, level, &types, &mut pal));
+                loaded.insert(
+                    key.clone(),
+                    load_level(&file, level, &types, &mut pal, &meanings),
+                );
             }
             Err(e) => out.warnings.push(format!("left out: {e}")),
         }
@@ -508,6 +579,11 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             links: Vec::new(),
             signs: Vec::new(),
             spawn: (32.0, 32.0),
+            top: Vec::new(),
+            colour: Vec::new(),
+            walk: Vec::new(),
+            things: Vec::new(),
+            counts: Default::default(),
         });
     }
     for key in loaded.keys() {
@@ -525,6 +601,11 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             links: Vec::new(),
             signs: Vec::new(),
             spawn: (32.0, 32.0),
+            top: Vec::new(),
+            colour: Vec::new(),
+            walk: Vec::new(),
+            things: Vec::new(),
+            counts: Default::default(),
         });
     }
     // Two worlds may not share a name (a gmap and a level, or "a b.nw" and
@@ -548,6 +629,8 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     for world in &mut worlds {
         let (tw, th) = (world.width * 64, world.height * 64);
         let mut ground = vec![None; tw * th];
+        let mut kinds = vec![Kind::Ground; tw * th];
+        let mut colours = vec![Colour([0, 0, 0]); tw * th];
         let mut links = Vec::new();
         let mut signs = Vec::new();
         for (cx, cy, key) in world.levels.clone() {
@@ -555,7 +638,10 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             let (ox, oy) = ((cx * 64) as i32, (cy * 64) as i32);
             for y in 0..64 {
                 for x in 0..64 {
-                    ground[(oy as usize + y) * tw + ox as usize + x] = Some(l.ground[y * 64 + x]);
+                    let i = (oy as usize + y) * tw + ox as usize + x;
+                    ground[i] = Some(l.ground[y * 64 + x]);
+                    kinds[i] = l.kinds[y * 64 + x];
+                    colours[i] = l.colour[y * 64 + x];
                 }
             }
             for link in &l.level.links {
@@ -594,6 +680,21 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
                 });
             }
         }
+        let sc = scene::build(
+            &scene::Tiles {
+                w: tw,
+                h: th,
+                ground: &ground,
+                kind: &kinds,
+                colour: &colours,
+            },
+            o.wall_height,
+        );
+        world.top = sc.top;
+        world.colour = sc.colour;
+        world.walk = sc.walk;
+        world.things = sc.things;
+        world.counts = sc.counts;
         world.ground = ground;
         world.links = links;
         world.signs = signs;
@@ -633,12 +734,11 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     }
 
     // The files.
-    let wall = o.wall_height;
     for w in &worlds {
         let mut text = world_header(w);
         for (n, (cx, cy, key)) in w.levels.iter().enumerate() {
             let l = &loaded[key];
-            let shape = level_shape(w, *cx, *cy, l, wall, &pal);
+            let shape = level_shape(w, *cx, *cy, l, &pal);
             let colours = shape.colours();
             // A gmap's levels carry the gmap's name too.
             let file = if w.levels.len() == 1 {
@@ -657,10 +757,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             r.colours = colours.len();
             out.levels.push(r);
         }
-        let z = w
-            .at(w.spawn.0 as i32, w.spawn.1 as i32)
-            .map_or(0.0, |g| g.height(wall))
-            + 1.0;
+        let z = w.walk_at(w.spawn.0 as i32, w.spawn.1 as i32).unwrap_or(0.0) + 1.0;
         text.push_str(&format!(
             "spawn {:.2} {:.2} {:.2}\n",
             w.spawn.0, -w.spawn.1, z
@@ -682,7 +779,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     }
     out.files.push((
         walker::FILE.to_string(),
-        walker::script(&worlds, wall).into_bytes(),
+        walker::script(&worlds).into_bytes(),
     ));
     // The 2D levels too, under their own names, so 2D players can walk the
     // same world and a TCP warp to one takes its 3D client along.
@@ -694,6 +791,14 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     for (key, p) in &gmap_paths {
         let bytes = std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?;
         out.files.push((format!("levels/{key}"), bytes));
+    }
+    if o.meaning_maps {
+        for l in loaded.values() {
+            out.files.push((
+                format!("PW3D-MAPS/{}.png", world_name(&l.file)),
+                meaning_map(&l.kinds)?,
+            ));
+        }
     }
     out.worlds = worlds;
     out.files
@@ -740,11 +845,12 @@ fn world_header(w: &World) -> String {
 /// sides where a tile stands higher than its neighbour, and markers for its
 /// NPCs, signs, chests and baddies. In level-local units; the world file
 /// puts the object at the level's corner.
-fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, wall: f32, pal: &Palette) -> Shape {
+fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, pal: &Palette) -> Shape {
     let (ox, oy) = ((cx * 64) as i32, (cy * 64) as i32);
     let mut s = Shape::default();
+    let wi = |x: usize, y: usize| (oy as usize + y) * w.tiles_w() + ox as usize + x;
     // Top colour per tile, with link tiles tinted.
-    let mut top = l.colour.clone();
+    let mut top: Vec<Colour> = (0..4096).map(|i| w.colour[wi(i % 64, i / 64)]).collect();
     for link in &l.level.links {
         for y in link.y.max(0)..(link.y + link.height.max(1)).min(64) {
             for x in link.x.max(0)..(link.x + link.width.max(1)).min(64) {
@@ -753,7 +859,8 @@ fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, wall: f32, pal: &Pal
             }
         }
     }
-    let h = |x: usize, y: usize| l.ground[y * 64 + x].height(wall);
+    let h = |x: usize, y: usize| w.top[wi(x, y)];
+    let floor = w.top.iter().copied().fold(0.0f32, f32::min) - 1.0;
     // Greedy rectangles of equal height and colour.
     let mut done = vec![false; 4096];
     for y in 0..64 {
@@ -791,13 +898,14 @@ fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, wall: f32, pal: &Pal
         }
     }
     // Sides: east, west, south (+map y, -3D y) and north of each tile, down
-    // to the neighbour (or to -1 past the world's edge and in holes).
+    // to the neighbour (or below the lowest ground past the world's edge
+    // and in holes).
     for y in 0..64usize {
         for x in 0..64usize {
             let z = h(x, y);
             let side = top[y * 64 + x].shade(0.65);
             let (gx, gy) = (ox + x as i32, oy + y as i32);
-            let below = |nx: i32, ny: i32| w.at(nx, ny).map_or(-1.0, |g| g.height(wall));
+            let below = |nx: i32, ny: i32| w.top_at(nx, ny).unwrap_or(floor);
             let (x0, x1) = (x as f32, x as f32 + 1.0);
             let (y0, y1) = (-(y as f32) - 1.0, -(y as f32));
             let zb = below(gx + 1, gy);
@@ -818,12 +926,20 @@ fn level_shape(w: &World, cx: usize, cy: usize, l: &Loaded, wall: f32, pal: &Pal
             }
         }
     }
+    // The things standing in this level, moved to its corner.
+    for ((tx, ty), thing) in &w.things {
+        if (ox..ox + 64).contains(tx) && (oy..oy + 64).contains(ty) {
+            let mut t = thing.clone();
+            t.shift([-(ox as f32), oy as f32, 0.0]);
+            s.extend(&t);
+        }
+    }
     let floor_at = |x: f32, y: f32| {
         let (tx, ty) = (
             x.floor().clamp(0.0, 63.0) as usize,
             y.floor().clamp(0.0, 63.0) as usize,
         );
-        h(tx, ty).max(0.0)
+        h(tx, ty)
     };
     // Markers. An NPC stands where its image's corner is; a box a tile
     // across is the best guess without its image.
@@ -1014,4 +1130,24 @@ fn report(c: &Converted, o: &Options) -> String {
          3D worlds unchanged, so 2D players still get all of it.\n",
     );
     t
+}
+
+/// A 64 x 64 picture of a level's tile meanings, 8 pixels a tile.
+fn meaning_map(kinds: &[Kind]) -> Result<Vec<u8>, String> {
+    let mut px = Vec::with_capacity(512 * 512 * 3);
+    for py in 0..512 {
+        for qx in 0..512 {
+            let k = kinds[(py / 8) * 64 + qx / 8];
+            px.extend_from_slice(&k.debug_rgb());
+        }
+    }
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, 512, 512);
+        enc.set_color(png::ColorType::Rgb);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut w = enc.write_header().map_err(|e| e.to_string())?;
+        w.write_image_data(&px).map_err(|e| e.to_string())?;
+    }
+    Ok(out)
 }

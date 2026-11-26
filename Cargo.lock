@@ -3051,7 +3051,7 @@ dependencies = [
 name = "seihai-pw3d"
 version = "0.0.1"
 dependencies = [
- "png",
+ "lat-core",
  "seihai-core",
  "tempfile",
 ]

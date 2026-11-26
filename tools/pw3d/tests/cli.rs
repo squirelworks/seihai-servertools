@@ -138,8 +138,8 @@ fn converts_a_small_world() {
     assert!(walk.contains("{63, 28, 1, 8, \"default\", 0, 0, 1, 32, 0, 0, 0, 0}"));
     assert!(walk.contains("Welcome to the \\\"test\\\" world"));
     assert!(
-        walk.contains("\"1#62.1#\""),
-        "the gap rows run wall, floor, wall"
+        walk.contains("\"1#62e1#\""),
+        "the gap rows run wall, floor at height 0 (e), wall"
     );
     let client = walk.split("//#CLIENTSIDE").nth(1).unwrap();
     if let Err(e) = seihai_core::scripting::gs2::compile::compile_gs2(client) {

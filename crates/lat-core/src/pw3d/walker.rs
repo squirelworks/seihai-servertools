@@ -15,10 +15,20 @@
 //!   the player where the link lands;
 //! * shows a sign's text while the player stands below it.
 //!
-//! The grid is one run-length string a row: a count, then `.` floor, `~`
-//! water, `^` lava or `#` wall (and gmap holes).
+//! The grid is one run-length string a row: a count, then `#` for a tile
+//! the player cannot enter (walls, gmap holes) or a letter for the height
+//! it stands at there (`a` is -1, each letter a quarter unit higher).
 
-use crate::convert::{Ground, World};
+use super::convert::World;
+
+/// Walkable heights as letters, a quarter unit each from -1.
+const ALPHA: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/// The letter for standing height `z`.
+pub fn letter(z: f32) -> char {
+    let k = ((z + 1.0) / 0.25).round().clamp(0.0, 51.0) as usize;
+    ALPHA.as_bytes()[k] as char
+}
 
 pub const WEAPON: &str = "PW3DWalk";
 /// Relative to the server's world folder (`weapon3d` files are).
@@ -71,7 +81,7 @@ fn opt(v: Option<f32>) -> String {
 }
 
 /// The whole weapon for these worlds.
-pub fn script(worlds: &[World], wall: f32) -> String {
+pub fn script(worlds: &[World]) -> String {
     let start = worlds
         .iter()
         .find(|w| w.name == "default")
@@ -124,7 +134,7 @@ pub fn script(worlds: &[World], wall: f32) -> String {
          \x20 temp.at = 0;\n\
          \x20 for (temp.i = 0; temp.i < temp.row.length(); temp.i++) {{\n\
          \x20   temp.c = temp.row.charat(temp.i);\n\
-         \x20   if (temp.c == \".\" || temp.c == \"~\" || temp.c == \"^\" || temp.c == \"#\") {{\n\
+         \x20   if (\"0123456789\".pos(temp.c) < 0) {{\n\
          \x20     temp.at += temp.n;\n\
          \x20     if (x < temp.at) return temp.c;\n\
          \x20     temp.n = 0;\n\
@@ -132,10 +142,10 @@ pub fn script(worlds: &[World], wall: f32) -> String {
          \x20 }}\n\
          \x20 return \"#\";\n\
          }}\n\n\
+         // A tile's letter is its height: {alpha}, a quarter unit\n\
+         // each from -1; the player's origin is 1 above its feet.\n\
          function pw3dZ(k) {{\n\
-         \x20 if (k == \"~\") return {water} + 1;\n\
-         \x20 if (k == \"^\") return {lava} + 1;\n\
-         \x20 return 1;\n\
+         \x20 return \"{alpha}\".pos(k) * 0.25;\n\
          }}\n\n\
          function pw3dStep(dx, dy) {{\n\
          \x20 temp.nx = this.px + dx * this.step;\n\
@@ -202,8 +212,7 @@ pub fn script(worlds: &[World], wall: f32) -> String {
          \x20 if (temp.text == \"\") hideimg(200);\n\
          \x20 else showtext(200, 20, 20, \"Arial\", \"b\", temp.text);\n\
          }}\n\n",
-        water = num(Ground::Water.height(wall)),
-        lava = num(Ground::Lava.height(wall)),
+        alpha = ALPHA,
     ));
     // The worlds' data.
     t.push_str("function pw3dLoad(name) {\n  this.world = name;\n");
@@ -217,9 +226,8 @@ pub fn script(worlds: &[World], wall: f32) -> String {
         ));
         let rows: Vec<String> = (0..w.tiles_h() as i32)
             .map(|y| {
-                let row = rle_row(
-                    (0..w.tiles_w() as i32).map(|x| w.at(x, y).map_or('#', Ground::letter)),
-                );
+                let row =
+                    rle_row((0..w.tiles_w() as i32).map(|x| w.walk_at(x, y).map_or('#', letter)));
                 format!("      \"{row}\"")
             })
             .collect();

@@ -72,6 +72,81 @@ impl Shape {
         );
     }
 
+    /// A triangle, counter-clockwise seen from outside.
+    pub fn tri(&mut self, t: [[f32; 3]; 3], c: Colour) {
+        let b = self.points.len() as u32;
+        self.points.extend_from_slice(&t);
+        self.faces.push(([b, b + 1, b + 2], c));
+    }
+
+    /// A low rounded lump (an ellipsoid of 8 sides and 4 bands) round
+    /// `centre` with radii `r`; faces looking up get `top`, the rest `side`.
+    pub fn blob(&mut self, centre: [f32; 3], r: [f32; 3], top: Colour, side: Colour) {
+        const LAT: [f32; 5] = [-90.0, -40.0, 0.0, 40.0, 90.0];
+        let p = |lat: f32, lon: usize| {
+            let (la, lo) = (
+                lat.to_radians(),
+                (lon % 8) as f32 * std::f32::consts::FRAC_PI_4,
+            );
+            [
+                centre[0] + r[0] * la.cos() * lo.cos(),
+                centre[1] + r[1] * la.cos() * lo.sin(),
+                centre[2] + r[2] * la.sin(),
+            ]
+        };
+        for i in 0..LAT.len() - 1 {
+            let (lo, hi) = (LAT[i], LAT[i + 1]);
+            let c = if (lo + hi) / 2.0 > 20.0 { top } else { side };
+            for j in 0..8 {
+                if i == 0 {
+                    self.tri([p(lo, j), p(hi, j + 1), p(hi, j)], c);
+                } else if i == LAT.len() - 2 {
+                    self.tri([p(lo, j), p(lo, j + 1), p(hi, j)], c);
+                } else {
+                    self.quad([p(lo, j), p(lo, j + 1), p(hi, j + 1), p(hi, j)], c);
+                }
+            }
+        }
+    }
+
+    /// A gabled roof over the rectangle `lo` to `hi` (x, y), its eaves at
+    /// `lo[2]`, the ridge along the longer side.
+    pub fn gable(&mut self, lo: [f32; 3], hi: [f32; 2], roof: Colour, end: Colour) {
+        let ([x0, y0, z], [x1, y1]) = (lo, hi);
+        let r = ((x1 - x0).min(y1 - y0) * 0.35).min(3.0);
+        let t = z + r;
+        if x1 - x0 >= y1 - y0 {
+            let ym = (y0 + y1) / 2.0;
+            self.quad([[x0, y0, z], [x1, y0, z], [x1, ym, t], [x0, ym, t]], roof);
+            self.quad([[x1, y1, z], [x0, y1, z], [x0, ym, t], [x1, ym, t]], roof);
+            self.tri([[x0, y1, z], [x0, y0, z], [x0, ym, t]], end);
+            self.tri([[x1, y0, z], [x1, y1, z], [x1, ym, t]], end);
+        } else {
+            let xm = (x0 + x1) / 2.0;
+            self.quad([[x1, y0, z], [x1, y1, z], [xm, y1, t], [xm, y0, t]], roof);
+            self.quad([[x0, y1, z], [x0, y0, z], [xm, y0, t], [xm, y1, t]], roof);
+            self.tri([[x0, y0, z], [x1, y0, z], [xm, y0, t]], end);
+            self.tri([[x1, y1, z], [x0, y1, z], [xm, y1, t]], end);
+        }
+    }
+
+    /// Move every point by `d`.
+    pub fn shift(&mut self, d: [f32; 3]) {
+        for p in &mut self.points {
+            for k in 0..3 {
+                p[k] += d[k];
+            }
+        }
+    }
+
+    /// Add another shape's faces.
+    pub fn extend(&mut self, other: &Shape) {
+        let b = self.points.len() as u32;
+        self.points.extend_from_slice(&other.points);
+        self.faces
+            .extend(other.faces.iter().map(|(f, c)| (f.map(|v| v + b), *c)));
+    }
+
     pub fn colours(&self) -> Vec<Colour> {
         let mut c: Vec<Colour> = self.faces.iter().map(|f| f.1).collect();
         c.sort();
@@ -221,6 +296,36 @@ mod tests {
             let out = [p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]];
             let dot = n[0] * out[0] + n[1] * out[1] + n[2] * out[2];
             assert!(dot > 0.0, "face {f:?} faces inwards");
+        }
+    }
+
+    fn all_outward(s: &Shape, centre: [f32; 3]) {
+        for (f, _) in &s.faces {
+            let n = normal(s, *f);
+            if n.iter().map(|v| v * v).sum::<f32>() < 1e-9 {
+                continue; // a pole's sliver
+            }
+            let p = s.points[f[0] as usize];
+            let q = s.points[f[1] as usize];
+            let r = s.points[f[2] as usize];
+            let m = [0, 1, 2].map(|k| (p[k] + q[k] + r[k]) / 3.0 - centre[k]);
+            assert!(
+                n[0] * m[0] + n[1] * m[1] + n[2] * m[2] > 0.0,
+                "face {f:?} faces inwards"
+            );
+        }
+    }
+
+    #[test]
+    fn blobs_and_roofs_face_outwards() {
+        let c = Colour([1, 2, 3]);
+        let mut s = Shape::default();
+        s.blob([5.0, -3.0, 2.0], [2.0, 1.0, 1.5], c, c);
+        all_outward(&s, [5.0, -3.0, 2.0]);
+        for hi in [[4.0, 2.0], [2.0, 4.0]] {
+            let mut r = Shape::default();
+            r.gable([0.0, 0.0, 1.0], hi, c, c);
+            all_outward(&r, [hi[0] / 2.0, hi[1] / 2.0, 1.0]);
         }
     }
 
