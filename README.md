@@ -57,6 +57,14 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 | Leaderboard pages from seihai-gserver accounts (gserverstat's job) | `seihai-servertools stats` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
+Every command is also its own program, built, tested and run on its own:
+`seihai-lab`, `seihai-setup`, `seihai-check`, `seihai-code`, `seihai-gpak`,
+`seihai-level`, `seihai-theme`, `seihai-gmap`, `seihai-gani`, `seihai-gen`,
+`seihai-stats`, `seihai-gif2mng` and `seihai-servertools-gui` take the same
+words after their name (`seihai-gpak pack ...` is `seihai-servertools gpak
+pack ...`). Each lives in `tools/<tool>/` with its own README; the list and
+the rules for a new tool are in [tools/README.md](tools/README.md).
+
 The level editor here is for staff editing a live server. The Seihai
 client keeps its own offline level editor.
 
@@ -262,7 +270,8 @@ found next to it, in the world folder or on `PATH`.
 
 ### seihai-suite-stress
 
-The second binary starts the whole server suite on `127.0.0.1` and drives bot
+A standalone tool ([tools/suite-stress](tools/suite-stress/README.md)), not
+part of `seihai-servertools`. It starts the whole server suite on `127.0.0.1` and drives bot
 clients at it. `seihai-suite-stress run` runs bots for `--stay` seconds and
 writes a report; `compat` tries one bot per version profile; `versions` lists
 the profiles; `probe ADDR VERSION ACCOUNT STEPS` runs one scripted client
@@ -279,9 +288,11 @@ full list, including the walk, chat, warp and external-client options.
 ```
 git clone https://github.com/squirelworks/seihai-servertools
 cd seihai-servertools
-cargo build --release      # target/release/seihai-servertools and seihai-suite-stress
+cargo build --release      # target/release/seihai-servertools, every seihai-<tool> and seihai-suite-stress
 cargo test
-cargo build --release --no-default-features   # command line only, no window
+cargo build --release -p seihai-servertools --no-default-features   # command line only, no window
+cargo build --release -p seihai-gpak   # one tool on its own (any tool in tools/)
+cargo test -p seihai-gpak
 ```
 
 On Linux the window needs the usual X11 or Wayland libraries at run time;

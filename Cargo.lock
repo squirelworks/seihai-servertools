@@ -2941,6 +2941,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "seihai-check"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "png",
+ "setup-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-code"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "tempfile",
+]
+
+[[package]]
 name = "seihai-core"
 version = "0.7.2"
 source = "git+https://github.com/squirelworks/seihai-core?tag=v0.7.2#81ba7e24df32ff5f937d0c09e7d5f75da6aa6913"
@@ -2969,6 +2987,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "seihai-gani"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "png",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-gen"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "png",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-gif2mng"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-gmap"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "png",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-gpak"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-lab"
+version = "0.0.1"
+dependencies = [
+ "ctrlc",
+ "setup-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-level"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "png",
+ "tempfile",
+]
+
+[[package]]
 name = "seihai-pw3d"
 version = "0.0.1"
 dependencies = [
@@ -2989,12 +3068,61 @@ dependencies = [
 name = "seihai-servertools"
 version = "0.0.1"
 dependencies = [
- "ctrlc",
- "lat-core",
- "png",
+ "seihai-check",
+ "seihai-code",
+ "seihai-gani",
+ "seihai-gen",
+ "seihai-gif2mng",
+ "seihai-gmap",
+ "seihai-gpak",
+ "seihai-lab",
+ "seihai-level",
  "seihai-pw3d",
+ "seihai-servertools-gui",
+ "seihai-setup",
+ "seihai-stats",
+ "seihai-theme",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-servertools-gui"
+version = "0.0.1"
+dependencies = [
  "servertools-app",
+]
+
+[[package]]
+name = "seihai-setup"
+version = "0.0.1"
+dependencies = [
+ "ctrlc",
  "setup-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-stats"
+version = "0.0.1"
+dependencies = [
+ "setup-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-suite-stress"
+version = "0.0.1"
+dependencies = [
+ "ctrlc",
+ "seihai-core",
+ "tempfile",
+]
+
+[[package]]
+name = "seihai-theme"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
  "tempfile",
 ]
 
@@ -3270,15 +3398,6 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
-
-[[package]]
-name = "suite-stress"
-version = "0.0.1"
-dependencies = [
- "ctrlc",
- "seihai-core",
- "tempfile",
-]
 
 [[package]]
 name = "syn"

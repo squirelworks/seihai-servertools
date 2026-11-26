@@ -165,6 +165,9 @@ fn converts_a_small_world() {
 
 #[test]
 fn usage_and_bad_input() {
+    let v = bin().arg("--version").output().unwrap();
+    assert!(v.status.success());
+    assert!(String::from_utf8_lossy(&v.stdout).starts_with("seihai-pw3d "));
     let o = bin().arg("--help").output().unwrap();
     assert!(o.status.success());
     assert!(String::from_utf8_lossy(&o.stdout).contains("seihai-pw3d INPUT OUT"));

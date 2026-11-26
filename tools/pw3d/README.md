@@ -7,7 +7,8 @@ and their gmaps) into 3D worlds that seihai-gserver serves to the 3D clients
 ```
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
             [--tiledefs FILE] [--wall-height F] [--colour-bits N] [--force]
-seihai-servertools pw3d ...        # the same, from the umbrella binary
+seihai-servertools pw3d ...        # the same, from the front door
+seihai-pw3d --help | --version
 ```
 
 ## Why it has to build 3D content
@@ -67,7 +68,8 @@ cargo build -p seihai-pw3d
 cargo test -p seihai-pw3d
 ```
 
-It depends only on `seihai-core` (pinned once in the workspace by tag) for
+It depends on no other tool, only on `seihai-core` (pinned once in the root
+`Cargo.toml` by tag, v0.7.2) for
 the level, gmap and tiledefs parsers, the built-in tileset and the GS2
 compiler the tests check the walker with, and `png` for the sky. The tests
 run the binary on a made-up playerworld and check the worlds, shapes, links

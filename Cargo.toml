@@ -1,11 +1,13 @@
 [workspace]
+# crates/: the shared libraries and the all-in-one `seihai-servertools`.
+# tools/: one crate and binary per tool, each built and tested on its own
+# (`cargo build -p seihai-<tool>`; tools/README.md).
 members = [
     "crates/setup-core",
     "crates/lat-core",
     "crates/app",
     "crates/seihai-servertools",
-    "crates/suite-stress",
-    "tools/pw3d",
+    "tools/*",
 ]
 resolver = "2"
 
@@ -57,5 +59,18 @@ getrandom = "0.2"
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }
 servertools-app = { path = "crates/app" }
+seihai-lab = { path = "tools/lab" }
+seihai-setup = { path = "tools/setup" }
+seihai-check = { path = "tools/check" }
+seihai-code = { path = "tools/code" }
+seihai-gpak = { path = "tools/gpak" }
+seihai-level = { path = "tools/level" }
+seihai-theme = { path = "tools/theme" }
+seihai-gmap = { path = "tools/gmap" }
+seihai-gani = { path = "tools/gani" }
+seihai-gen = { path = "tools/gen" }
+seihai-stats = { path = "tools/stats" }
+seihai-gif2mng = { path = "tools/gif2mng" }
 seihai-pw3d = { path = "tools/pw3d" }
+seihai-servertools-gui = { path = "tools/gui" }
 
