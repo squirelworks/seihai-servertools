@@ -20,6 +20,7 @@ Each one builds, tests and runs on its own; `seihai-servertools` (in
 | [gen](gen/README.md) | `seihai-gen` | World generators: terrain, 3D, picture, dungeon |
 | [stats](stats/README.md) | `seihai-stats` | Leaderboard pages from accounts |
 | [gif2mng](gif2mng/README.md) | `seihai-gif2mng` | GIF to PNG or MNG |
+| [pw3d](pw3d/README.md) | `seihai-pw3d` | A 2D playerworld as 3D worlds for seihai-gserver |
 | [gui](gui/README.md) | `seihai-servertools-gui` | The window |
 | [suite-stress](suite-stress/README.md) | `seihai-suite-stress` | Stress rig for the whole server suite |
 

@@ -1,0 +1,26 @@
+[package]
+name = "seihai-pw3d"
+description = "Turn a 2D Graal playerworld (levels, gmaps) into a 3D world that seihai-gserver serves to the 4.20r6/5.x 3D clients."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_pw3d"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-pw3d"
+path = "src/main.rs"
+
+[dependencies]
+# The conversion (AGENTS.md: logic in the core crates).
+lat-core.workspace = true
+
+[dev-dependencies]
+# The tests build levels with seihai-core's tile codes and compile the
+# walker with its GS2 compiler.
+seihai-core.workspace = true
+tempfile.workspace = true

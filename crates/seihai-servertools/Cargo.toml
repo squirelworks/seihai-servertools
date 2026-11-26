@@ -32,6 +32,7 @@ seihai-gani.workspace = true
 seihai-gen.workspace = true
 seihai-stats.workspace = true
 seihai-gif2mng.workspace = true
+seihai-pw3d.workspace = true
 seihai-servertools-gui = { workspace = true, optional = true }
 
 [dev-dependencies]
