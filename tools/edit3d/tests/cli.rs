@@ -125,6 +125,12 @@ fn show_edit_and_render() {
         said.contains("squares changed") && said.contains("terrain backup"),
         "{said}"
     );
+    // The terrain copy goes under backups/, out of the served files.
+    let kept: Vec<_> = fs::read_dir(d.path().join("backups"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(kept.len() == 1 && kept[0].contains(".bak-"), "{kept:?}");
     let shown = ok(&["show", root]);
     assert!(shown.contains("0 chunks missing"), "{shown}");
     // A brush that changes nothing saves nothing (no backups, no rewrite).

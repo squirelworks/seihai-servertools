@@ -163,7 +163,12 @@ pub fn save(w: &World, terrain: bool) -> Result<Vec<String>, String> {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            let copy = dir.with_file_name(format!("{name}.bak-{}", stamp.compact()));
+            // Not beside the folder: that is usually under the served
+            // files, and a copy there would be served and listed too.
+            let copy = w
+                .root
+                .join("backups")
+                .join(format!("{name}.bak-{}", stamp.compact()));
             copy_dir(&dir, &copy).map_err(|e| format!("{}: {e}", copy.display()))?;
             said.push(format!("terrain backup {}", copy.display()));
         }
