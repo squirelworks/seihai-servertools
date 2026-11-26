@@ -17,7 +17,8 @@
 //!   side by side, every other level a world of its own) and writes one
 //!   `.3ds` a level ([`shape`]); the `PW3DWalk` weapon ([`walker`]) walks
 //!   the player over the heights, stops it at walls, follows links between
-//!   worlds and shows signs.
+//!   worlds and shows signs; [`signtext`] puts each sign's words on a board
+//!   above it in 3D letters.
 //!
 //! The output is a seihai-gserver world folder: `config/graal3dworld.txt`
 //! (the start level), `config/graal3dworlds/<name>.txt` (each other world,
@@ -32,6 +33,7 @@ pub mod meaning;
 pub mod npc;
 pub mod scene;
 pub mod shape;
+pub mod signtext;
 pub mod walker;
 
 use std::path::Path;

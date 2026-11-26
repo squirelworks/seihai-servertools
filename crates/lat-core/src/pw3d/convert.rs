@@ -4,6 +4,7 @@ use super::meaning::{read_object_sets, Kind, Meanings};
 use super::npc::{npc_shape, Images};
 use super::scene;
 use super::shape::{Colour, Shape};
+use super::signtext;
 use super::walker;
 use seihai_core::assets::{read_png_rgba, Level, TileTypes, EMPTY_UPPER_TILE};
 use seihai_core::gmap::Gmap;
@@ -1068,6 +1069,24 @@ fn level_shape(
             SIGN_FACE,
             WOOD,
         );
+        // The words on a board over its top, low enough that a wall
+        // behind it does not hide the first line (5.12 lab): a 3D client
+        // draws no 2D text.
+        // As wide as the gap to the nearest sign beside it allows.
+        let room = l
+            .level
+            .signs
+            .iter()
+            .filter(|o| !std::ptr::eq(*o, sg) && (o.y as f32 - y).abs() < 4.0)
+            .map(|o| (o.x as f32 - x).abs() - 0.3)
+            .fold(8.0_f32, f32::min);
+        s.extend(&signtext::board(
+            &sg.text,
+            x + 0.5,
+            -y - 0.62,
+            z + 0.9,
+            room,
+        ));
     }
     (s, made)
 }
