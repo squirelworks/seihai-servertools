@@ -1070,7 +1070,21 @@ fn level_shape(
             WOOD,
         );
         // The words on a board above it: a 3D client draws no 2D text.
-        s.extend(&signtext::board(&sg.text, x + 0.5, -y - 0.62, z + 1.4));
+        // As wide as the gap to the nearest sign beside it allows.
+        let room = l
+            .level
+            .signs
+            .iter()
+            .filter(|o| !std::ptr::eq(*o, sg) && (o.y as f32 - y).abs() < 4.0)
+            .map(|o| (o.x as f32 - x).abs() - 0.3)
+            .fold(8.0_f32, f32::min);
+        s.extend(&signtext::board(
+            &sg.text,
+            x + 0.5,
+            -y - 0.62,
+            z + 1.4,
+            room,
+        ));
     }
     (s, made)
 }

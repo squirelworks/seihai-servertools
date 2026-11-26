@@ -8,11 +8,11 @@
 use super::shape::{Colour, Shape};
 
 /// One pixel's size, in tiles.
-const PX: f32 = 0.07;
-/// Letters on one line, before wrapping at a space.
+const PX: f32 = 0.06;
+/// Letters on one line at most, before wrapping at a space.
 const WIDTH: usize = 22;
 /// Lines shown; longer text ends with "...".
-const LINES: usize = 6;
+const LINES: usize = 8;
 
 const BOARD: Colour = Colour([225, 205, 150]);
 const INK: Colour = Colour([40, 30, 20]);
@@ -33,8 +33,8 @@ fn glyph(c: char) -> Option<[u8; 5]> {
         'J' => [0b001, 0b001, 0b001, 0b101, 0b010],
         'K' => [0b101, 0b101, 0b110, 0b101, 0b101],
         'L' => [0b100, 0b100, 0b100, 0b100, 0b111],
-        'M' => [0b101, 0b111, 0b111, 0b101, 0b101],
-        'N' => [0b110, 0b101, 0b101, 0b101, 0b101],
+        'M' => [0b101, 0b111, 0b101, 0b101, 0b101],
+        'N' => [0b101, 0b111, 0b111, 0b111, 0b101],
         'O' => [0b010, 0b101, 0b101, 0b101, 0b010],
         'P' => [0b110, 0b101, 0b110, 0b100, 0b100],
         'Q' => [0b010, 0b101, 0b101, 0b110, 0b011],
@@ -78,7 +78,8 @@ fn glyph(c: char) -> Option<[u8; 5]> {
 
 /// The sign's words in lines: `#b` and line breaks become spaces, `#` codes
 /// with arguments are dropped, letters the font lacks become spaces.
-pub fn lines(text: &str) -> Vec<String> {
+pub fn lines(text: &str, width: usize) -> Vec<String> {
+    let width = width.clamp(4, WIDTH);
     let mut clean = String::new();
     let mut it = text.chars().peekable();
     while let Some(c) = it.next() {
@@ -107,15 +108,15 @@ pub fn lines(text: &str) -> Vec<String> {
     let mut line = String::new();
     for word in clean.split_whitespace() {
         let mut word = word.to_string();
-        while word.len() > WIDTH {
+        while word.len() > width {
             if !line.is_empty() {
                 out.push(std::mem::take(&mut line));
             }
-            let rest = word.split_off(WIDTH);
+            let rest = word.split_off(width);
             out.push(word);
             word = rest;
         }
-        if !line.is_empty() && line.len() + 1 + word.len() > WIDTH {
+        if !line.is_empty() && line.len() + 1 + word.len() > width {
             out.push(std::mem::take(&mut line));
         }
         if !line.is_empty() {
@@ -129,7 +130,7 @@ pub fn lines(text: &str) -> Vec<String> {
     if out.len() > LINES {
         out.truncate(LINES);
         let last = &mut out[LINES - 1];
-        while last.len() + 3 > WIDTH {
+        while last.len() + 3 > width {
             last.pop();
         }
         last.push_str("...");
@@ -138,10 +139,12 @@ pub fn lines(text: &str) -> Vec<String> {
 }
 
 /// A board with the sign's words, its bottom centre at `(cx, y, z)`, its
-/// face at world `y` looking towards -y. Nothing for a sign with no words.
-pub fn board(text: &str, cx: f32, y: f32, z: f32) -> Shape {
+/// face at world `y` looking towards -y, at most `max_w` wide (so boards of
+/// signs side by side do not overlap). Nothing for a sign with no words.
+pub fn board(text: &str, cx: f32, y: f32, z: f32, max_w: f32) -> Shape {
     let mut s = Shape::default();
-    let lines = lines(text);
+    let fit = ((max_w / PX - 1.0) / 4.0).floor().max(0.0) as usize;
+    let lines = lines(text, fit);
     if lines.is_empty() {
         return s;
     }
@@ -187,28 +190,36 @@ mod tests {
 
     #[test]
     fn codes_and_wrapping() {
-        assert_eq!(lines("Welcome to#bArynala!"), vec!["WELCOME TO ARYNALA!"]);
-        assert_eq!(lines("a #c(red)b"), vec!["A B"]);
-        let l = lines("one two three four five six seven eight nine");
+        assert_eq!(
+            lines("Welcome to#bArynala!", WIDTH),
+            vec!["WELCOME TO ARYNALA!"]
+        );
+        assert_eq!(lines("a #c(red)b", WIDTH), vec!["A B"]);
+        let l = lines("one two three four five six seven eight nine", WIDTH);
         assert!(l.len() > 1 && l.iter().all(|x| x.len() <= WIDTH));
-        assert!(lines("").is_empty());
+        assert!(lines("", WIDTH).is_empty());
         let long = "word ".repeat(100);
-        let l = lines(&long);
+        let l = lines(&long, WIDTH);
         assert_eq!(l.len(), LINES);
         assert!(l[LINES - 1].ends_with("..."));
     }
 
     #[test]
     fn board_has_letters() {
-        let s = board("HI", 5.0, -3.0, 1.0);
+        let s = board("HI", 5.0, -3.0, 1.0, 9.0);
         // The board's 5 faces as 10 triangles, then the ink.
         assert!(s.faces.len() > 10);
         assert!(s.faces.iter().any(|f| f.1 == INK));
-        assert!(board("   ", 0.0, 0.0, 0.0).faces.is_empty());
+        assert!(board("   ", 0.0, 0.0, 0.0, 9.0).faces.is_empty());
         let w: Vec<f32> = s.points.iter().map(|p| p[0]).collect();
         let (lo, hi) = w
             .iter()
             .fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
         assert!((lo + hi) / 2.0 - 5.0 < 0.01);
+        // Narrow room: the board stays inside it and wraps instead.
+        let t = "a long sign that has to wrap into a narrow board";
+        let n = board(t, 0.0, 0.0, 0.0, 2.0);
+        assert!(n.points.iter().all(|p| p[0].abs() <= 1.0 + 1e-4));
+        assert!(lines(t, 7).iter().all(|l| l.len() <= 7));
     }
 }
