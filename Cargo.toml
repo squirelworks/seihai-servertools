@@ -5,6 +5,7 @@ members = [
     "crates/app",
     "crates/seihai-servertools",
     "crates/suite-stress",
+    "tools/pw3d",
 ]
 resolver = "2"
 
@@ -56,4 +57,5 @@ getrandom = "0.2"
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }
 servertools-app = { path = "crates/app" }
+seihai-pw3d = { path = "tools/pw3d" }
 

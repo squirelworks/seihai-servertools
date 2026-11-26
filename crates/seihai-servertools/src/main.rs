@@ -47,6 +47,9 @@ Usage:
   seihai-servertools gen terrain|3d|image|dungeon ...
                                     generate a world: height field, its 3D version from a
                                     gmap, from a picture, or a dungeon (`gen --help`)
+  seihai-servertools pw3d INPUT OUT [...]
+                                    a 2D playerworld as 3D worlds for seihai-gserver (the
+                                    seihai-pw3d tool, `pw3d --help`)
   seihai-servertools stats ACCOUNTS OUTDIR [MODE...]
                                     leaderboard pages (kills, deaths, rupees, highap, lowap,
                                     maxpower, power, arrows, bombs, glovepower, swordpower,
@@ -148,6 +151,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["gen", rest @ ..] => generate::run(rest),
+        ["pw3d", rest @ ..] => seihai_pw3d::run(rest),
         ["stats", accounts, out, modes @ ..] => stats(accounts, out, modes),
         ["gif2mng", rest @ ..] => gif2mng(rest),
         ["gui", rest @ ..] => gui(rest),

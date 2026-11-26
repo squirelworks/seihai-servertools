@@ -36,3 +36,5 @@ jobs:
       - run: cargo test
       # The command-line-only build for headless servers must keep building.
       - run: cargo build -p seihai-servertools --no-default-features
+      # Each tool in tools/ builds and tests on its own.
+      - run: cargo test -p seihai-pw3d

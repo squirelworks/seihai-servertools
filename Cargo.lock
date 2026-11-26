@@ -2969,6 +2969,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "seihai-pw3d"
+version = "0.0.1"
+dependencies = [
+ "png",
+ "seihai-core",
+ "tempfile",
+]
+
+[[package]]
 name = "seihai-rc"
 version = "0.1.0"
 source = "git+https://github.com/squirelworks/seihai-rc?rev=fcfd2cc264fece3838a1acca56b1d2d3cc217a17#fcfd2cc264fece3838a1acca56b1d2d3cc217a17"
@@ -2983,6 +2992,7 @@ dependencies = [
  "ctrlc",
  "lat-core",
  "png",
+ "seihai-pw3d",
  "servertools-app",
  "setup-core",
  "tempfile",

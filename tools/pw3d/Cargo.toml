@@ -1,0 +1,26 @@
+[package]
+name = "seihai-pw3d"
+description = "Turn a 2D Graal playerworld (levels, gmaps) into a 3D world that seihai-gserver serves to the 4.20r6/5.x 3D clients."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_pw3d"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-pw3d"
+path = "src/main.rs"
+
+[dependencies]
+# Level, gmap and tile-type parsers, and the built-in Seihai tileset and
+# tiledefs. The same ones the Seihai client uses.
+seihai-core.workspace = true
+# Sky faces.
+png.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

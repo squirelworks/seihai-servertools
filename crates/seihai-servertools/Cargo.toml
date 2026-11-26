@@ -20,6 +20,8 @@ gui = ["dep:servertools-app"]
 [dependencies]
 setup-core.workspace = true
 lat-core.workspace = true
+# `seihai-servertools pw3d`: the standalone seihai-pw3d tool.
+seihai-pw3d.workspace = true
 servertools-app = { workspace = true, optional = true }
 ctrlc.workspace = true
 
