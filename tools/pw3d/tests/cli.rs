@@ -147,6 +147,8 @@ fn converts_a_small_world() {
         walk.contains("\"1#62e1#\""),
         "the gap rows run wall, floor at height 0 (e), wall"
     );
+    // temp.name reads back as the function's own name on a real 5.12.
+    assert!(!walk.contains("temp.name ") && !walk.contains("temp.name;"));
     let client = walk.split("//#CLIENTSIDE").nth(1).unwrap();
     if let Err(e) = seihai_core::scripting::gs2::compile::compile_gs2(client) {
         panic!("the walker does not compile: {e:?}");
