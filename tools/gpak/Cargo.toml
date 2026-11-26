@@ -1,0 +1,24 @@
+[package]
+name = "seihai-gpak"
+description = "Resource packages: build or unpack a .gpak or encrypted .gpake for a gserver folder."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_gpak"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-gpak"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

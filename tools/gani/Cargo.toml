@@ -1,0 +1,25 @@
+[package]
+name = "seihai-gani"
+description = "GraalShop movie mode (GANI0002): list actors and keyframes, paint a timeline frame."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_gani"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-gani"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+png.workspace = true

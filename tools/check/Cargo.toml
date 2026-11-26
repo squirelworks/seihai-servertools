@@ -1,0 +1,26 @@
+[package]
+name = "seihai-check"
+description = "World and config checker: parse errors, missing levels, images, sounds, scripts, packages and unsafe server settings."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_check"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-check"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+setup-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+png.workspace = true

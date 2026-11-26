@@ -61,9 +61,14 @@ to do next. In short:
 
 - **Logic in the core crates, never in the UI.** `crates/setup-core` (server
   setup, lab start) and `crates/lat-core` (LAT tools) hold every rule, file
-  format and check, with tests. `crates/seihai-servertools` (command line) and
+  format and check, with tests. The tools in `tools/` (command line) and
   `crates/app` (window) only parse input, call the cores and show results.
   If a rule is needed by both, it belongs in a core crate.
+- **Every tool is standalone.** One crate and one program per tool in
+  `tools/<tool>/` (`seihai-<tool>`), with its own README and tests, and no
+  dependency on another tool; `crates/seihai-servertools` only dispatches.
+  A new tool follows `tools/README.md` ("Standalone"), and CI builds and
+  tests each tool on its own (`scripts/ci/each-tool.sh`).
 - **One parser per format, shared with Seihai.** Levels, gmaps, ganis, GS1 and
   the protocol come from `seihai-core` (`squirelworks/seihai-core`). Do not
   write a second parser here. When something is missing, add it in

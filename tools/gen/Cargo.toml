@@ -1,0 +1,25 @@
+[package]
+name = "seihai-gen"
+description = "World generators: height-field terrain (2D, 3D, streamed), 3D from a gmap, levels from a picture, dungeons."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_gen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-gen"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+png.workspace = true

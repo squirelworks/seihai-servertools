@@ -9,11 +9,11 @@ same in every Seihai repo.
 - **Current version:** 0.0.1 (never released).
 - **Where the version lives:** `version` under `[workspace.package]` in `Cargo.toml`.
 - **Public surface** (the things a version number makes promises about):
-  - the command line (`lab start`, `check --json`, `gpak`, `code` and the rest) and its machine-readable output;
+  - the command line (`lab start`, `check --json`, `gpak`, `code` and the rest) and its machine-readable output, both as `seihai-servertools <tool> ...` and as each standalone `seihai-<tool>` program;
   - the setup and lab files it saves;
   - the window's workflows.
 
-  The workspace's internal crates (`lat-core`, `suite-stress` and the rest), `scripts/`, the recovered tools and lab write-ups are not part of the surface.
+  The workspace's internal crates (`lat-core`, `setup-core`, each tool's library and the rest), `scripts/`, the recovered tools and lab write-ups are not part of the surface.
 - **Unreleased notes:** `docs/releases/unreleased.md`.
 - **Release notes:** `docs/releases/vX.Y.Z.md`.
 - **How a release is made:** After the release PR merges, someone runs `.github/workflows/release.yml` by hand with the version. It builds every target and makes a **draft**, and the owner presses Publish.

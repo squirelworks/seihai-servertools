@@ -1,0 +1,24 @@
+[package]
+name = "seihai-theme"
+description = "LFThemeMaker: patch themes for LevelFiller from a recipe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_theme"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-theme"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
