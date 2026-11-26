@@ -59,6 +59,7 @@ getrandom = "0.2"
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }
 servertools-app = { path = "crates/app" }
+seihai-guide = { path = "tools/guide" }
 seihai-lab = { path = "tools/lab" }
 seihai-setup = { path = "tools/setup" }
 seihai-check = { path = "tools/check" }

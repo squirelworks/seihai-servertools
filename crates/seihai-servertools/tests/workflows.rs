@@ -64,6 +64,47 @@ fn version_and_help() {
 }
 
 #[test]
+fn no_words_explain_the_suite_and_guide_reaches_every_topic() {
+    let out = bin().output().unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("HOW A SEIHAI SERVER FITS TOGETHER"), "{text}");
+    assert!(text.contains("seihai-servertools --help"));
+    let out = bin().args(["guide", "rc"]).output().unwrap();
+    assert!(String::from_utf8_lossy(&out.stdout).contains("REMOTE CONTROL"));
+}
+
+#[test]
+fn setup_new_writes_a_server_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = bin()
+        .args([
+            "setup",
+            "new",
+            "srv",
+            "--yes",
+            "--gservers",
+            "2",
+            "--no-port-check",
+        ])
+        .current_dir(tmp.path())
+        .env("PATH", "")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("Staff passwords"));
+    let srv = tmp.path().join("srv");
+    for f in [
+        "start.sh",
+        "gservers/world2/config/server.txt",
+        "listservers/list/seihai-listserver.toml",
+    ] {
+        assert!(srv.join(f).is_file(), "{f}");
+    }
+}
+
+#[test]
 fn generators_write_worlds_that_read_back() {
     let d = tempfile::tempdir().unwrap();
     run(
