@@ -109,6 +109,8 @@ pub fn script(worlds: &[World]) -> String {
          \x20 this.py = {sy};\n\
          \x20 this.away = 0;\n\
          \x20 this.settle = 8;\n\
+         \x20 this.ticks = 0;\n\
+         \x20 this.wantworld = \"\";\n\
          \x20 setTimer(0.05);\n\
          }}\n\n\
          // The arrows, read each tick: the 3D key bindings end up as keys too\n\
@@ -129,6 +131,13 @@ pub fn script(worlds: &[World]) -> String {
          \x20 this.last = temp.now;\n\
          \x20 if (this.step > 0.5) this.step = 0.5;\n\
          \x20 if (this.step < 0.05) this.step = 0.05;\n\
+         \x20 // A real 5.12 drops triggerserver in its first ticks (lab), so a\n\
+         \x20 // world change made that early is told to the server later.\n\
+         \x20 if (this.ticks <= 64) this.ticks++;\n\
+         \x20 if (this.ticks > 64 && this.wantworld != \"\") {{\n\
+         \x20   triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", this.wantworld @ \"\");\n\
+         \x20   this.wantworld = \"\";\n\
+         \x20 }}\n\
          \x20 temp.moved = 0;\n\
          \x20 if (temp.dx != 0) temp.moved = temp.moved + pw3dStep(temp.dx, 0);\n\
          \x20 if (temp.dy != 0) temp.moved = temp.moved + pw3dStep(0, temp.dy);\n\
@@ -236,7 +245,8 @@ pub fn script(worlds: &[World]) -> String {
          \x20 if (temp.l[8] == \"k\") temp.ny = this.py - temp.l[12] + temp.l[10] + temp.l[6];\n\
          \x20 else temp.ny = temp.l[8] + temp.l[6];\n\
          \x20 if (temp.l[4] != this.world) {{\n\
-         \x20   triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", temp.l[4]);\n\
+         \x20   if (this.ticks > 64) triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", temp.l[4]);\n\
+         \x20   else this.wantworld = temp.l[4];\n\
          \x20   pw3dLoad(temp.l[4]);\n\
          \x20 }}\n\
          \x20 this.px = temp.nx;\n\
