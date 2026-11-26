@@ -19,6 +19,7 @@ gui = ["dep:seihai-servertools-gui"]
 
 [dependencies]
 # One line per tool; each is also its own binary (tools/<tool>/README.md).
+seihai-guide.workspace = true
 seihai-lab.workspace = true
 seihai-setup.workspace = true
 seihai-check.workspace = true

@@ -7,8 +7,9 @@ Each one builds, tests and runs on its own; `seihai-servertools` (in
 
 | Tool | Program | What |
 |---|---|---|
+| [guide](guide/README.md) | `seihai-guide` | How the servers fit together, every tool, setup, RC, troubleshooting |
 | [lab](lab/README.md) | `seihai-lab` | One-step lab start: listserver and gservers, stopped together |
-| [setup](setup/README.md) | `seihai-setup` | Go public and back, host a listserver, player limit, HQ password |
+| [setup](setup/README.md) | `seihai-setup` | A server from scratch (`setup new`), go public and back, host a listserver, player limit, HQ password |
 | [check](check/README.md) | `seihai-check` | World and config checker (`--json` for CI) |
 | [code](code/README.md) | `seihai-code` | Client `.code` caches: show, CRC, dump, pack |
 | [gpak](gpak/README.md) | `seihai-gpak` | Resource packages `.gpak` / `.gpake` |
