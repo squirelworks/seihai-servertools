@@ -80,6 +80,14 @@ fn opt(v: Option<f32>) -> String {
     v.map_or_else(|| "\"k\"".to_string(), num)
 }
 
+/// A sign's text for one line: GS1's `#b` line breaks become spaces.
+fn sign_text(t: &str) -> String {
+    t.replace("#b", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// The whole weapon for these worlds.
 pub fn script(worlds: &[World]) -> String {
     let start = worlds
@@ -127,16 +135,21 @@ pub fn script(worlds: &[World]) -> String {
         sy = num(start.spawn.1)
     ));
     t.push_str(&format!(
-        "function pw3dKind(x, y) {{\n\
-         \x20 if (x < 0 || y < 0 || x >= this.w || y >= this.h) return \"#\";\n\
-         \x20 temp.row = this.rows[y];\n\
+        "// A real 5.12 running seihai-core's bytecode misreads a variable or\n\
+         // parameter given straight to .pos(), .charat() or an index (lab,\n\
+         // 2026-11-26): each goes through a temp or an expression.\n\
+         function pw3dKind(x, y) {{\n\
+         \x20 temp.x = x + 0;\n\
+         \x20 temp.y = y + 0;\n\
+         \x20 if (temp.x < 0 || temp.y < 0 || temp.x >= this.w || temp.y >= this.h) return \"#\";\n\
+         \x20 temp.row = this.rows[temp.y + 0];\n\
          \x20 temp.n = 0;\n\
          \x20 temp.at = 0;\n\
          \x20 for (temp.i = 0; temp.i < temp.row.length(); temp.i++) {{\n\
-         \x20   temp.c = temp.row.charat(temp.i);\n\
-         \x20   if (\"0123456789\".pos(temp.c) < 0) {{\n\
+         \x20   temp.c = temp.row.charat(temp.i + 0);\n\
+         \x20   if (\"0123456789\".pos(temp.c @ \"\") < 0) {{\n\
          \x20     temp.at += temp.n;\n\
-         \x20     if (x < temp.at) return temp.c;\n\
+         \x20     if (temp.x < temp.at) return temp.c;\n\
          \x20     temp.n = 0;\n\
          \x20   }} else temp.n = temp.n * 10 + temp.c;\n\
          \x20 }}\n\
@@ -145,11 +158,13 @@ pub fn script(worlds: &[World]) -> String {
          // A tile's letter is its height: {alpha}, a quarter unit\n\
          // each from -1; the player's origin is 1 above its feet.\n\
          function pw3dZ(k) {{\n\
-         \x20 return \"{alpha}\".pos(k) * 0.25;\n\
+         \x20 return \"{alpha}\".pos(k @ \"\") * 0.25;\n\
          }}\n\n\
          function pw3dStep(dx, dy) {{\n\
-         \x20 temp.nx = this.px + dx * this.step;\n\
-         \x20 temp.ny = this.py + dy * this.step;\n\
+         \x20 temp.dx = dx + 0;\n\
+         \x20 temp.dy = dy + 0;\n\
+         \x20 temp.nx = this.px + temp.dx * this.step;\n\
+         \x20 temp.ny = this.py + temp.dy * this.step;\n\
          \x20 if (temp.nx < 0 || temp.ny < 0) return 0;\n\
          \x20 if (pw3dKind(int(temp.nx), int(temp.ny)) == \"#\") return 0;\n\
          \x20 this.px = temp.nx;\n\
@@ -164,10 +179,13 @@ pub fn script(worlds: &[World]) -> String {
          // The camera 5 behind (south of) the player and 3 above, looking\n\
          // north and down (the lab #458 walker's camera).\n\
          function pw3dCamera(x, y, z) {{\n\
+         \x20 temp.x = x + 0;\n\
+         \x20 temp.y = y + 0;\n\
+         \x20 temp.z = z + 0;\n\
          \x20 temp.cam = ServerConnection.camera;\n\
          \x20 if (temp.cam == NULL) return;\n\
          \x20 temp.cam.cameramode = \"free\";\n\
-         \x20 temp.cam.position = format(\"%f %f %f\", x, y - 5, z + 3);\n\
+         \x20 temp.cam.position = format(\"%f %f %f\", temp.x, temp.y - 5, temp.z + 3);\n\
          \x20 temp.cam.eulerrotation = \"0.5 0 0\";\n\
          \x20 temp.cam.updatePosition();\n\
          }}\n\n\
@@ -187,13 +205,14 @@ pub fn script(worlds: &[World]) -> String {
          // l: x, y, w, h, world, dest origin x, y, dest x, y (\"k\" keeps the\n\
          // coordinate), keep offset x, y, origin x, y of the link's level.\n\
          function pw3dTake(l) {{\n\
-         \x20 if (l[7] == \"k\") temp.nx = this.px - l[11] + l[9] + l[5];\n\
-         \x20 else temp.nx = l[7] + l[5];\n\
-         \x20 if (l[8] == \"k\") temp.ny = this.py - l[12] + l[10] + l[6];\n\
-         \x20 else temp.ny = l[8] + l[6];\n\
-         \x20 if (l[4] != this.world) {{\n\
-         \x20   triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", l[4]);\n\
-         \x20   pw3dLoad(l[4]);\n\
+         \x20 temp.l = l;\n\
+         \x20 if (temp.l[7] == \"k\") temp.nx = this.px - temp.l[11] + temp.l[9] + temp.l[5];\n\
+         \x20 else temp.nx = temp.l[7] + temp.l[5];\n\
+         \x20 if (temp.l[8] == \"k\") temp.ny = this.py - temp.l[12] + temp.l[10] + temp.l[6];\n\
+         \x20 else temp.ny = temp.l[8] + temp.l[6];\n\
+         \x20 if (temp.l[4] != this.world) {{\n\
+         \x20   triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", temp.l[4]);\n\
+         \x20   pw3dLoad(temp.l[4]);\n\
          \x20 }}\n\
          \x20 this.px = temp.nx;\n\
          \x20 this.py = temp.ny;\n\
@@ -209,16 +228,21 @@ pub fn script(worlds: &[World]) -> String {
          \x20 }}\n\
          \x20 if (temp.text == this.signshown) return;\n\
          \x20 this.signshown = temp.text;\n\
+         \x20 // showtext draws nothing in 5.12's 3D view (lab, 2026-11-26); the\n\
+         \x20 // player's chat line is tried as well.\n\
+         \x20 player.chat = temp.text;\n\
          \x20 if (temp.text == \"\") hideimg(200);\n\
          \x20 else showtext(200, 20, 20, \"Arial\", \"b\", temp.text);\n\
          }}\n\n",
         alpha = ALPHA,
     ));
     // The worlds' data.
-    t.push_str("function pw3dLoad(name) {\n  this.world = name;\n");
+    t.push_str(
+        "function pw3dLoad(name) {\n  temp.name = name @ \"\";\n  this.world = temp.name;\n",
+    );
     for (i, w) in worlds.iter().enumerate() {
         t.push_str(&format!(
-            "  {}if (name == {}) {{\n    this.w = {};\n    this.h = {};\n    this.rows = {{\n",
+            "  {}if (temp.name == {}) {{\n    this.w = {};\n    this.h = {};\n    this.rows = {{\n",
             if i == 0 { "" } else { "else " },
             lit(&w.name),
             w.tiles_w(),
@@ -260,7 +284,7 @@ pub fn script(worlds: &[World]) -> String {
         let signs: Vec<String> = w
             .signs
             .iter()
-            .map(|s| format!("      {{{}, {}, {}}}", s.x, s.y, lit(&s.text)))
+            .map(|s| format!("      {{{}, {}, {}}}", s.x, s.y, lit(&sign_text(&s.text))))
             .collect();
         t.push_str(&signs.join(",\n"));
         t.push_str("\n    };\n  }\n");
@@ -277,6 +301,11 @@ mod tests {
     fn rows_are_runs() {
         assert_eq!(rle_row("...##.".chars()), "3.2#1.");
         assert_eq!(rle_row("".chars()), "");
+    }
+
+    #[test]
+    fn sign_lines_join() {
+        assert_eq!(sign_text("Hello#bthere #b  you"), "Hello there you");
     }
 
     #[test]

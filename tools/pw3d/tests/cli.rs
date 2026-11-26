@@ -62,7 +62,10 @@ fn world(dir: &Path) {
         "levels/house.nw",
         level("LINK start.nw 0 28 1 8 62 playery\n"),
     );
-    w("fields_a.nw", level("LINK start.nw 63 28 1 8 1 32\n"));
+    w(
+        "fields_a.nw",
+        level("LINK start.nw 63 28 1 8 1 32\nLINK fields_b.nw 63 40 1 8 0 playery\n"),
+    );
     w("fields_b.nw", level("BADDY 30 30 0\n\n\n\nBADDYEND\n"));
     w(
         "fields.gmap",
@@ -136,6 +139,9 @@ fn converts_a_small_world() {
     assert!(walk.contains("{0, 28, 1, 8, \"fields\", 0, 0, 62, 32, 0, 0, 0, 0}"));
     // From fields_a back to start: the link's own level is at 0,0 in fields.
     assert!(walk.contains("{63, 28, 1, 8, \"default\", 0, 0, 1, 32, 0, 0, 0, 0}"));
+    // Inside the gmap, the edge link from fields_a to fields_b is dropped:
+    // the two levels touch and the player walks across.
+    assert!(!walk.contains("{63, 40, 1, 8, \"fields\""), "{walk}");
     assert!(walk.contains("Welcome to the \\\"test\\\" world"));
     assert!(
         walk.contains("\"1#62e1#\""),
