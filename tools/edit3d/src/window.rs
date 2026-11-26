@@ -599,6 +599,7 @@ impl Editor {
                         shape: self.place_shape.clone(),
                         pos: p,
                         turn: None,
+                        rest: Vec::new(),
                     };
                     self.checkpoint();
                     match self.world.doc.add_object(&o) {

@@ -461,6 +461,7 @@ mod tests {
                 shape: "nope.3ds".into(),
                 pos: [0.0; 3],
                 turn: None,
+                rest: Vec::new(),
             })
             .unwrap();
         let (_, notes) = w.scene(1);

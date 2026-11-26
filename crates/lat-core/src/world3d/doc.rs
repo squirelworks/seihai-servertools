@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 /// Every key seihai-gserver reads in a world file.
-pub const KEYS: [&str; 15] = [
+pub const KEYS: [&str; 17] = [
     "object",
     "objectfor",
     "sun",
@@ -27,6 +27,9 @@ pub const KEYS: [&str; 15] = [
     "terrain",
     "water",
     "replicator",
+    // Lab entries.
+    "rawobject",
+    "rawevent",
 ];
 
 /// A rotation: an axis and an angle in radians, as the world file and the
@@ -59,6 +62,9 @@ pub struct Object {
     pub shape: String,
     pub pos: [f64; 3],
     pub turn: Option<Turn>,
+    /// Words after the turn (seihai-gserver reads a scale `sx sy sz`
+    /// there), kept as written.
+    pub rest: Vec<String>,
 }
 
 /// The `sun` line.
@@ -212,6 +218,12 @@ impl Object {
             shape: w[1].to_string(),
             pos,
             turn,
+            rest: w
+                .get(9..)
+                .unwrap_or(&[])
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         })
     }
 
@@ -236,6 +248,10 @@ impl Object {
                 fmt_num(t.axis[2]),
                 fmt_num(t.angle)
             ));
+            for r in &self.rest {
+                out.push(' ');
+                out.push_str(r);
+            }
         }
         out
     }
@@ -602,7 +618,7 @@ mod tests {
 sun 0.57735 0.57735 -0.57735 0.8 0.8 0.8 1 0.3 0.3 0.35 1
 sky sky_fr,sky_rt,sky_bk,sky_lf,sky_up,sky_dn 500
 object house house.dif 4 4 0   # the inn
-objectfor one,two door door.3ds 2 2 0  0 0 1 1.5
+objectfor one,two door door.3ds 2 2 0  0 0 1 1.5 2 2 1
   object Tree1 tree.3ds 10.5 -3 0.25
 playershape labcube.3ds
 terrain world/island 4 repeat
@@ -649,6 +665,13 @@ spawn 0 0 1
         inn.pos = [5.0, 4.0, -0.0];
         inn.turn = Some(Turn::about_z(0.5));
         d.set_object("house", &inn).unwrap();
+        let mut door = d.object("door").unwrap();
+        assert_eq!(door.rest, vec!["2", "2", "1"]);
+        door.pos[0] = 3.0;
+        d.set_object("door", &door).unwrap();
+        assert!(d
+            .text()
+            .contains("objectfor one,two door door.3ds 3 2 0  0 0 1 1.5 2 2 1\n"));
         let mut tree = d.object("Tree1").unwrap();
         tree.pos[2] = 1.0;
         d.set_object("Tree1", &tree).unwrap();
@@ -660,7 +683,7 @@ spawn 0 0 1
             .zip(SAMPLE.lines())
             .filter(|(a, b)| a != b)
             .collect();
-        assert_eq!(changed.len(), 2);
+        assert_eq!(changed.len(), 3);
     }
 
     #[test]
@@ -674,6 +697,7 @@ spawn 0 0 1
             shape: "house.dif".into(),
             pos: [1.0, 2.0, 3.0],
             turn: None,
+            rest: Vec::new(),
         })
         .unwrap();
         // Right after the last object line.
@@ -684,7 +708,8 @@ spawn 0 0 1
                 name: "house".into(),
                 shape: "x.3ds".into(),
                 pos: [0.0; 3],
-                turn: None
+                turn: None,
+                rest: Vec::new(),
             })
             .is_err());
         d.remove_object("door").unwrap();

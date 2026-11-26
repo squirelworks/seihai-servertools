@@ -253,6 +253,7 @@ fn go(args: &[&str]) -> Result<(), String> {
                     shape: a.pos[2].to_string(),
                     pos: [x, y, z],
                     turn,
+                    rest: Vec::new(),
                 })?;
             } else {
                 let mut o = w
