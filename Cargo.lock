@@ -2987,6 +2987,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seihai-edit3d"
+version = "0.0.1"
+dependencies = [
+ "eframe",
+ "egui",
+ "lat-core",
+ "setup-core",
+ "tempfile",
+]
+
+[[package]]
 name = "seihai-gani"
 version = "0.0.1"
 dependencies = [
@@ -3074,6 +3085,7 @@ version = "0.0.1"
 dependencies = [
  "seihai-check",
  "seihai-code",
+ "seihai-edit3d",
  "seihai-gani",
  "seihai-gen",
  "seihai-gif2mng",

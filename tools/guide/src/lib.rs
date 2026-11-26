@@ -150,6 +150,9 @@ Building a world
   gif2mng      GIF art as PNG or MNG for clients that want those.
   pw3d         a 2D playerworld as 3D worlds for seihai-gserver: reads what
                the tiles show (--objects) and builds hills, trees and houses.
+  edit3d       the 3D level editor: place, move and turn objects in a 3D
+               world file, set the spawn and sun, raise, flatten and paint
+               the streamed terrain, with a live preview.
   gpak         resource packages (.gpak, encrypted .gpake) for 4.20 and 6.x.
   code         the client's .code caches: show, CRC, dump, pack.
 

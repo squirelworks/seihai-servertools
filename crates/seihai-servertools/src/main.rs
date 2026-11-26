@@ -54,6 +54,9 @@ Usage:
   seihai-servertools pw3d INPUT OUT [...]
                                     a 2D playerworld as 3D worlds for seihai-gserver
                                     (`pw3d --help`)
+  seihai-servertools edit3d FOLDER [--world NAME] | show|add|move|remove|spawn|terrain|render ...
+                                    the 3D level editor: a world file and its terrain, with a
+                                    live preview (`edit3d --help`)
   seihai-servertools gui [--world DIR] [--page lab|setup|levels|npcs|database|ganis|packages|check]
                                     open the window
   seihai-servertools --version | --help
@@ -61,7 +64,7 @@ Usage:
 Every command is also its own program, built and run on its own:
 seihai-guide, seihai-lab, seihai-setup, seihai-check, seihai-code, seihai-gpak,
 seihai-level, seihai-theme, seihai-gmap, seihai-gani, seihai-gen,
-seihai-stats, seihai-gif2mng, seihai-pw3d and seihai-servertools-gui take the same
+seihai-stats, seihai-gif2mng, seihai-pw3d, seihai-edit3d and seihai-servertools-gui take the same
 words after the command name (`seihai-gpak pack ...`). `seihai-servertools
 COMMAND --help` and `seihai-COMMAND --help` print a command's options.";
 
@@ -110,6 +113,7 @@ fn dispatch(tool: &str, rest: &[&str]) -> Option<ExitCode> {
         "stats" => seihai_stats::run(rest),
         "gif2mng" => seihai_gif2mng::run(rest),
         "pw3d" => seihai_pw3d::run(rest),
+        "edit3d" => seihai_edit3d::run(rest),
         "gui" => gui(rest),
         _ => return None,
     })

@@ -15,7 +15,7 @@ path = "src/main.rs"
 # The window (`seihai-servertools gui`). On by default; build with
 # `--no-default-features` for a command-line-only binary on a headless server.
 default = ["gui"]
-gui = ["dep:seihai-servertools-gui"]
+gui = ["dep:seihai-servertools-gui", "seihai-edit3d/window"]
 
 [dependencies]
 # One line per tool; each is also its own binary (tools/<tool>/README.md).
@@ -33,6 +33,8 @@ seihai-gen.workspace = true
 seihai-stats.workspace = true
 seihai-gif2mng.workspace = true
 seihai-pw3d.workspace = true
+# Its window comes with the `gui` feature; the edit commands work without.
+seihai-edit3d = { workspace = true, default-features = false }
 seihai-servertools-gui = { workspace = true, optional = true }
 
 [dev-dependencies]

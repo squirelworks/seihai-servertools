@@ -53,4 +53,5 @@ pub mod render;
 pub mod terrain3d;
 pub mod terrain_chunks;
 pub mod tmx;
+pub mod world3d;
 pub mod worldmap;

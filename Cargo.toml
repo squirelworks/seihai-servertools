@@ -73,5 +73,6 @@ seihai-gen = { path = "tools/gen" }
 seihai-stats = { path = "tools/stats" }
 seihai-gif2mng = { path = "tools/gif2mng" }
 seihai-pw3d = { path = "tools/pw3d" }
+seihai-edit3d = { path = "tools/edit3d", default-features = false }
 seihai-servertools-gui = { path = "tools/gui" }
 
