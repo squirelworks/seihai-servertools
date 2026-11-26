@@ -21,6 +21,7 @@ Each one builds, tests and runs on its own; `seihai-servertools` (in
 | [stats](stats/README.md) | `seihai-stats` | Leaderboard pages from accounts |
 | [gif2mng](gif2mng/README.md) | `seihai-gif2mng` | GIF to PNG or MNG |
 | [pw3d](pw3d/README.md) | `seihai-pw3d` | A 2D playerworld as 3D worlds for seihai-gserver |
+| [edit3d](edit3d/README.md) | `seihai-edit3d` | The 3D level editor: world file, terrain, live preview |
 | [gui](gui/README.md) | `seihai-servertools-gui` | The window |
 | [suite-stress](suite-stress/README.md) | `seihai-suite-stress` | Stress rig for the whole server suite |
 

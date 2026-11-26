@@ -56,13 +56,14 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 | Gmap from levels: a list, generator names, or a linked world's edge links | `seihai-servertools gmap make` | working |
 | World generators: height field (2D, 3D with `--3d`, streamed client terrain with `--stream`, or 3D from an existing gmap with `gen 3d`; `--playerworld` lays it out as a gserver folder), from a picture, dungeon | `seihai-servertools gen terrain\|3d\|image\|dungeon` | working (3D output not yet client-tested) |
 | 2D playerworld to 3D: each level a coloured 3D ground, gmaps as one world, links, walls and signs through a walker weapon ([tools/pw3d](tools/pw3d/README.md)) | `seihai-pw3d INPUT OUT` or `seihai-servertools pw3d` | prototype (lab runs on a real 5.12 under way) |
+| 3D level editor: a 3D world file and its streamed terrain, with a live preview; objects, spawn, sun, terrain brushes, saved with backups ([tools/edit3d](tools/edit3d/README.md)) | `seihai-edit3d FOLDER` or `seihai-servertools edit3d` | scaffold (window, edit commands, built-in preview; not yet used on a real client's world) |
 | Leaderboard pages from seihai-gserver accounts (gserverstat's job) | `seihai-servertools stats` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
 Every command is also its own program, built, tested and run on its own:
 `seihai-guide`, `seihai-lab`, `seihai-setup`, `seihai-check`, `seihai-code`, `seihai-gpak`,
 `seihai-level`, `seihai-theme`, `seihai-gmap`, `seihai-gani`, `seihai-gen`,
-`seihai-stats`, `seihai-gif2mng` and `seihai-servertools-gui` take the same
+`seihai-stats`, `seihai-gif2mng`, `seihai-pw3d`, `seihai-edit3d` and `seihai-servertools-gui` take the same
 words after their name (`seihai-gpak pack ...` is `seihai-servertools gpak
 pack ...`). Each lives in `tools/<tool>/` with its own README; the list and
 the rules for a new tool are in [tools/README.md](tools/README.md).
