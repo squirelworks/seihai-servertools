@@ -112,7 +112,14 @@ impl Kind {
 pub fn kind_of_name(name: &str) -> Option<Kind> {
     let n = name.to_lowercase();
     let has = |w: &str| n.contains(w);
-    Some(if has("door") || has("cave") || has("entrance") {
+    // A floor is a floor whatever room it is in ("CastleFloor Red",
+    // "CastleCarpet Border"); the black void round rooms and caves is a hole.
+    let floor = (has("floor") || has("carpet")) && !has("carpet+");
+    Some(if floor {
+        Kind::Ground
+    } else if has("blackness") {
+        Kind::Hole
+    } else if has("door") || has("cave") || has("entrance") {
         Kind::Door
     } else if has("stair") {
         Kind::Stairs
@@ -315,10 +322,16 @@ impl Meanings {
                 } else {
                     Kind::Ground
                 }
+            } else if wall && v.contains_key(&Kind::Hole) {
+                // The black void a "Blackness" stamp names, whatever else
+                // (a cathedral, a cave entry) is drawn round it.
+                Kind::Hole
             } else if !wall
                 && kinds >= 2
-                && !matches!(best, Kind::Path | Kind::Stairs | Kind::Bridge | Kind::Door)
+                && !matches!(best, Kind::Path | Kind::Stairs | Kind::Bridge)
             {
+                // Ground several stamps share: under doors too (a castle
+                // floor tile that a door stamp also uses).
                 Kind::Ground
             } else if !wall
                 && matches!(
@@ -390,6 +403,9 @@ mod tests {
         assert_eq!(kind_of_name("Lava Bridge East/West"), Some(Kind::Bridge));
         assert_eq!(kind_of_name("VillageWay Vertical"), Some(Kind::Path));
         assert_eq!(kind_of_name("Dining Table"), Some(Kind::Furniture));
+        assert_eq!(kind_of_name("CastleFloor Red"), Some(Kind::Ground));
+        assert_eq!(kind_of_name("CastleCarpet Border"), Some(Kind::Ground));
+        assert_eq!(kind_of_name("Blackness"), Some(Kind::Hole));
         assert_eq!(kind_of_name("Alien Pipe"), None);
     }
 

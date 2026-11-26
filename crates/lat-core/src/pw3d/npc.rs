@@ -243,6 +243,20 @@ pub fn npc_shape(
         }
         cy += step;
     }
+    // A big picture (a tree, 3 tiles wide and over 6 tall) is also a
+    // board facing east, the same
+    // picture turned a quarter round its middle, so it does not vanish
+    // when seen from the side.
+    if bh > 96 && bw >= 48 {
+        let cx = x + (b.0 + b.2) as f32 / 2.0 / PX;
+        let mut turned = s.clone();
+        for p in &mut turned.points {
+            let (dx, dy) = (p[0] - cx, p[1] - base_y);
+            p[0] = cx + dy;
+            p[1] = base_y - dx;
+        }
+        s.extend(&turned);
+    }
     (s, Made::Picture)
 }
 
@@ -319,7 +333,13 @@ mod tests {
         let tree = picture(128, 160, |x, y| Some([(x * 2) as u8, y as u8, 90]));
         let (s, made) = npc_shape(Some(&tree), None, 0.0, 0.0, 0.0, &q);
         assert_eq!(made, Made::Picture);
-        assert!(s.faces.len() <= 16 * 16 * 10, "{}", s.faces.len());
+        assert!(s.faces.len() <= 2 * 16 * 16 * 10, "{}", s.faces.len());
+        // A tall picture is a cross of two boards, so it has depth both ways.
+        let span = |k: usize| {
+            let v = s.points.iter().map(|p| p[k]);
+            v.clone().fold(f32::MIN, f32::max) - v.fold(f32::MAX, f32::min)
+        };
+        assert!(span(0) > 7.0 && span(1) > 7.0, "{} {}", span(0), span(1));
     }
 
     #[test]

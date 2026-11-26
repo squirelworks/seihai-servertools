@@ -231,6 +231,10 @@ pub struct Converted {
     pub levels: Vec<LevelReport>,
     pub warnings: Vec<String>,
     pub files: Vec<File>,
+    /// The object sets read (file, stamps) and how many stamp names said
+    /// nothing.
+    pub object_sets: Vec<(String, usize)>,
+    pub unnamed_stamps: usize,
 }
 
 /// World names: lower case, letters, digits, `_` and `-`.
@@ -512,6 +516,8 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
         None => Vec::new(),
     };
     let meanings = Meanings::new(&sets, &types);
+    out.object_sets = meanings.sources.clone();
+    out.unnamed_stamps = meanings.unnamed.len();
 
     // Every level and gmap under the input folder, by lower-cased file name.
     let mut paths = Vec::new();
@@ -1131,6 +1137,20 @@ fn report(c: &Converted, o: &Options) -> String {
             )),
         o.wall_height
     ));
+    if c.object_sets.is_empty() {
+        t.push_str("No object sets (--objects): tiles are read by their tiledefs type only.\n\n");
+    } else {
+        let total: usize = c.object_sets.iter().map(|s| s.1).sum();
+        t.push_str(&format!(
+            "What the tiles show, from {} object sets, {total} stamps ({} with names that say nothing):",
+            c.object_sets.len(),
+            c.unnamed_stamps
+        ));
+        for (f, n) in &c.object_sets {
+            t.push_str(&format!(" `{f}` {n};"));
+        }
+        t.push_str("\n\n");
+    }
     t.push_str(
         "This folder holds the playerworld's own levels; keep it local and do not publish it.\n\n",
     );
