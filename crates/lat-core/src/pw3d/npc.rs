@@ -163,7 +163,8 @@ pub fn npc_shape(
     quantise: &dyn Fn([u32; 3]) -> Colour,
 ) -> (Shape, Made) {
     const SKIN: Colour = Colour([230, 190, 150]);
-    const CLOTH: Colour = Colour([90, 110, 150]);
+    // Not the player's blue (convert.rs), so an NPC is not taken for it.
+    const CLOTH: Colour = Colour([150, 120, 80]);
     let Some(img) = img else {
         return (figure(x + 1.0, -y - 1.5, z, CLOTH, SKIN), Made::Guess);
     };
@@ -185,7 +186,9 @@ pub fn npc_shape(
         return (figure(x + 1.0, -y - 1.5, z, body, head), Made::Figure);
     }
     // The cut-out stands on the bottom edge of the picture's footprint.
-    let step = if bw.max(bh) > 64 { 4 } else { 2 };
+    // At most about 16 squares along the longer side, so a big picture
+    // (a 128 x 160 tree) stays a small shape.
+    let step = bw.max(bh).div_ceil(16).max(2);
     let base_y = -(y + b.3 as f32 / PX) + 0.5;
     let (yf, yb) = (base_y - DEPTH / 2.0, base_y + DEPTH / 2.0);
     let top = z + bh as f32 / PX;
@@ -194,6 +197,7 @@ pub fn npc_shape(
     while cy < b.3 {
         // Runs of equal colour along a row of cells.
         let mut run: Option<(u32, Colour)> = None;
+        let mut open_left = true;
         let mut cx = b.0;
         let z1 = top - (cy - b.1) as f32 / PX;
         let z0 = top - ((cy + step).min(b.3) - b.1) as f32 / PX;
@@ -205,7 +209,7 @@ pub fn npc_shape(
             if run.map(|r| r.1) != c {
                 if let Some((start, col)) = run {
                     let (x0, x1) = (x + start as f32 / PX, x + cx.min(b.2) as f32 / PX);
-                    // Front (south) and back, and the run's ends and edges.
+                    // Front (south) and back.
                     s.quad(
                         [[x0, yf, z0], [x1, yf, z0], [x1, yf, z1], [x0, yf, z1]],
                         col,
@@ -214,19 +218,22 @@ pub fn npc_shape(
                         [[x1, yb, z0], [x0, yb, z0], [x0, yb, z1], [x1, yb, z1]],
                         col.shade(0.8),
                     );
-                    s.quad(
-                        [[x0, yb, z1], [x0, yf, z1], [x1, yf, z1], [x1, yb, z1]],
-                        col,
-                    );
-                    s.quad(
-                        [[x0, yb, z0], [x0, yf, z0], [x0, yf, z1], [x0, yb, z1]],
-                        col.shade(0.7),
-                    );
-                    s.quad(
-                        [[x1, yf, z0], [x1, yb, z0], [x1, yb, z1], [x1, yf, z1]],
-                        col.shade(0.7),
-                    );
+                    // Edges only where the picture ends, so a board of many
+                    // colours stays two faces a run.
+                    if open_left {
+                        s.quad(
+                            [[x0, yb, z0], [x0, yf, z0], [x0, yf, z1], [x0, yb, z1]],
+                            col.shade(0.7),
+                        );
+                    }
+                    if c.is_none() {
+                        s.quad(
+                            [[x1, yf, z0], [x1, yb, z0], [x1, yb, z1], [x1, yf, z1]],
+                            col.shade(0.7),
+                        );
+                    }
                 }
+                open_left = run.is_none();
                 run = c.map(|col| (cx, col));
             }
             if cx >= b.2 {
@@ -308,6 +315,11 @@ mod tests {
             Made::Figure
         );
         assert_eq!(npc_shape(None, None, 0.0, 0.0, 0.0, &q).1, Made::Guess);
+        // A 128 x 160 picture stays at most 16 x 16 squares (5 quads each).
+        let tree = picture(128, 160, |x, y| Some([(x * 2) as u8, y as u8, 90]));
+        let (s, made) = npc_shape(Some(&tree), None, 0.0, 0.0, 0.0, &q);
+        assert_eq!(made, Made::Picture);
+        assert!(s.faces.len() <= 16 * 16 * 10, "{}", s.faces.len());
     }
 
     #[test]

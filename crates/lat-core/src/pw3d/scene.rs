@@ -2,12 +2,14 @@
 //! ([`super::meaning`]):
 //!
 //! * **Elevation.** A 2D level draws a raised area in three-quarter view:
-//!   the cliff face shows below the higher ground. So the ground is cut
-//!   into regions at cliff and stair tiles, every vertical run of cliff
-//!   tiles says the region above it stands that much higher than the one
-//!   below (0.75 a tile of face), and the heights are solved outward from
-//!   the largest region. Cliff tiles take the height of the ground above
-//!   them, so their south edge is the face; stairs sit half way.
+//!   the cliff face shows below the higher ground. Every vertical run of
+//!   cliff face (cliff tiles in a band at least two wide) says the ground
+//!   above it stands that much higher than the ground below (0.75 a tile
+//!   of face), neighbours want the same height, and the heights are solved
+//!   together ([`elevation`]): a closed cliff gives a flat plateau, an open
+//!   one a hill that ramps round its ends. Cliff tiles take the height of
+//!   the ground above them, so their south edge is the face; stairs sit
+//!   half way; a lone cliff tile is ground.
 //! * **Ground.** Every tile is a flat top at its height in its own colour,
 //!   with sides down to lower neighbours; water and lava are sunk, holes
 //!   deep, walls and castle walls raised, hedges and fences a tile high.
@@ -199,108 +201,171 @@ fn split(g: &[(i32, i32)], per: usize) -> Vec<Vec<(i32, i32)>> {
 }
 
 /// Region heights from cliff runs.
-fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize) {
-    let barrier = |k: Kind| matches!(k, Kind::Cliff | Kind::Stairs);
-    let mut region = vec![usize::MAX; t.w * t.h];
-    let mut sizes = Vec::new();
+/// Cliff tiles that make a face: part of a band at least two tiles wide.
+/// A lone cliff tile (a patterned floor, a single post) is ground.
+fn faces(t: &Tiles) -> Vec<bool> {
+    let cliff = |x: i32, y: i32| t.ok(x, y).is_some_and(|i| t.kind[i] == Kind::Cliff);
+    let mut f = vec![false; t.w * t.h];
     for y in 0..t.h as i32 {
         for x in 0..t.w as i32 {
-            let Some(i) = t.ok(x, y) else { continue };
-            if region[i] != usize::MAX || barrier(t.kind[i]) {
-                continue;
+            if cliff(x, y) && (cliff(x - 1, y) || cliff(x + 1, y)) {
+                f[y as usize * t.w + x as usize] = true;
             }
-            let r = sizes.len();
-            let mut n = 0;
-            let mut q = VecDeque::from([(x, y)]);
-            region[i] = r;
-            while let Some((cx, cy)) = q.pop_front() {
-                n += 1;
-                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-                    if let Some(j) = t.ok(cx + dx, cy + dy) {
-                        if region[j] == usize::MAX && !barrier(t.kind[j]) {
-                            region[j] = r;
-                            q.push_back((cx + dx, cy + dy));
-                        }
-                    }
-                }
-            }
-            sizes.push(n);
         }
     }
-    let nr = sizes.len();
-    // e[a] - e[b] votes for each pair, from vertical cliff runs.
-    let mut votes: HashMap<(usize, usize), Vec<f32>> = HashMap::new();
+    f
+}
+
+/// Ground heights, solved as a smooth field: neighbours want the same
+/// height, and each vertical run of cliff face wants the ground above it
+/// `run x FACE` higher than the ground below (much more strongly). Where
+/// the cliffs close a region it comes out flat at its height; where a
+/// cliff ends in open ground, the ground ramps round its end, so a cliff
+/// that is not closed still makes a hill. Heights are rounded to half
+/// units, so gentle slopes are a few clear steps. Returns the heights, the number of separate
+/// ground regions and how many of them stand raised.
+fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize) {
+    let face = faces(t);
+    let barrier = |i: usize| face[i] || t.kind[i] == Kind::Stairs;
+    let n = t.w * t.h;
+    let free: Vec<bool> = (0..n)
+        .map(|i| t.ground[i].is_some() && !barrier(i))
+        .collect();
+    // Cliff runs: (above, below, wanted difference).
+    let mut runs: Vec<(usize, usize, f32)> = Vec::new();
     for x in 0..t.w as i32 {
         let mut y = 0i32;
         while y < t.h as i32 {
-            let is_cliff = |y: i32| t.ok(x, y).is_some_and(|i| t.kind[i] == Kind::Cliff);
-            if !is_cliff(y) {
+            let is_face = |y: i32| t.ok(x, y).is_some_and(|i| face[i]);
+            if !is_face(y) {
                 y += 1;
                 continue;
             }
             let y0 = y;
-            while is_cliff(y) {
+            while is_face(y) {
                 y += 1;
             }
-            let (above, below) = (t.ok(x, y0 - 1), t.ok(x, y));
-            if let (Some(a), Some(b)) = (above, below) {
-                let (ra, rb) = (region[a], region[b]);
-                if ra != usize::MAX && rb != usize::MAX && ra != rb {
-                    let d = (y - y0) as f32 * FACE;
-                    if ra < rb {
-                        votes.entry((ra, rb)).or_default().push(d);
-                    } else {
-                        votes.entry((rb, ra)).or_default().push(-d);
-                    }
+            if let (Some(a), Some(b)) = (t.ok(x, y0 - 1), t.ok(x, y)) {
+                if free[a] && free[b] {
+                    runs.push((a, b, (y - y0) as f32 * FACE));
                 }
             }
         }
     }
-    let mut edges: HashMap<usize, Vec<(usize, f32)>> = HashMap::new();
-    for ((a, b), mut v) in votes {
-        v.sort_by(f32::total_cmp);
-        let d = v[v.len() / 2];
-        edges.entry(a).or_default().push((b, -d));
-        edges.entry(b).or_default().push((a, d));
+    // Minimise sum (h_i - h_j)^2 over neighbours + W sum (h_a - h_b - d)^2
+    // (+ a tiny pull to 0 so the system has one answer), by conjugate
+    // gradients on the normal equations A h = r.
+    const W: f32 = 30.0;
+    const EPS: f32 = 1e-4;
+    let nb = |i: usize| {
+        let (x, y) = ((i % t.w) as i32, (i / t.w) as i32);
+        [(1, 0), (-1, 0), (0, 1), (0, -1)]
+            .into_iter()
+            .filter_map(move |(dx, dy)| t.ok(x + dx, y + dy))
+    };
+    let apply = |h: &[f32], out: &mut [f32]| {
+        for i in 0..n {
+            if !free[i] {
+                out[i] = 0.0;
+                continue;
+            }
+            let mut v = EPS * h[i];
+            for j in nb(i) {
+                if free[j] {
+                    v += h[i] - h[j];
+                }
+            }
+            out[i] = v;
+        }
+        for &(a, b, _) in &runs {
+            let d = W * (h[a] - h[b]);
+            out[a] += d;
+            out[b] -= d;
+        }
+    };
+    let mut rhs = vec![0.0f32; n];
+    for &(a, b, d) in &runs {
+        rhs[a] += W * d;
+        rhs[b] -= W * d;
     }
-    // Solve outward from the largest region, the biggest regions first.
-    let mut e = vec![f32::NAN; nr];
-    let mut order: Vec<usize> = (0..nr).collect();
-    order.sort_by_key(|&r| std::cmp::Reverse(sizes[r]));
-    for &root in &order {
-        if !e[root].is_nan() {
+    let mut h = vec![0.0f32; n];
+    if !runs.is_empty() {
+        let mut r = rhs.clone();
+        let mut p = r.clone();
+        let mut ap = vec![0.0f32; n];
+        let dot = |a: &[f32], b: &[f32]| {
+            a.iter()
+                .zip(b)
+                .map(|(x, y)| f64::from(*x) * f64::from(*y))
+                .sum::<f64>()
+        };
+        let mut rr = dot(&r, &r);
+        let stop = rr * 1e-10;
+        for _ in 0..(4 * (t.w + t.h)).max(200) {
+            if rr <= stop {
+                break;
+            }
+            apply(&p, &mut ap);
+            let alpha = (rr / dot(&p, &ap)) as f32;
+            for i in 0..n {
+                h[i] += alpha * p[i];
+                r[i] -= alpha * ap[i];
+            }
+            let rr2 = dot(&r, &r);
+            let beta = (rr2 / rr) as f32;
+            for i in 0..n {
+                p[i] = r[i] + beta * p[i];
+            }
+            rr = rr2;
+        }
+    }
+    let low = (0..n)
+        .filter(|&i| free[i])
+        .map(|i| h[i])
+        .fold(f32::MAX, f32::min);
+    let low = if low == f32::MAX { 0.0 } else { low };
+    let mut tile = vec![0.0f32; n];
+    for i in 0..n {
+        if free[i] {
+            tile[i] = ((h[i] - low) / 0.5).round() * 0.5;
+        }
+    }
+    // Regions, for the report: 4-connected free ground.
+    let mut region = vec![usize::MAX; n];
+    let (mut nr, mut raised) = (0, 0);
+    for s0 in 0..n {
+        if !free[s0] || region[s0] != usize::MAX {
             continue;
         }
-        e[root] = 0.0;
-        let mut q = VecDeque::from([root]);
-        while let Some(r) = q.pop_front() {
-            for &(n, d) in edges.get(&r).map(|v| v.as_slice()).unwrap_or(&[]) {
-                if e[n].is_nan() {
-                    e[n] = e[r] + d;
-                    q.push_back(n);
+        let mut q = VecDeque::from([s0]);
+        region[s0] = nr;
+        let (mut sum, mut cnt) = (0.0f32, 0usize);
+        while let Some(i) = q.pop_front() {
+            sum += tile[i];
+            cnt += 1;
+            for j in nb(i) {
+                if free[j] && region[j] == usize::MAX {
+                    region[j] = nr;
+                    q.push_back(j);
                 }
             }
         }
-    }
-    let low = e.iter().copied().fold(0.0f32, f32::min);
-    let raised = e.iter().filter(|&&v| v - low > 0.01).count();
-    let mut tile = vec![0.0f32; t.w * t.h];
-    for i in 0..tile.len() {
-        if region[i] != usize::MAX {
-            tile[i] = e[region[i]] - low;
+        if sum / cnt as f32 > 0.01 {
+            raised += 1;
         }
+        nr += 1;
     }
     // Cliffs: the ground above their run; stairs: half way.
     for x in 0..t.w as i32 {
         for y in 0..t.h as i32 {
             let Some(i) = t.ok(x, y) else { continue };
-            if !barrier(t.kind[i]) {
+            if !barrier(i) {
                 continue;
             }
             let mut up = None;
             let mut yy = y - 1;
             while let Some(j) = t.ok(x, yy) {
-                if !barrier(t.kind[j]) {
+                if !barrier(j) {
                     up = Some(tile[j]);
                     break;
                 }
@@ -309,7 +374,7 @@ fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize) {
             let mut down = None;
             let mut yy = y + 1;
             while let Some(j) = t.ok(x, yy) {
-                if !barrier(t.kind[j]) {
+                if !barrier(j) {
                     down = Some(tile[j]);
                     break;
                 }
@@ -318,7 +383,7 @@ fn elevation(t: &Tiles) -> (Vec<f32>, usize, usize) {
             let side = [(1, 0), (-1, 0)]
                 .iter()
                 .filter_map(|(dx, dy)| t.ok(x + dx, y + dy))
-                .filter(|&j| !barrier(t.kind[j]))
+                .filter(|&j| !barrier(j))
                 .map(|j| tile[j])
                 .fold(None, |m: Option<f32>, v| Some(m.map_or(v, |m| m.max(v))));
             let hi = [up, down, side]
@@ -647,6 +712,65 @@ mod tests {
         assert!((high - 4.0 * FACE).abs() < 1e-4, "{high}");
         assert_eq!(s.walk[2 * 20 + 5], Some(high));
         assert_eq!(s.counts.raised_regions, 1);
+    }
+
+    #[test]
+    fn an_open_cliff_still_makes_a_hill() {
+        // A face 3 tall across the middle 20 of 40 columns, open at both
+        // ends: the ground above its middle stands high, and ramps down
+        // round the ends to the ground below.
+        let (w, h) = (40, 40);
+        let (g, k, c) = world(w, h, |x, y| {
+            if (10..30).contains(&x) && (20..23).contains(&y) {
+                Kind::Cliff
+            } else {
+                Kind::Ground
+            }
+        });
+        let s = build(
+            &Tiles {
+                w,
+                h,
+                ground: &g,
+                kind: &k,
+                colour: &c,
+                solid: &c,
+            },
+            1.5,
+        );
+        let at = |x: usize, y: usize| s.top[y * w + x];
+        assert!(
+            at(20, 19) - at(20, 23) >= 1.5,
+            "{} {}",
+            at(20, 19),
+            at(20, 23)
+        );
+        // Heights are walker steps.
+        assert!(s.top.iter().all(|v| (v * 4.0).fract() == 0.0));
+    }
+
+    #[test]
+    fn a_patterned_floor_is_not_a_checkerboard_of_cliffs() {
+        // Every other tile read as cliff, as a patterned floor can be.
+        let (g, k, c) = world(20, 20, |x, y| {
+            if (x + y) % 2 == 0 {
+                Kind::Cliff
+            } else {
+                Kind::Ground
+            }
+        });
+        let s = build(
+            &Tiles {
+                w: 20,
+                h: 20,
+                ground: &g,
+                kind: &k,
+                colour: &c,
+                solid: &c,
+            },
+            1.5,
+        );
+        assert!(s.top.iter().all(|&v| v == 0.0), "{:?}", &s.top[..20]);
     }
 
     #[test]

@@ -678,7 +678,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     worlds[start_world].name = "default".into();
 
     // Ground grids, links and signs.
-    for world in &mut worlds {
+    for (wi, world) in worlds.iter_mut().enumerate() {
         let (tw, th) = (world.width * 64, world.height * 64);
         let mut ground = vec![None; tw * th];
         let mut kinds = vec![Kind::Ground; tw * th];
@@ -710,6 +710,12 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
                 }) else {
                     continue;
                 };
+                // Inside a gmap the levels already touch: a link to a
+                // neighbour in the same gmap is its edge, and walking on
+                // is the way across.
+                if dw == wi && (dcx, dcy) != (cx, cy) {
+                    continue;
+                }
                 links.push(WalkLink {
                     x: ox + link.x,
                     y: oy + link.y,
