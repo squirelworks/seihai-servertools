@@ -29,6 +29,7 @@
 
 pub mod convert;
 pub mod meaning;
+pub mod npc;
 pub mod scene;
 pub mod shape;
 pub mod walker;
