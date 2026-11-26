@@ -239,11 +239,13 @@ pub fn script(worlds: &[World]) -> String {
     ));
     // The worlds' data.
     t.push_str(
-        "function pw3dLoad(name) {\n  temp.name = name @ \"\";\n  this.world = temp.name;\n",
+        // Not temp.name: on a real 5.12 that reads back as the function's
+        // own name (lab, 2026-11-26).
+        "function pw3dLoad(name) {\n  temp.wname = name @ \"\";\n  this.world = temp.wname;\n",
     );
     for (i, w) in worlds.iter().enumerate() {
         t.push_str(&format!(
-            "  {}if (temp.name == {}) {{\n    this.w = {};\n    this.h = {};\n    this.rows = {{\n",
+            "  {}if (temp.wname == {}) {{\n    this.w = {};\n    this.h = {};\n    this.rows = {{\n",
             if i == 0 { "" } else { "else " },
             lit(&w.name),
             w.tiles_w(),
