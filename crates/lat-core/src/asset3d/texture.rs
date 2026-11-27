@@ -26,21 +26,39 @@ pub fn decode(bytes: &[u8]) -> Result<Rgba, String> {
     })
 }
 
-/// `img` made safe: scaled down (keeping its shape) until neither side is
-/// over `max`, every alpha 0 or 255.
+/// The power of two nearest `n` (on a log scale), at most `max`'s.
+fn pow2(n: u32, max: u32) -> u32 {
+    let top = 1u32 << (31 - max.max(1).leading_zeros());
+    let lo = 1u32 << (31 - n.max(1).leading_zeros());
+    let near = if lo == n || (n as f32) < lo as f32 * std::f32::consts::SQRT_2 {
+        lo
+    } else {
+        lo * 2
+    };
+    near.min(top)
+}
+
+/// `img` made safe: resized to power-of-two sides (the 5.12 pads a
+/// non-power-of-two texture and keeps the texture places, so a 44 x 64
+/// picture filled only 44/64 of its card in the lab), neither over `max`,
+/// and every alpha 0 or 255. Stretching keeps the texture places right,
+/// tiled ones too. Growing uses the nearest pixel, so pixel art stays sharp.
 pub fn safe(img: &Rgba, max: u32) -> Rgba {
     let max = max.max(1);
-    let mut out = if img.width > max || img.height > max {
-        let k = max as f32 / img.width.max(img.height) as f32;
-        let w = ((img.width as f32 * k).round() as u32).clamp(1, max);
-        let h = ((img.height as f32 * k).round() as u32).clamp(1, max);
+    let (w, h) = (pow2(img.width, max), pow2(img.height, max));
+    let mut out = if (w, h) != (img.width, img.height) {
+        let filter = if w >= img.width && h >= img.height {
+            image::imageops::FilterType::Nearest
+        } else {
+            image::imageops::FilterType::Triangle
+        };
         let src = image::RgbaImage::from_raw(img.width, img.height, img.pixels.clone())
             .expect("an RGBA buffer of its size");
-        let small = image::imageops::resize(&src, w, h, image::imageops::FilterType::Triangle);
+        let r = image::imageops::resize(&src, w, h, filter);
         Rgba {
             width: w,
             height: h,
-            pixels: small.into_raw(),
+            pixels: r.into_raw(),
         }
     } else {
         img.clone()
@@ -144,12 +162,21 @@ mod tests {
     }
 
     #[test]
-    fn big_pictures_shrink_and_keep_their_shape() {
+    fn textures_become_powers_of_two_within_the_limit() {
         let s = safe(&img(2048, 512, [10, 20, 30, 200]), MAX_SIDE);
-        assert_eq!((s.width, s.height), (1024, 256));
+        assert_eq!((s.width, s.height), (1024, 512));
+        let s = safe(&img(3000, 1500, [0, 0, 0, 255]), MAX_SIDE);
+        assert_eq!((s.width, s.height), (1024, 1024));
+        // Not a power of two: stretched to the nearest one.
+        let s = safe(&img(44, 64, [0, 0, 0, 255]), MAX_SIDE);
+        assert_eq!((s.width, s.height), (32, 64));
+        let s = safe(&img(48, 100, [0, 0, 0, 255]), MAX_SIDE);
+        assert_eq!((s.width, s.height), (64, 128));
+        assert_eq!(pow2(1, 1024), 1);
+        assert_eq!(pow2(5000, 1000), 512);
         assert!(s.pixels.chunks_exact(4).all(|p| p[3] == 255));
-        let s = safe(&img(10, 10, [0, 0, 0, 50]), MAX_SIDE);
-        assert_eq!((s.width, s.height), (10, 10));
+        let s = safe(&img(8, 8, [0, 0, 0, 50]), MAX_SIDE);
+        assert_eq!((s.width, s.height), (8, 8));
         assert!(s.pixels.chunks_exact(4).all(|p| p[3] == 0));
     }
 

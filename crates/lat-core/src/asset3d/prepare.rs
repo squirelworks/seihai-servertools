@@ -146,7 +146,7 @@ fn textured(model: &mut Model, name: &str, max: u32) -> Result<Prepared, String>
                 None => {
                     let src = &model.textures[t];
                     let safe = texture::safe(src, max);
-                    shrunk |= safe.width != src.width || safe.height != src.height;
+                    shrunk |= safe.width.max(safe.height) < src.width.max(src.height);
                     let base = format!("{name}_{}", tex_map.len());
                     let file = format!("{base}.png");
                     files.push((file.clone(), texture::png(&safe)?));
@@ -166,7 +166,7 @@ fn textured(model: &mut Model, name: &str, max: u32) -> Result<Prepared, String>
     }
     if shrunk {
         model.notes.push(format!(
-            "textures over {max} pixels a side were made smaller"
+            "textures over {max} pixels a side were made smaller (every texture is stretched to power-of-two sides)"
         ));
     }
     let faces = model
@@ -423,7 +423,7 @@ mod tests {
         let (n, png) = &a.files[1];
         assert_eq!(n, "sign_0.png");
         let back = texture::decode(png).unwrap();
-        assert_eq!((back.width, back.height), (1024, 512));
+        assert_eq!((back.width, back.height), (1024, 1024));
         // The shape names the texture file.
         let shape = &a.files[0].1;
         assert!(shape.windows(10).any(|w| w == b"sign_0.png"));
