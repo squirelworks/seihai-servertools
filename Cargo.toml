@@ -12,7 +12,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/squirelworks/seihai-servertools"
@@ -26,13 +26,12 @@ publish = false
 # seihai-core and seihai-draw both live in squirelworks/seihai-core and are
 # tagged together, so one tag pins both and a Level or Gani from the parser
 # is the same type seihai-draw paints.
-seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.7.2", default-features = false }
-seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.7.2" }
-# RC file link: list_dir, get_file, put_file. Pinned to a seihai-rc main
-# commit on seihai-core v0.7.2, so this workspace has one core
-# (squirelworks/seihai-core#79, #123). No rc tag on that core yet; move to
-# seihai-rc v0.2.0 when it ships.
-seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", rev = "fcfd2cc264fece3838a1acca56b1d2d3cc217a17" }
+seihai-core = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.8.0", default-features = false }
+seihai-draw = { git = "https://github.com/squirelworks/seihai-core", tag = "v0.8.0" }
+# RC file link: list_dir, get_file, put_file. seihai-rc v0.2.0 is on the
+# same seihai-core tag, so this workspace has one core
+# (squirelworks/seihai-core#79, #123).
+seihai-rc = { git = "https://github.com/squirelworks/seihai-rc", tag = "v0.2.0" }
 # The window. Same versions as the Seihai client and its level editor.
 eframe = "0.29"
 egui = "0.29"
