@@ -110,6 +110,7 @@ fn dispatch(tool: &str, rest: &[&str]) -> Option<ExitCode> {
         "gmap" => seihai_gmap::run(rest),
         "gani" => seihai_gani::run(rest),
         "gen" => seihai_gen::run(rest),
+        "regions" => seihai_regions::run(rest),
         "stats" => seihai_stats::run(rest),
         "gif2mng" => seihai_gif2mng::run(rest),
         "pw3d" => seihai_pw3d::run(rest),

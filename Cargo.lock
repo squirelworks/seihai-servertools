@@ -3080,6 +3080,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "seihai-regions"
+version = "0.0.1"
+dependencies = [
+ "lat-core",
+ "tempfile",
+]
+
+[[package]]
 name = "seihai-servertools"
 version = "0.0.1"
 dependencies = [
@@ -3095,6 +3103,7 @@ dependencies = [
  "seihai-lab",
  "seihai-level",
  "seihai-pw3d",
+ "seihai-regions",
  "seihai-servertools-gui",
  "seihai-setup",
  "seihai-stats",
