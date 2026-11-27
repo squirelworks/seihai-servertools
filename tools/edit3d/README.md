@@ -61,9 +61,9 @@ its indent and trailing comment; a new object goes after the last object
 line. The old file is kept as `<file>.bak-YYYYMMDD-HHMMSS` and the new
 one written through a temporary file and a rename (as the setup tools
 save `serveroptions.txt`). When the terrain changed, its folder is first
-copied to `backups/<folder>.bak-YYYYMMDD-HHMMSS` in the world folder
-(outside the served folders, so the server never finds a second
-`heights.info` or texture set), then all 256 chunks and
+copied to `backups/<folder name>.bak-YYYYMMDD-HHMMSS` under the world
+folder (not beside it, where the server would serve the copy too), then
+all 256 chunks and
 `heights.info` are written in the client's own encoding, so the stamps a
 returning client sends match and only changed chunks go out again
 (`lat_core::terrain_chunks`). Terrain holes are not kept yet.

@@ -163,10 +163,8 @@ pub fn save(w: &World, terrain: bool) -> Result<Vec<String>, String> {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            // Outside the served folders: a copy beside the terrain, under
-            // seihai-gserver's files/ (searched at any depth, by bare name),
-            // would serve a second heights.info and texture set (lab,
-            // 2026-11-26).
+            // Not beside the folder: that is usually under the served
+            // files, and a copy there would be served and listed too.
             let copy = w
                 .root
                 .join("backups")
