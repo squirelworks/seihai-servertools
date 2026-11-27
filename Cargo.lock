@@ -1922,7 +1922,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "lat-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "des",
  "epaint_default_fonts",
@@ -2964,7 +2964,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-asset3d"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "png",
@@ -2973,7 +2973,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-check"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "png",
@@ -2983,7 +2983,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-code"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "tempfile",
@@ -2991,8 +2991,8 @@ dependencies = [
 
 [[package]]
 name = "seihai-core"
-version = "0.7.2"
-source = "git+https://github.com/squirelworks/seihai-core?tag=v0.7.2#81ba7e24df32ff5f937d0c09e7d5f75da6aa6913"
+version = "0.8.0"
+source = "git+https://github.com/squirelworks/seihai-core?tag=v0.8.0#910416b9af0d8dd00d3151b1ef7dd371c1a4daac"
 dependencies = [
  "base64",
  "bzip2",
@@ -3010,8 +3010,8 @@ dependencies = [
 
 [[package]]
 name = "seihai-draw"
-version = "0.7.2"
-source = "git+https://github.com/squirelworks/seihai-core?tag=v0.7.2#81ba7e24df32ff5f937d0c09e7d5f75da6aa6913"
+version = "0.8.0"
+source = "git+https://github.com/squirelworks/seihai-core?tag=v0.8.0#910416b9af0d8dd00d3151b1ef7dd371c1a4daac"
 dependencies = [
  "ab_glyph",
  "seihai-core",
@@ -3019,7 +3019,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-edit3d"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
@@ -3030,7 +3030,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-gani"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "png",
@@ -3039,7 +3039,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-gen"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "png",
@@ -3048,7 +3048,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-gif2mng"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "tempfile",
@@ -3056,7 +3056,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-gmap"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "png",
@@ -3065,7 +3065,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-gpak"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "tempfile",
@@ -3073,11 +3073,11 @@ dependencies = [
 
 [[package]]
 name = "seihai-guide"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "seihai-lab"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "ctrlc",
  "setup-core",
@@ -3086,7 +3086,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-level"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "png",
@@ -3095,7 +3095,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-pw3d"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "seihai-core",
@@ -3104,15 +3104,15 @@ dependencies = [
 
 [[package]]
 name = "seihai-rc"
-version = "0.1.0"
-source = "git+https://github.com/squirelworks/seihai-rc?rev=fcfd2cc264fece3838a1acca56b1d2d3cc217a17#fcfd2cc264fece3838a1acca56b1d2d3cc217a17"
+version = "0.2.0"
+source = "git+https://github.com/squirelworks/seihai-rc?tag=v0.2.0#47004c2e1d6c2990f5d14df9687131e82dff6622"
 dependencies = [
  "seihai-core",
 ]
 
 [[package]]
 name = "seihai-regions"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "tempfile",
@@ -3120,7 +3120,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-servertools"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "seihai-asset3d",
  "seihai-check",
@@ -3145,14 +3145,14 @@ dependencies = [
 
 [[package]]
 name = "seihai-servertools-gui"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "servertools-app",
 ]
 
 [[package]]
 name = "seihai-setup"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "ctrlc",
  "setup-core",
@@ -3161,7 +3161,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-stats"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "setup-core",
  "tempfile",
@@ -3169,7 +3169,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-suite-stress"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "ctrlc",
  "seihai-core",
@@ -3178,7 +3178,7 @@ dependencies = [
 
 [[package]]
 name = "seihai-theme"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "lat-core",
  "tempfile",
@@ -3246,7 +3246,7 @@ dependencies = [
 
 [[package]]
 name = "servertools-app"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
@@ -3257,7 +3257,7 @@ dependencies = [
 
 [[package]]
 name = "setup-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
  "if-addrs",
