@@ -153,6 +153,9 @@ Building a world
   edit3d       the 3D level editor: place, move and turn objects in a 3D
                world file, set the spawn and sun, raise, flatten and paint
                the streamed terrain, with a live preview.
+  regions      a big 3D overworld as a grid of regions for seihai-gserver's
+               `regions` line: cut a world into regions, count objects per
+               region and the densest spot, build a test overworld.
   gpak         resource packages (.gpak, encrypted .gpake) for 4.20 and 6.x.
   code         the client's .code caches: show, CRC, dump, pack.
 
