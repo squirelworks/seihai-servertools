@@ -37,6 +37,24 @@ jobs:
       # The command-line-only build for headless servers must keep building.
       - run: cargo build -p seihai-servertools --no-default-features
 
+  # The community 3D test worlds still build, and build the same twice
+  # (scripts/community-worlds/README.md).
+  community-worlds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: squirelworks/Graal_analysis
+          path: graal-analysis
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build twice and compare checksums
+        run: |
+          scripts/community-worlds/build.sh "$RUNNER_TEMP/a" --graal-analysis graal-analysis --date 2026-01-01
+          scripts/community-worlds/build.sh "$RUNNER_TEMP/b" --graal-analysis graal-analysis --date 2026-01-01
+          diff "$RUNNER_TEMP/a/SHA256SUMS" "$RUNNER_TEMP/b/SHA256SUMS"
+          test "$(wc -l < "$RUNNER_TEMP/a/SHA256SUMS")" -eq 5
+
   # Every tool in tools/ builds and tests on its own (`cargo build -p` and
   # `cargo test -p` per tool), has its README, lib and main, and depends on
   # no other tool (tools/README.md, "Standalone").
