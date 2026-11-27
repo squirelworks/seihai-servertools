@@ -62,6 +62,10 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 | Leaderboard pages from seihai-gserver accounts (gserverstat's job) | `seihai-servertools stats` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
+**3D worlds:** [docs/3D-TOOLS.md](docs/3D-TOOLS.md) explains the standalone
+3D tools end to end: converting a 2D playerworld, interiors and regions,
+assets, the offline 3D editor, and serving the result.
+
 Every command is also its own program, built, tested and run on its own:
 `seihai-guide`, `seihai-lab`, `seihai-setup`, `seihai-check`, `seihai-code`, `seihai-gpak`,
 `seihai-level`, `seihai-theme`, `seihai-gmap`, `seihai-gani`, `seihai-gen`,

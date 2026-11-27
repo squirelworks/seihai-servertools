@@ -165,10 +165,11 @@ pub fn save(w: &World, terrain: bool) -> Result<Vec<String>, String> {
                 .into_owned();
             // Not beside the folder: that is usually under the served
             // files, and a copy there would be served and listed too.
-            let copy = w
-                .root
-                .join("backups")
-                .join(format!("{name}.bak-{}", stamp.compact()));
+            // Two saves in one second get `-2`, `-3`, ... as the world
+            // file's backups do, so the first copy is never written over.
+            let slot = w.root.join("backups").join(&name);
+            let copy = backup::backup_path(&slot, stamp)
+                .map_err(|e| format!("{}: {e}", slot.display()))?;
             copy_dir(&dir, &copy).map_err(|e| format!("{}: {e}", copy.display()))?;
             said.push(format!("terrain backup {}", copy.display()));
         }

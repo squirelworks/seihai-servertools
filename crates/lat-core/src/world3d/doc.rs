@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 /// Every key seihai-gserver reads in a world file.
-pub const KEYS: [&str; 17] = [
+pub const KEYS: [&str; 19] = [
     "object",
     "objectfor",
     "sun",
@@ -27,6 +27,10 @@ pub const KEYS: [&str; 17] = [
     "terrain",
     "water",
     "replicator",
+    // seihai-gserver 0.2.0: a world built from region folders, and doors
+    // to a far part of the same world (seihai-pw3d's interiors).
+    "regions",
+    "portal",
     // Lab entries.
     "rawobject",
     "rawevent",
@@ -590,6 +594,7 @@ impl WorldDoc {
                 "spawn" | "camera" => nums::<3>(&e.words, &e.key).map(|_| ()),
                 "sun" => nums::<11>(&e.words, "sun").map(|_| ()),
                 "water" => nums::<6>(&e.words, "water").map(|_| ()),
+                "portal" => nums::<7>(&e.words, "portal").map(|_| ()),
                 _ => Ok(()),
             };
             if let Err(m) = parsed {
@@ -655,6 +660,19 @@ spawn 0 0 1
         assert_eq!(
             d.problems(),
             vec!["line 10: `futurekey` is not a world file entry".to_string()]
+        );
+    }
+
+    #[test]
+    fn regions_and_portal_lines_are_known() {
+        let d = WorldDoc::parse(
+            "regions files/3d/regions 2x2 8 8\n\
+             portal 32 -1663.5 0 5 31.5 -26.5 0\n\
+             portal 1 2 3\n",
+        );
+        assert_eq!(
+            d.problems(),
+            vec!["line 3: portal: needs 7 numbers".to_string()]
         );
     }
 
