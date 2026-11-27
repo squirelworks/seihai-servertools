@@ -46,6 +46,10 @@ pub struct Options {
     pub wall_height: f32,
     /// Bits a colour channel keeps (1 to 8): fewer bits, fewer materials.
     pub colour_bits: u8,
+    /// Keep every interior (a level reached by a link from a gmap or the
+    /// start level) a world of its own, switched to with `g3dworld`, as
+    /// before interiors were placed inside the world they are entered from.
+    pub separate_interiors: bool,
 }
 
 impl Default for Options {
@@ -61,6 +65,7 @@ impl Default for Options {
             images: Vec::new(),
             wall_height: 1.5,
             colour_bits: 3,
+            separate_interiors: false,
         }
     }
 }
@@ -167,9 +172,24 @@ pub struct World {
     pub walk: Vec<Option<f32>>,
     pub things: Vec<((i32, i32), Shape)>,
     pub counts: scene::Counts,
+    /// For an interior: the world it is placed in (its "host", the gmap or
+    /// start level it is entered from) and where, in that world's tiles.
+    /// It keeps its own world file too, for TCP warps.
+    pub host: Option<(String, (i32, i32))>,
 }
 
 impl World {
+    /// The server world the player is in while here: the host's for an
+    /// interior placed in one, else its own.
+    pub fn server_world(&self) -> &str {
+        self.host.as_ref().map_or(&self.name, |h| &h.0)
+    }
+
+    /// Where its tile (0, 0) is in the server world's tiles.
+    pub fn offset(&self) -> (i32, i32) {
+        self.host.as_ref().map_or((0, 0), |h| h.1)
+    }
+
     pub fn tiles_w(&self) -> usize {
         self.width * 64
     }
@@ -643,6 +663,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             walk: Vec::new(),
             things: Vec::new(),
             counts: Default::default(),
+            host: None,
         });
     }
     for key in loaded.keys() {
@@ -665,6 +686,7 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             walk: Vec::new(),
             things: Vec::new(),
             counts: Default::default(),
+            host: None,
         });
     }
     // Two worlds may not share a name (a gmap and a level, or "a b.nw" and
@@ -773,6 +795,9 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             l.world = names[l.world.parse::<usize>().unwrap()].clone();
         }
     }
+    if !o.separate_interiors {
+        place_interiors(&mut worlds, start_world, &mut out.warnings);
+    }
     // Unresolved links, for the report.
     for l in loaded.values_mut() {
         for link in &l.level.links {
@@ -826,6 +851,34 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
             r.npc_made = npc_made;
             out.levels.push(r);
         }
+        // The interiors placed in this world, each its own object far from
+        // the rest (place_interiors); the same shapes as their own worlds.
+        let mut k = 0;
+        for p in worlds.iter() {
+            let Some((host, (px, py))) = &p.host else {
+                continue;
+            };
+            if host != &w.name {
+                continue;
+            }
+            if k == 0 {
+                text.push_str("# Interiors, entered by their doors (links).\n");
+            }
+            for (cx, cy, key) in &p.levels {
+                let file = if p.levels.len() == 1 {
+                    format!("pw3d_{}.3ds", world_name(key))
+                } else {
+                    format!("pw3d_{}_{}.3ds", world_name(&p.source), world_name(key))
+                };
+                text.push_str(&format!(
+                    "object PW3D_I{k} {file} {} {} 0\n",
+                    *px as usize + cx * 64,
+                    -((*py as usize + cy * 64) as i64)
+                ));
+                k += 1;
+            }
+        }
+        text.push_str(&portals(w, &worlds));
         let z = w.walk_at(w.spawn.0 as i32, w.spawn.1 as i32).unwrap_or(0.0) + 1.0;
         text.push_str(&format!(
             "spawn {:.2} {:.2} {:.2}\n",
@@ -873,6 +926,107 @@ pub fn convert(o: &Options) -> Result<Converted, String> {
     out.files
         .push(("PW3D-REPORT.md".into(), report(&out, o).into_bytes()));
     Ok(out)
+}
+
+/// Tiles between an interior and anything else in its host world: past a
+/// 5.12's draw cut (an object's centre about 1000 to 1050 units from the
+/// camera) and past seihai-gserver's default scope radius plus hysteresis
+/// (1100 + 200), so from outside an interior is neither drawn nor, with
+/// `graal3d_scope` on, sent; and from inside, the rest of the world is not.
+/// Graal_analysis `torque/3d-scoping-interiors-limits-512-2026-11-26.md`,
+/// `torque/3d-big-world-streaming-512-2026-11-27.md`.
+pub const POCKET_GAP: i32 = 1536;
+/// Interiors a row, so every coordinate stays well inside seihai-gserver's
+/// 100 000-unit limit on a client's position.
+const POCKETS_A_ROW: i32 = 48;
+const POCKET_LIMIT: i32 = 90_000;
+
+/// Places each interior in the world it is entered from, far enough away
+/// that it is not seen from there, so a door is a move inside one world
+/// (no `g3dworld` switch, no terrain resend, no relight).
+///
+/// Hubs are the start world and every gmap; an interior is any other world
+/// reached from a hub by links, through other interiors (a house's
+/// cellar), and goes to the first hub that reaches it. Interiors are laid
+/// out in rows south of the hub, `POCKET_GAP` apart.
+fn place_interiors(worlds: &mut [World], start: usize, warnings: &mut Vec<String>) {
+    let index: HashMap<String, usize> = worlds
+        .iter()
+        .enumerate()
+        .map(|(i, w)| (w.name.clone(), i))
+        .collect();
+    let is_hub = |i: usize, w: &World| i == start || w.levels.len() > 1;
+    let mut hubs: Vec<usize> = vec![start];
+    hubs.extend((0..worlds.len()).filter(|&i| i != start && is_hub(i, &worlds[i])));
+    let mut assigned: Vec<Option<usize>> = vec![None; worlds.len()];
+    for &h in &hubs {
+        let mut queue = std::collections::VecDeque::from([h]);
+        let mut order = Vec::new();
+        while let Some(i) = queue.pop_front() {
+            for l in &worlds[i].links {
+                let Some(&d) = index.get(&l.world) else {
+                    continue;
+                };
+                if is_hub(d, &worlds[d]) || assigned[d].is_some() {
+                    continue;
+                }
+                assigned[d] = Some(h);
+                order.push(d);
+                queue.push_back(d);
+            }
+        }
+        let (base_x, base_y) = (0, worlds[h].tiles_h() as i32 + POCKET_GAP);
+        let host = worlds[h].name.clone();
+        for (k, d) in order.into_iter().enumerate() {
+            let k = k as i32;
+            let at = (
+                base_x + (k % POCKETS_A_ROW) * POCKET_GAP,
+                base_y + (k / POCKETS_A_ROW) * POCKET_GAP,
+            );
+            if at.1 + worlds[d].tiles_h() as i32 > POCKET_LIMIT {
+                warnings.push(format!(
+                    "{}: too many interiors to place in {host}; it stays a world of its own",
+                    worlds[d].name
+                ));
+                continue;
+            }
+            worlds[d].host = Some((host.clone(), at));
+        }
+    }
+}
+
+/// `portal` lines for the server world `host`: every link between two
+/// parts of it (the land and an interior placed in it, or two interiors),
+/// so seihai-gserver with `graal3d_scope` on has the far side in scope
+/// while the player stands at the door. In 3D units; a coordinate the link
+/// keeps is taken as the middle of the level it lands in.
+fn portals(host: &World, worlds: &[World]) -> String {
+    let mut t = String::new();
+    for a in worlds.iter().filter(|a| a.server_world() == host.name) {
+        let (ax, ay) = a.offset();
+        for l in &a.links {
+            let Some(d) = worlds.iter().find(|d| d.name == l.world) else {
+                continue;
+            };
+            if d.name == a.name || d.server_world() != host.name {
+                continue;
+            }
+            let (dx, dy) = d.offset();
+            let cx = ax as f32 + l.x as f32 + l.w as f32 / 2.0;
+            let cy = ay as f32 + l.y as f32 + l.h as f32 / 2.0;
+            let r = (l.w.max(l.h) as f32) / 2.0 + 4.0;
+            let tx = dx as f32 + l.dest_origin.0 as f32 + l.dest_x.unwrap_or(32.0);
+            let ty = dy as f32 + l.dest_origin.1 as f32 + l.dest_y.unwrap_or(32.0);
+            if t.is_empty() {
+                t.push_str("# Doors between its parts, for graal3d_scope.\n");
+            }
+            t.push_str(&format!(
+                "portal {cx:.1} {:.1} 0 {r:.1} {tx:.1} {:.1} 0\n",
+                -cy, -ty
+            ));
+        }
+    }
+    t
 }
 
 fn nearest_floor(w: &World, want: (f32, f32)) -> (f32, f32) {
@@ -1173,18 +1327,34 @@ fn report(c: &Converted, o: &Options) -> String {
     t.push_str(
         "This folder holds the playerworld's own levels; keep it local and do not publish it.\n\n",
     );
-    t.push_str("## Worlds\n\n| world | from | levels | links | signs | spawn |\n|---|---|---|---|---|---|\n");
+    t.push_str("## Worlds\n\n| world | from | levels | links | signs | spawn | inside |\n|---|---|---|---|---|---|---|\n");
     for w in &c.worlds {
         t.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {:.1},{:.1} |\n",
+            "| {} | {} | {} | {} | {} | {:.1},{:.1} | {} |\n",
             w.name,
             w.source,
             w.levels.len(),
             w.links.len(),
             w.signs.len(),
             w.spawn.0,
-            w.spawn.1
+            w.spawn.1,
+            w.host
+                .as_ref()
+                .map_or("its own world".to_string(), |(h, (x, y))| format!(
+                    "{h} at {x},{y}"
+                ))
         ));
+    }
+    if c.worlds.iter().any(|w| w.host.is_some()) {
+        t.push_str(
+            "\nInteriors (levels entered by a link from the start level or a gmap) are placed \
+             in the world they are entered from, at least 1536 tiles from anything else in it: \
+             walking through a door moves the player there without a world switch. A 5.12 does \
+             not draw them from outside (it draws nothing whose centre is over about 1050 units \
+             from the camera). Set `graal3d_scope = on` in the server's options so they are not \
+             sent either until the player is inside. Each interior keeps its own world file too, \
+             for TCP warps.\n",
+        );
     }
     t.push_str("\n## Levels\n\n| level | world | floor | water | lava | walls | upper-layer tiles | colours | links (unresolved) | NPCs (with scripts) | NPCs as picture / figure / guess | signs | chests | baddies |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     for l in &c.levels {

@@ -7,7 +7,7 @@ and their gmaps) into 3D worlds that seihai-gserver serves to the 3D clients
 ```
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
             [--tiledefs FILE] [--objects DIR] [--images DIR]... [--meaning-maps]
-            [--wall-height F] [--colour-bits N] [--force]
+            [--wall-height F] [--colour-bits N] [--separate-interiors] [--force]
 seihai-servertools pw3d ...        # the same, from the front door
 seihai-pw3d --help | --version
 ```
@@ -33,6 +33,7 @@ a Sun, and it runs `weapon3d` GS2 scripts. So:
 | links | tinted tiles; the walker takes them, switching world with `g3dworld` when the link leaves the world | lossless (links to levels not in the folder are listed and dropped) |
 | signs | the words on a board above each sign in 3D capital letters (our own 3×5 font with wider N, M and W; up to 8 lines of about 26 letters, narrower when signs stand close); the walker also says them in chat, which the 5.12 does not draw in 3D | text kept; lower case, colours and rare symbols lost |
 | gmap | one world, its levels side by side (Torque `x`, `-y` from tile `x`, `y`, one unit a tile) | lossless layout |
+| interiors (levels a link from the start level or a gmap leads to, and the levels linked on from them: houses, cellars, caves) | placed in the world they are entered from, in rows 1536 tiles south of it and 1536 apart, with `portal` lines for each door; the walker takes the door as a move, with no world switch | layout lossless; sky and light are the outdoor ones |
 | any other level | its own world, `config/graal3dworlds/<level>.txt`, so a TCP warp to that level also takes a 3D client there | |
 
 The `PW3DWalk` weapon (`weapons/pw3dwalk.gs2`) carries each world's walk
@@ -40,6 +41,40 @@ grid as run-length rows and its links and signs. Each tick it reads the
 arrow keys (`keydown2`), moves a quarter tile unless the tile ahead is a
 wall, sets `player.position` and keeps a free camera behind and above the
 player. This is the walker shape a real 5.12 walked with in an earlier lab.
+
+## Houses and other interiors
+
+A 3D client given a world switch at every door stalls: each `g3dworld`
+resends the whole terrain, needs a second phase 2 to light it, and a world
+with no terrain, water or Sun froze a real 5.12 (Graal_analysis
+`torque/3d-worldswitch-terrain-lighting-512-2026-11-26.md`, T3D-162). So the
+converter follows the links: the start world and each gmap are hubs, and
+every other level reached from a hub by links (through other interiors,
+for a house's cellar) goes into that hub's world, laid out in rows starting
+1536 tiles south of it. A level reached from two hubs goes to the first
+(the start world, then gmaps by name). Entering is then a walk inside one
+world:
+
+- **Not drawn from outside.** A 5.12 draws nothing whose centre is over
+  about 1000 to 1050 units from the camera (T3D-075), and 1536 keeps every
+  interior well past that from the land and from the other interiors.
+- **Not sent from outside, with `graal3d_scope = on`** in the server's
+  options: seihai-gserver then ghosts an object only within 1100 of the
+  player. Each world file has a `portal` line a door, so while the player
+  stands at a door the room behind it is in scope already and appears the
+  moment the player is through; the land outside comes back the same way.
+  Without scoping every interior is sent at join, but still not drawn.
+- **The walker** keeps each level's walk grid in its own coordinates and
+  the place it stands in the world; a link into an interior of the same
+  world is a move, and `g3dworld` is sent only when the server world
+  changes (a door from one gmap's interior into another gmap).
+
+Every interior also keeps its own `config/graal3dworlds/<level>.txt`, so a
+TCP warp into it still takes a 3D client there; the walker does not know of
+such a warp. `--separate-interiors` keeps the old layout, every interior a
+world of its own. More than 48 x 58 interiors under one hub do not fit
+inside seihai-gserver's 100 000-unit position limit; the rest stay worlds of
+their own (listed in the warnings).
 
 ## What the tiles show, and the 3D built from it
 

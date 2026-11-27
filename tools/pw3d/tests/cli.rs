@@ -107,6 +107,23 @@ fn converts_a_small_world() {
         "{fields}"
     );
     assert!(out.join("config/graal3dworlds/house.txt").exists());
+    // The house is entered from the start level: it stands in the default
+    // world too, 1536 tiles south of it, so its door is a walk, not a
+    // world switch.
+    assert!(
+        default.contains("object PW3D_I0 pw3d_house.3ds 0 -1600 0"),
+        "{default}"
+    );
+    assert!(!fields.contains("pw3d_house"), "{fields}");
+    // Its doors both ways, so a scoping server has the far side ready.
+    assert!(
+        default.contains("portal 63.5 -32.0 0 8.0 1.0 -1632.0 0\n"),
+        "{default}"
+    );
+    assert!(
+        default.contains("portal 0.5 -1632.0 0 8.0 62.0 -32.0 0\n"),
+        "{default}"
+    );
 
     // Every shape a world names is there, and is a 3DS file.
     for text in [&default, &fields] {
@@ -147,6 +164,12 @@ fn converts_a_small_world() {
         walk.contains("\"1#62e1#\""),
         "the gap rows run wall, floor at height 0 (e), wall"
     );
+    // The house's grid says where it stands and in which server world.
+    assert!(
+        walk.contains("if (temp.wname == \"house\") {\n    this.world = \"default\";\n    this.ax = 0;\n    this.ay = 1600;"),
+        "{walk}"
+    );
+    assert!(walk.contains("if (temp.wname == \"fields\") {\n    this.world = \"fields\";\n    this.ax = 0;\n    this.ay = 0;"));
     // temp.name reads back as the function's own name on a real 5.12.
     assert!(!walk.contains("temp.name ") && !walk.contains("temp.name;"));
     let client = walk.split("//#CLIENTSIDE").nth(1).unwrap();

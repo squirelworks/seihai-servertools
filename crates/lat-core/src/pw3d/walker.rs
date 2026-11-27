@@ -13,8 +13,10 @@
 //!   `player.position` (5.12 sends its own object's transform on);
 //! * keeps a free camera behind and above the player, in front of any wall
 //!   behind it;
-//! * on a link, switches world (`g3dworld`) when the link leaves it and puts
-//!   the player where the link lands;
+//! * on a link, loads the walk grid of the level or gmap it leads to and
+//!   puts the player where the link lands; an interior placed inside the
+//!   world it is entered from (`convert::place_interiors`) is only a move,
+//!   and `g3dworld` is sent only when the server world changes;
 //! * shows a sign's text while the player stands below it.
 //!
 //! The grid is one run-length string a row: a count, then `#` for a tile
@@ -193,7 +195,10 @@ pub fn script(worlds: &[World]) -> String {
          }}\n\n\
          function pw3dPlace() {{\n\
          \x20 temp.z = pw3dZ(pw3dKind(int(this.px), int(this.py)));\n\
-         \x20 player.position = {{this.px, 0 - this.py, temp.z}};\n\
+         \x20 // An interior's grid is its own; it stands at (ax, ay) in the world.\n\
+         \x20 temp.wx = this.px + this.ax;\n\
+         \x20 temp.wy = this.py + this.ay;\n\
+         \x20 player.position = {{temp.wx, 0 - temp.wy, temp.z}};\n\
          \x20 // The camera comes in front of the first wall (or ground over\n\
          \x20 // 2 higher) behind the player, so it is never inside one.\n\
          \x20 temp.back = 6;\n\
@@ -205,7 +210,7 @@ pub fn script(worlds: &[World]) -> String {
          \x20   }}\n\
          \x20 }}\n\
          \x20 if (temp.back < 0.8) temp.back = 0.8;\n\
-         \x20 pw3dCamera(this.px, 0 - this.py, temp.z, temp.back);\n\
+         \x20 pw3dCamera(temp.wx, 0 - temp.wy, temp.z, temp.back);\n\
          }}\n\n\
          // The camera up to 6 behind (south of) the player and 2.5 above, looking\n\
          // north and a little down: a steeper look made upright things\n\
@@ -236,7 +241,7 @@ pub fn script(worlds: &[World]) -> String {
          \x20 }}\n\
          \x20 if (!temp.inany) this.away = 1;\n\
          }}\n\n\
-         // l: x, y, w, h, world, dest origin x, y, dest x, y (\"k\" keeps the\n\
+         // l: x, y, w, h, the level or gmap it leads to, dest origin x, y, dest x, y (\"k\" keeps the\n\
          // coordinate), keep offset x, y, origin x, y of the link's level.\n\
          function pw3dTake(l) {{\n\
          \x20 temp.l = l;\n\
@@ -244,10 +249,13 @@ pub fn script(worlds: &[World]) -> String {
          \x20 else temp.nx = temp.l[7] + temp.l[5];\n\
          \x20 if (temp.l[8] == \"k\") temp.ny = this.py - temp.l[12] + temp.l[10] + temp.l[6];\n\
          \x20 else temp.ny = temp.l[8] + temp.l[6];\n\
-         \x20 if (temp.l[4] != this.world) {{\n\
-         \x20   if (this.ticks > 64) triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", temp.l[4]);\n\
-         \x20   else this.wantworld = temp.l[4];\n\
-         \x20   pw3dLoad(temp.l[4]);\n\
+         \x20 temp.was = this.world;\n\
+         \x20 if (temp.l[4] != this.area) pw3dLoad(temp.l[4]);\n\
+         \x20 // Into an interior of this world or out again is a move; only a\n\
+         \x20 // different server world needs the server.\n\
+         \x20 if (this.world != temp.was) {{\n\
+         \x20   if (this.ticks > 64) triggerserver(\"gui\", \"{WEAPON}\", \"g3dworld\", this.world @ \"\");\n\
+         \x20   else this.wantworld = this.world @ \"\";\n\
          \x20 }}\n\
          \x20 this.px = temp.nx;\n\
          \x20 this.py = temp.ny;\n\
@@ -275,13 +283,16 @@ pub fn script(worlds: &[World]) -> String {
     t.push_str(
         // Not temp.name: on a real 5.12 that reads back as the function's
         // own name (lab, 2026-11-26).
-        "function pw3dLoad(name) {\n  temp.wname = name @ \"\";\n  this.world = temp.wname;\n",
+        "function pw3dLoad(name) {\n  temp.wname = name @ \"\";\n  this.area = temp.wname;\n",
     );
     for (i, w) in worlds.iter().enumerate() {
         t.push_str(&format!(
-            "  {}if (temp.wname == {}) {{\n    this.w = {};\n    this.h = {};\n    this.rows = {{\n",
+            "  {}if (temp.wname == {}) {{\n    this.world = {};\n    this.ax = {};\n    this.ay = {};\n    this.w = {};\n    this.h = {};\n    this.rows = {{\n",
             if i == 0 { "" } else { "else " },
             lit(&w.name),
+            lit(w.server_world()),
+            w.offset().0,
+            w.offset().1,
             w.tiles_w(),
             w.tiles_h()
         ));
