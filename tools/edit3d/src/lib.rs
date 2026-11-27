@@ -141,6 +141,15 @@ fn open(a: &Args<'_>, folder: &str) -> Result<World, String> {
     World::open(Path::new(folder), a.get("--world").unwrap_or("default"))
 }
 
+/// `--ground` over no terrain keeps Z as given (the ground is z = 0), which
+/// for a world whose floor is a shape (a seihai-pw3d level) puts the thing
+/// inside that shape: say so rather than do it silently.
+fn ground_note(w: &World, x: f64, y: f64) {
+    if w.terrain.as_ref().and_then(|t| t.height_at(x, y)).is_none() {
+        eprintln!("note: --ground: no terrain under {x} {y}, so Z stays as given (above z = 0)");
+    }
+}
+
 /// The world file with a dated backup, and the terrain folder (backed up
 /// as a dated copy) when `terrain` is set. Returns what was written.
 pub fn save(w: &World, terrain: bool) -> Result<Vec<String>, String> {
@@ -154,7 +163,12 @@ pub fn save(w: &World, terrain: bool) -> Result<Vec<String>, String> {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            let copy = dir.with_file_name(format!("{name}.bak-{}", stamp.compact()));
+            // Not beside the folder: that is usually under the served
+            // files, and a copy there would be served and listed too.
+            let copy = w
+                .root
+                .join("backups")
+                .join(format!("{name}.bak-{}", stamp.compact()));
             copy_dir(&dir, &copy).map_err(|e| format!("{}: {e}", copy.display()))?;
             said.push(format!("terrain backup {}", copy.display()));
         }
@@ -239,6 +253,7 @@ fn go(args: &[&str]) -> Result<(), String> {
             let p = &a.pos[need - 3..];
             let (x, y, mut z) = (num(p[0])?, num(p[1])?, num(p[2])?);
             if a.has("--ground") {
+                ground_note(&w, x, y);
                 z += w.ground(x, y);
             }
             let turn = a
@@ -287,6 +302,7 @@ fn go(args: &[&str]) -> Result<(), String> {
             let mut w = open(&a, folder)?;
             let (x, y, mut z) = (num(a.pos[1])?, num(a.pos[2])?, num(a.pos[3])?);
             if a.has("--ground") {
+                ground_note(&w, x, y);
                 z += w.ground(x, y);
             }
             w.doc.set_spawn([x, y, z]);
@@ -327,6 +343,11 @@ fn go(args: &[&str]) -> Result<(), String> {
             })?;
             let n = t.apply(brush, x, y, r);
             println!("{n} squares changed");
+            // Nothing changed: no backups and no rewrite of 256 chunks.
+            if n == 0 {
+                println!("nothing to save");
+                return Ok(());
+            }
             print_saved(&save(&w, true)?);
             Ok(())
         }
