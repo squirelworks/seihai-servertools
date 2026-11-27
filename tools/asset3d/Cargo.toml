@@ -1,0 +1,25 @@
+[package]
+name = "seihai-asset3d"
+description = "Convert 3D models (glTF, OBJ, STL, 3DS) and pictures into .3ds shapes and textures a 5.12 draws, and add them to a seihai-gserver world folder."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_asset3d"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-asset3d"
+path = "src/main.rs"
+
+[dependencies]
+# The conversion (AGENTS.md: logic in the core crates).
+lat-core.workspace = true
+
+[dev-dependencies]
+# The tests write their own pictures.
+png.workspace = true
+tempfile.workspace = true

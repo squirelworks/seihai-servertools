@@ -25,6 +25,7 @@
 //! | [`tmx`] | Levels to and from Tiled `.tmx` maps (NW2TMX, nw-converter) | working |
 //! | [`render`] | Levels and whole gmaps as PNG pictures (NW2PNG's job): board, chests, signs, and with loaders NPC images and ganis | working |
 //! | [`files`] | A world folder's files by name, and the level, picture and gani loaders the offline tools hand the painters | working |
+//! | [`asset3d`] | 3D assets for a playerworld: glTF, OBJ, STL, 3DS and pictures as `.3ds` shapes and textures a 5.12 draws | working |
 //! | [`check`] | The world and config checker | parse, links, images and sounds, NPC scripts, packages |
 //!
 //! Parsers come from `seihai-core` and painting from `seihai-draw`, both
@@ -32,6 +33,7 @@
 //! gani parser, and do not copy the drawing (`docs/ARCHITECTURE.md`).
 
 pub mod anim;
+pub mod asset3d;
 pub mod check;
 pub mod code_cache;
 pub mod diff;
