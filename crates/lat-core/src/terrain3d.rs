@@ -345,8 +345,9 @@ pub fn seihai_gserver_layout(world: &str, files: Vec<File>) -> Vec<File> {
     let mut cfg = format!(
         "# seihai-gserver settings for the 3D world {world}, from seihai-servertools\n\
          # gen. Serve it with: seihai-gserver --world <this folder>\n\
+         # A 5.x client links 3D only to a server whose name starts with `3 `.\n\
          # Other settings take their defaults (see seihai-gserver's world/config/server.txt).\n\n\
-         name = {world} 3D\n\
+         name = 3 {world}\n\
          graal3d = true\n\
          # 4.x to 6.x clients log in to a lobby first; set the port they use.\n\
          #lobby_port = 14900\n"
@@ -1271,6 +1272,7 @@ mod tests {
             );
         }
         let cfg = text("config/server.txt");
+        assert!(cfg.contains("\nname = 3 Isle\n"), "{cfg}");
         assert!(cfg.contains("\ngraal3d = true\n"), "{cfg}");
         assert!(cfg.contains("\ngraal3d_pushterrain = true\n"), "{cfg}");
         let start = cfg
