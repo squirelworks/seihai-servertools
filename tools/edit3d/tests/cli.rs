@@ -212,3 +212,40 @@ fn another_renderer_is_run() {
         "{args}"
     );
 }
+
+/// Two terrain saves in the same second each keep their own backup, so the
+/// first one (the terrain as it was before any edit) is never written over.
+#[test]
+fn terrain_backups_in_one_second_are_kept_apart() {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path().to_str().unwrap();
+    world(d.path());
+    let terrain = d.path().join("world/isle_terrain");
+    let read_all = |dir: &Path| {
+        let mut files: Vec<(String, Vec<u8>)> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                (
+                    e.file_name().to_string_lossy().into_owned(),
+                    fs::read(e.path()).unwrap(),
+                )
+            })
+            .collect();
+        files.sort();
+        files
+    };
+    let before = read_all(&terrain);
+    ok(&["terrain", root, "raise", "5", "-5", "24", "6"]);
+    ok(&["terrain", root, "raise", "5", "-5", "24", "6"]);
+    let mut kept: Vec<_> = fs::read_dir(d.path().join("backups"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    kept.sort();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    // Sorted by name, the first backup is the earliest (`-2` sorts after
+    // the plain name, and a later second sorts later too).
+    assert_eq!(read_all(&kept[0]), before);
+    assert_ne!(read_all(&kept[1]), before);
+}
