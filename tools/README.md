@@ -18,6 +18,7 @@ Each one builds, tests and runs on its own; `seihai-servertools` (in
 | [gmap](gmap/README.md) | `seihai-gmap` | Gmap make and render |
 | [gani](gani/README.md) | `seihai-gani` | GraalShop movie mode: show, render |
 | [gen](gen/README.md) | `seihai-gen` | World generators: terrain, 3D, picture, dungeon |
+| [regions](regions/README.md) | `seihai-regions` | A big 3D overworld as a grid of regions: split, stats, demo |
 | [stats](stats/README.md) | `seihai-stats` | Leaderboard pages from accounts |
 | [gif2mng](gif2mng/README.md) | `seihai-gif2mng` | GIF to PNG or MNG |
 | [pw3d](pw3d/README.md) | `seihai-pw3d` | A 2D playerworld as 3D worlds for seihai-gserver |

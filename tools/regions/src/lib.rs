@@ -191,9 +191,9 @@ impl Layout {
 
 /// Where a line's x and y are, by its first word.
 fn xy_at(words: &[&str]) -> Option<usize> {
-    match words.first()? {
-        &"object" => Some(3),
-        &"objectfor" => Some(4),
+    match *words.first()? {
+        "object" => Some(3),
+        "objectfor" => Some(4),
         _ => None,
     }
 }
@@ -229,6 +229,9 @@ fn terrain_line(text: &str) -> Option<(String, u32, (u32, u32))> {
     }
     None
 }
+
+/// Files to write, by path under a root.
+pub type Files = Vec<(PathBuf, Vec<u8>)>;
 
 /// What `split` writes: the files under the world root, and the new world
 /// file's text.
@@ -614,7 +617,7 @@ fn ground(x: f32, y: f32, towns: &[[f32; 2]], r: f32) -> f32 {
 }
 
 /// The demo's files under the gserver folder, and a one-line summary.
-pub fn demo(o: &Demo) -> Result<(Vec<(PathBuf, Vec<u8>)>, String), String> {
+pub fn demo(o: &Demo) -> Result<(Files, String), String> {
     let l = o.layout;
     let mut rng = Rng(o.seed.wrapping_mul(2_654_435_761) ^ 0x9E37_79B9);
     for _ in 0..8 {
@@ -775,7 +778,13 @@ pub fn demo(o: &Demo) -> Result<(Vec<(PathBuf, Vec<u8>)>, String), String> {
                 } else {
                     "rg_tree.3ds"
                 };
-                put(format!("r{i}_{j}t{k}"), shape, x, y, rng.unit() * 6.28);
+                put(
+                    format!("r{i}_{j}t{k}"),
+                    shape,
+                    x,
+                    y,
+                    rng.unit() * std::f32::consts::TAU,
+                );
                 trees += 1;
             }
         }
