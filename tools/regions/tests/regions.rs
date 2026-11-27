@@ -136,15 +136,15 @@ fn demo_builds_a_world_the_stats_find_and_that_fits() {
     assert!(said.contains("1 towns, 300 houses,"), "{said}");
     let out = t.path().join("out");
     let world = fs::read_to_string(out.join("config/graal3dworld.txt")).unwrap();
-    assert!(world.contains("regions world/3d/regions 2x2 8 8\n"));
+    assert!(world.contains("regions files/3d/regions 2x2 8 8\n"));
     for f in [
-        "world/3d/rg_house.3ds",
-        "world/3d/regions/heights.info",
-        "world/3d/regions/1-1/heights7-7.dat",
+        "files/3d/rg_house.3ds",
+        "files/3d/regions/heights.info",
+        "files/3d/regions/1-1/heights7-7.dat",
     ] {
         assert!(out.join(f).is_file(), "{f}");
     }
-    let n = fs::read_dir(out.join("world/3d/regions/0-0"))
+    let n = fs::read_dir(out.join("files/3d/regions/0-0"))
         .unwrap()
         .count();
     assert_eq!(n, 64 + 1); // its chunks and region.txt

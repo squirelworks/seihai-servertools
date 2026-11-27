@@ -85,11 +85,12 @@ regions stats WORLD.txt --root DIR [--chunks N] [--reach UNITS] [--budget N]
 regions demo DIR [--regions CxR] [--chunks N] [--towns N] [--town-objects N]
             [--town-radius U] [--trees N] [--seed N] [--force]
     A test overworld as a gserver folder: DIR/config/graal3dworld.txt with
-    a regions line, DIR/world/3d/regions/ with hilly terrain, a grass,
-    rock, sand and path heights.info and textures, houses, trees and rocks
-    (.3ds) in DIR/world/3d/. Default 8x8 regions of 8 chunks (8192 units a
-    side), 6 towns of 1500 houses within 200 units of their centres, and
-    150 trees a region. The spawn is in the first town.
+    a regions line, DIR/files/3d/regions/ with hilly terrain, a grass,
+    rock, sand and path heights.info and textures, and houses, trees and
+    rocks (.3ds) in DIR/files/3d/, the folder seihai-gserver serves.
+    Default 8x8 regions of 8 chunks (8192 units a side), 6 towns of 1500
+    houses within 200 units of their centres, and 150 trees a region. The
+    spawn is just outside the first town.
 
 Without --force, split and demo refuse to write over files.
 ```
