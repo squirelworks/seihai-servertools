@@ -1,0 +1,24 @@
+[package]
+name = "seihai-regions"
+description = "A big 3D overworld as a grid of regions for seihai-gserver: split a world, count objects per region, build a test overworld."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "seihai_regions"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seihai-regions"
+path = "src/main.rs"
+
+[dependencies]
+# seihai-core comes through lat-core, at the one pin in the root
+# Cargo.toml ([workspace.dependencies]); see README.md.
+lat-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

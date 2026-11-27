@@ -44,6 +44,9 @@ Usage:
   seihai-servertools gen terrain|3d|image|dungeon ...
                                     generate a world: height field, its 3D version from a
                                     gmap, from a picture, or a dungeon (`gen --help`)
+  seihai-servertools regions split|stats|demo ...
+                                    a big 3D overworld as a grid of regions: cut a world,
+                                    count objects per region, build a test world (`regions --help`)
   seihai-servertools stats ACCOUNTS OUTDIR [MODE...]
                                     leaderboard pages (kills, deaths, rupees, highap, lowap,
                                     maxpower, power, arrows, bombs, glovepower, swordpower,
@@ -64,7 +67,7 @@ Usage:
 Every command is also its own program, built and run on its own:
 seihai-guide, seihai-lab, seihai-setup, seihai-check, seihai-code, seihai-gpak,
 seihai-level, seihai-theme, seihai-gmap, seihai-gani, seihai-gen,
-seihai-stats, seihai-gif2mng, seihai-pw3d, seihai-edit3d and seihai-servertools-gui take the same
+seihai-regions, seihai-stats, seihai-gif2mng, seihai-pw3d, seihai-edit3d and seihai-servertools-gui take the same
 words after the command name (`seihai-gpak pack ...`). `seihai-servertools
 COMMAND --help` and `seihai-COMMAND --help` print a command's options.";
 
@@ -110,6 +113,7 @@ fn dispatch(tool: &str, rest: &[&str]) -> Option<ExitCode> {
         "gmap" => seihai_gmap::run(rest),
         "gani" => seihai_gani::run(rest),
         "gen" => seihai_gen::run(rest),
+        "regions" => seihai_regions::run(rest),
         "stats" => seihai_stats::run(rest),
         "gif2mng" => seihai_gif2mng::run(rest),
         "pw3d" => seihai_pw3d::run(rest),

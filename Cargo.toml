@@ -70,6 +70,7 @@ seihai-theme = { path = "tools/theme" }
 seihai-gmap = { path = "tools/gmap" }
 seihai-gani = { path = "tools/gani" }
 seihai-gen = { path = "tools/gen" }
+seihai-regions = { path = "tools/regions" }
 seihai-stats = { path = "tools/stats" }
 seihai-gif2mng = { path = "tools/gif2mng" }
 seihai-pw3d = { path = "tools/pw3d" }

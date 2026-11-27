@@ -694,6 +694,10 @@ pub fn world3d(f: &Field3d, o3: &Terrain3dOptions) -> Result<Vec<File>, String> 
 
 /// A 256 x 256 24-bit PNG of one colour with a little grain, as the client
 /// wants for terrain materials.
+pub fn texture_png(rgb: [u8; 3]) -> Result<Vec<u8>, String> {
+    texture(rgb)
+}
+
 fn texture(rgb: [u8; 3]) -> Result<Vec<u8>, String> {
     let mut rng =
         DelphiRandom(u32::from(rgb[0]) << 16 | u32::from(rgb[1]) << 8 | u32::from(rgb[2]));
