@@ -10,7 +10,7 @@ use std::process::ExitCode;
 pub const USAGE: &str = "\
 gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
             [--chaos F] [--islands] [--force]
-            [--3d [--vscale F] [--trees N] [--stream] [--playerworld]]
+            [--3d [--vscale F] [--trees N] [--stream] [--playerworld [--v2]]]
     A height-field world (TerrainGenerator): WxH levels (default 2x2) named
     <NAME><column><row>.nw with a 9x9 HEIGHTS block each, edge links, and
     NAME.gmap with the generator keys. --height is how far the first split
@@ -24,11 +24,16 @@ gen terrain DIR --world NAME [--size WxH] [--seed N] [--base N] [--height N]
     level (default 4). --stream also writes NAME_terrain/: the ground as
     streamed terrain for 4.20r6 and 5.x clients (256 heights<x>-<y>.dat
     chunks, heights.info and its textures), and the world file uses it.
-    --playerworld lays DIR out as a gserver folder ready to ship:
-    config/graal3dworld.txt, the levels and gmap in world/, the 3D files
-    in world/3d/ under real, lower-cased names, and
-    config/foldersconfig-3d.txt: the lines the server's foldersconfig needs.
-gen 3d GMAP DIR [--world NAME] [--vscale F] [--trees N] [--stream] [--playerworld] [--force]
+    --playerworld lays DIR out as a seihai-gserver world that serves as
+    it is (seihai-gserver --world DIR): config/graal3dworld.txt, the
+    levels and gmap in levels/, the 3D files in files/3d/ under real,
+    lower-cased names, and config/server.txt with 3D on, the terrain
+    pushed at login and the start level under the spawn. With --v2 it is
+    a GServer-v2 folder instead: the levels and gmap in world/, the 3D
+    files in world/3d/, and config/foldersconfig-3d.txt: the lines the
+    server's foldersconfig needs.
+gen 3d GMAP DIR [--world NAME] [--vscale F] [--trees N] [--stream]
+       [--playerworld [--v2]] [--force]
     The --3d files (and with --stream, the streamed terrain) from a gmap that
     already has a HEIGHTMAP block, such as one written by gen terrain or by
     the original TerrainGenerator. NAME defaults to the gmap's file name.
@@ -63,10 +68,21 @@ struct Opts {
     trees: u32,
     stream: bool,
     playerworld: bool,
+    v2: bool,
     layout: Option<PathBuf>,
     maze: Option<(usize, usize)>,
     path: u16,
     wall: u16,
+}
+
+impl Opts {
+    fn server(&self) -> terrain3d::Playerworld {
+        if self.v2 {
+            terrain3d::Playerworld::V2
+        } else {
+            terrain3d::Playerworld::Seihai
+        }
+    }
 }
 
 fn size(v: &str) -> Result<(usize, usize), String> {
@@ -120,6 +136,7 @@ fn parse(args: &[&str]) -> Result<Opts, String> {
                 o.three_d = true;
                 o.playerworld = true;
             }
+            "--v2" => o.v2 = true,
             "--force" => o.force = true,
             s if s.starts_with('-') => return Err(format!("unknown option {s}")),
             s => o.plain.push(s.to_string()),
@@ -187,7 +204,7 @@ fn from_gmap(gmap: &Path, dir: &Path, o: &Opts) -> Result<(), String> {
         },
     )?;
     let files = if o.playerworld {
-        terrain3d::playerworld_layout(&world, files)
+        terrain3d::layout_for(o.server(), &world, files)
     } else {
         files
     };
@@ -278,7 +295,7 @@ fn terrain(dir: &Path, o: &Opts) -> Result<(), String> {
         files.extend(three);
     }
     if o.playerworld {
-        files = terrain3d::playerworld_layout(&options.world, files);
+        files = terrain3d::layout_for(o.server(), &options.world, files);
     }
     save(dir, &files, o.force)?;
     if o.three_d {

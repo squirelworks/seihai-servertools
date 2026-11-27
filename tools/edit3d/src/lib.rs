@@ -163,7 +163,14 @@ pub fn save(w: &World, terrain: bool) -> Result<Vec<String>, String> {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            let copy = dir.with_file_name(format!("{name}.bak-{}", stamp.compact()));
+            // Outside the served folders: a copy beside the terrain, under
+            // seihai-gserver's files/ (searched at any depth, by bare name),
+            // would serve a second heights.info and texture set (lab,
+            // 2026-11-26).
+            let copy = w
+                .root
+                .join("backups")
+                .join(format!("{name}.bak-{}", stamp.compact()));
             copy_dir(&dir, &copy).map_err(|e| format!("{}: {e}", copy.display()))?;
             said.push(format!("terrain backup {}", copy.display()));
         }
