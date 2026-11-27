@@ -55,6 +55,11 @@ flate2 = "1"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 des = "0.8"
 getrandom = "0.2"
+# 3D assets (lat-core::asset3d): pictures in any common format as textures
+# (the same image crate the window already uses, decoders only), and glTF's
+# JSON. Both MIT OR Apache-2.0, pure Rust.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tga"] }
+serde_json = "1"
 
 setup-core = { path = "crates/setup-core" }
 lat-core = { path = "crates/lat-core" }
@@ -75,5 +80,6 @@ seihai-stats = { path = "tools/stats" }
 seihai-gif2mng = { path = "tools/gif2mng" }
 seihai-pw3d = { path = "tools/pw3d" }
 seihai-edit3d = { path = "tools/edit3d", default-features = false }
+seihai-asset3d = { path = "tools/asset3d" }
 seihai-servertools-gui = { path = "tools/gui" }
 

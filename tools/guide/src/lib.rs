@@ -153,6 +153,9 @@ Building a world
   edit3d       the 3D level editor: place, move and turn objects in a 3D
                world file, set the spawn and sun, raise, flatten and paint
                the streamed terrain, with a live preview.
+  asset3d      3D models (glTF, OBJ, STL, 3DS) and pictures as shapes and
+               textures a 5.12 draws, added to a world's files/ and listed
+               in config/assets3d.txt for placing.
   regions      a big 3D overworld as a grid of regions for seihai-gserver's
                `regions` line: cut a world into regions, count objects per
                region and the densest spot, build a test overworld.

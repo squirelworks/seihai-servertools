@@ -58,13 +58,14 @@ The plan is in [docs/PLAN.md](docs/PLAN.md), the code layout in
 | 2D playerworld to 3D: each level a coloured 3D ground, gmaps as one world, links, walls and signs through a walker weapon ([tools/pw3d](tools/pw3d/README.md)) | `seihai-pw3d INPUT OUT` or `seihai-servertools pw3d` | prototype (lab runs on a real 5.12 under way) |
 | A big 3D overworld as a grid of regions for seihai-gserver's `regions` line: cut a world into regions, count objects per region and the densest spot against a client's ghost table, build a test overworld ([tools/regions](tools/regions/README.md)) | `seihai-regions split\|stats\|demo` or `seihai-servertools regions` | working (demo world walked on a real 5.12, 2026-11-27) |
 | 3D level editor: a 3D world file and its streamed terrain, with a live preview; objects, spawn, sun, terrain brushes, saved with backups ([tools/edit3d](tools/edit3d/README.md)) | `seihai-edit3d FOLDER` or `seihai-servertools edit3d` | scaffold (window, edit commands, built-in preview; not yet used on a real client's world) |
+| 3D assets for a playerworld: glTF/GLB, OBJ, STL, 3DS and pictures as `.3ds` shapes and textures within the 5.12's limits, added to a world's `files/` and listed in `config/assets3d.txt` ([tools/asset3d](tools/asset3d/README.md)) | `seihai-asset3d add FOLDER INPUT...` or `seihai-servertools asset3d` | working (7 test assets drawn on a real 5.12, 2026-11-27) |
 | Leaderboard pages from seihai-gserver accounts (gserverstat's job) | `seihai-servertools stats` | working |
 | The window | `seihai-servertools gui` | pages laid out |
 
 Every command is also its own program, built, tested and run on its own:
 `seihai-guide`, `seihai-lab`, `seihai-setup`, `seihai-check`, `seihai-code`, `seihai-gpak`,
 `seihai-level`, `seihai-theme`, `seihai-gmap`, `seihai-gani`, `seihai-gen`,
-`seihai-stats`, `seihai-gif2mng`, `seihai-pw3d`, `seihai-edit3d` and `seihai-servertools-gui` take the same
+`seihai-stats`, `seihai-gif2mng`, `seihai-pw3d`, `seihai-edit3d`, `seihai-asset3d` and `seihai-servertools-gui` take the same
 words after their name (`seihai-gpak pack ...` is `seihai-servertools gpak
 pack ...`). Each lives in `tools/<tool>/` with its own README; the list and
 the rules for a new tool are in [tools/README.md](tools/README.md).

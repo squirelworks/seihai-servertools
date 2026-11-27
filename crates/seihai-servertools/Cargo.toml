@@ -36,6 +36,7 @@ seihai-gif2mng.workspace = true
 seihai-pw3d.workspace = true
 # Its window comes with the `gui` feature; the edit commands work without.
 seihai-edit3d = { workspace = true, default-features = false }
+seihai-asset3d.workspace = true
 seihai-servertools-gui = { workspace = true, optional = true }
 
 [dev-dependencies]

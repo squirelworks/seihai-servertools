@@ -29,5 +29,8 @@ getrandom.workspace = true
 # GIF copies of PNG art (gifcopy.rs).
 png.workspace = true
 gif.workspace = true
+# 3D assets (asset3d.rs): pictures as textures, glTF's JSON.
+image.workspace = true
+serde_json.workspace = true
 # Exclusively created same-directory temporary files for atomic saves.
 tempfile.workspace = true
