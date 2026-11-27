@@ -10,7 +10,7 @@ use std::process::ExitCode;
 pub const USAGE: &str = "\
 seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
             [--tiledefs FILE] [--objects DIR] [--images DIR]... [--meaning-maps]
-            [--wall-height F] [--colour-bits N] [--force]
+            [--wall-height F] [--colour-bits N] [--separate-interiors] [--force]
     Turn the 2D playerworld in INPUT (levels and gmaps, searched in
     subfolders too) into 3D worlds in OUT, a seihai-gserver world folder:
     config/graal3dworld.txt for the start level, config/graal3dworlds/ for
@@ -35,6 +35,11 @@ seihai-pw3d INPUT OUT [--start LEVEL] [--at X,Y] [--tileset PICS1.PNG]
     figure. --meaning-maps also writes PW3D-MAPS/<level>.png, each tile coloured
     by what it was read as. --wall-height is in tiles (default 1.5); --colour-bits per
     channel (1 to 8, default 3) sets how many materials there are.
+    Interiors (levels a link from the start level or a gmap leads to,
+    and the levels linked from them) are placed in that world, far from
+    everything else, so a door is a walk with no world switch and the
+    house is not drawn from outside; serve with graal3d_scope = on so it
+    is not sent either. --separate-interiors keeps each a world of its own.
     Without --force, files already in OUT are not replaced.
     OUT holds copies of the playerworld's levels: keep it local.";
 
@@ -87,6 +92,7 @@ fn parse(args: &[&str]) -> Result<Args, String> {
                     .filter(|b| (1..=8).contains(b))
                     .ok_or(format!("--colour-bits {v}: 1 to 8"))?;
             }
+            "--separate-interiors" => o.separate_interiors = true,
             "--force" => force = true,
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             s => plain.push(s),
