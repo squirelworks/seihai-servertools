@@ -264,6 +264,112 @@ pub fn field_from_gmap(world: &str, gmap: &str) -> Result<Field3d, String> {
     })
 }
 
+/// Which gserver a `--playerworld` folder is laid out for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Playerworld {
+    /// seihai-gserver: `config/`, `levels/` and `files/`, served as it is
+    /// with `seihai-gserver --world DIR` (lab, real 5.12, 2026-11-26: the
+    /// GServer-v2 layout had to be copied into `files/` by hand).
+    #[default]
+    Seihai,
+    /// seihai-gserver-v2 (GServer-v2): `config/` and `world/`.
+    V2,
+}
+
+/// The files rearranged as a gserver folder for `server` (see
+/// [`seihai_gserver_layout`] and [`playerworld_layout`]).
+pub fn layout_for(server: Playerworld, world: &str, files: Vec<File>) -> Vec<File> {
+    match server {
+        Playerworld::Seihai => seihai_gserver_layout(world, files),
+        Playerworld::V2 => playerworld_layout(world, files),
+    }
+}
+
+/// The files rearranged as a seihai-gserver world folder that serves as it
+/// is: the world file as `config/graal3dworld.txt`, the 2D levels and gmap in
+/// `levels/`, every 3D file in `files/3d/` under its real, lower-cased name
+/// (seihai-gserver serves everything under `files/`, at any depth, by bare
+/// name), and a `config/server.txt` that turns 3D on, pushes the terrain's
+/// files at login (else a 5.12's first visit draws the terrain white,
+/// Graal_analysis `torque/terrain-512.md`) and starts new players in the
+/// level under the 3D spawn.
+pub fn seihai_gserver_layout(world: &str, files: Vec<File>) -> Vec<File> {
+    let lower = world.to_lowercase();
+    let world_txt = format!("{world}_graal3dworld.txt");
+    let levels: Vec<String> = files
+        .iter()
+        .filter(|(n, _)| n.ends_with(".nw"))
+        .map(|(n, _)| n.clone())
+        .collect();
+    let mut streamed = false;
+    let mut spawn: Option<(f64, f64)> = None;
+    let mut out: Vec<File> = files
+        .into_iter()
+        .map(|(name, bytes)| {
+            if name == world_txt {
+                let text = String::from_utf8_lossy(&bytes)
+                    .replace(&format!(" {world}"), &format!(" {lower}"))
+                    .replace(&format!("/{world}"), &format!("/{lower}"))
+                    .replace("terrain world/", "terrain files/3d/")
+                    .replace("into the server's world/ folder", "into the server's files/3d/ folder")
+                    .replace("Copy it to config/graal3dworld.txt, and the .3ds files into the\n# server's file folders", "This is config/graal3dworld.txt of a seihai-gserver world; the shapes\n# and terrain are in files/3d/");
+                streamed = text.lines().any(|l| l.starts_with("terrain "));
+                spawn = text.lines().find_map(|l| {
+                    let mut w = l.strip_prefix("spawn ")?.split_whitespace();
+                    let x: f64 = w.next()?.parse().ok()?;
+                    let y: f64 = w.next()?.parse().ok()?;
+                    Some((x, -y))
+                });
+                ("config/graal3dworld.txt".to_string(), text.into_bytes())
+            } else if name.ends_with(".nw") || name.ends_with(".gmap") {
+                (format!("levels/{name}"), bytes)
+            } else {
+                let renamed = match name.strip_prefix(world) {
+                    Some(rest) => format!("{lower}{rest}"),
+                    None => name,
+                };
+                (format!("files/3d/{renamed}"), bytes)
+            }
+        })
+        .collect();
+    // The level under the spawn: gen terrain names them
+    // <world><column><row>.nw, 64 tiles a side.
+    let (tx, ty) = spawn.unwrap_or((32.0, 32.0));
+    let (col, row) = ((tx / 64.0).max(0.0) as usize, (ty / 64.0).max(0.0) as usize);
+    let want = format!("{world}{}{row:02}.nw", generate::column_name(col));
+    let start = if levels.contains(&want) {
+        Some((want, tx - (col * 64) as f64, ty - (row * 64) as f64))
+    } else {
+        levels.first().map(|l| (l.clone(), 30.0, 30.0))
+    };
+    let mut cfg = format!(
+        "# seihai-gserver settings for the 3D world {world}, from seihai-servertools\n\
+         # gen. Serve it with: seihai-gserver --world <this folder>\n\
+         # A 5.x client links 3D only to a server whose name starts with `3 `.\n\
+         # Other settings take their defaults (see seihai-gserver's world/config/server.txt).\n\n\
+         name = 3 {world}\n\
+         graal3d = true\n\
+         # 4.x to 6.x clients log in to a lobby first; set the port they use.\n\
+         #lobby_port = 14900\n"
+    );
+    if streamed {
+        cfg.push_str(
+            "# Send heights.info and the terrain textures at login, so a 5.12's\n\
+             # first visit draws the terrain textured, not white.\n\
+             graal3d_pushterrain = true\n",
+        );
+    }
+    if let Some((level, x, y)) = start {
+        cfg.push_str(&format!(
+            "start_level = {level}\nstart_x = {:.1}\nstart_y = {:.1}\n",
+            x.clamp(0.0, 63.0),
+            y.clamp(0.0, 63.0)
+        ));
+    }
+    out.push(("config/server.txt".to_string(), cfg.into_bytes()));
+    out
+}
+
 /// The files rearranged as a gserver playerworld folder (seihai-gserver-v2's
 /// `bin/docs/graal3d.md`, "Shipping a 3D world"): the world file as
 /// `config/graal3dworld.txt`, 2D levels and the gmap in `world/`, and every 3D
@@ -1118,6 +1224,65 @@ mod tests {
                 "{shape}"
             );
         }
+    }
+
+    #[test]
+    fn a_seihai_gserver_world_serves_as_it_is() {
+        let o3 = Terrain3dOptions {
+            stream: true,
+            ..Terrain3dOptions::default()
+        };
+        let mut world = opts();
+        world.world = "Isle".into();
+        let mut files = generate::terrain(&world).unwrap();
+        files.extend(terrain3d(&world, &o3).unwrap());
+        let files = layout_for(Playerworld::Seihai, "Isle", files);
+        let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+        for n in [
+            "config/graal3dworld.txt",
+            "config/server.txt",
+            "levels/Isle.gmap",
+            "files/3d/isle.3ds",
+            "files/3d/isle_tree.3ds",
+            "files/3d/isle_terrain/heights0-0.dat",
+            "files/3d/isle_terrain/heights.info",
+            "files/3d/isle_terrain/g3d_grass.png",
+        ] {
+            assert!(names.contains(&n), "{n} in {names:?}");
+        }
+        assert!(names.iter().all(|n| !n.starts_with("world/")), "{names:?}");
+        // One heights.info, so the bare name the clients ask for is the terrain's.
+        assert_eq!(
+            names.iter().filter(|n| n.ends_with("heights.info")).count(),
+            1
+        );
+        let text = |want: &str| {
+            String::from_utf8(files.iter().find(|(n, _)| n == want).unwrap().1.clone()).unwrap()
+        };
+        let world_txt = text("config/graal3dworld.txt");
+        assert!(
+            world_txt.contains("\nterrain files/3d/isle_terrain "),
+            "{world_txt}"
+        );
+        for line in world_txt.lines().filter(|l| l.starts_with("object ")) {
+            let shape = line.split_whitespace().nth(2).unwrap();
+            assert!(
+                names.contains(&format!("files/3d/{shape}").as_str()),
+                "{shape}"
+            );
+        }
+        let cfg = text("config/server.txt");
+        assert!(cfg.contains("\nname = 3 Isle\n"), "{cfg}");
+        assert!(cfg.contains("\ngraal3d = true\n"), "{cfg}");
+        assert!(cfg.contains("\ngraal3d_pushterrain = true\n"), "{cfg}");
+        let start = cfg
+            .lines()
+            .find_map(|l| l.strip_prefix("start_level = "))
+            .expect("a start level");
+        assert!(
+            names.contains(&format!("levels/{start}").as_str()),
+            "{start}"
+        );
     }
 
     #[test]
