@@ -478,7 +478,7 @@ fn material_into(
                     Ok(mut img) => {
                         // The base colour factor tints the texture.
                         if factor != [1.0; 3] {
-                            for p in img.pixels.chunks_exact_mut(4) {
+                            for p in img.pixels.as_chunks_mut::<4>().0.iter_mut() {
                                 for k in 0..3 {
                                     p[k] = (p[k] as f32 * factor[k].clamp(0.0, 1.0)) as u8;
                                 }
@@ -565,7 +565,7 @@ fn mesh_into(
             None => (0..positions.len() as u32).collect(),
         };
         let tris: Vec<[u32; 3]> = match mode {
-            4 => idx.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect(),
+            4 => idx.as_chunks::<3>().0.to_vec(),
             5 => (2..idx.len())
                 .map(|k| {
                     if k % 2 == 0 {

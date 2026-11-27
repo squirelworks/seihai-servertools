@@ -63,7 +63,7 @@ pub fn safe(img: &Rgba, max: u32) -> Rgba {
     } else {
         img.clone()
     };
-    for px in out.pixels.chunks_exact_mut(4) {
+    for px in out.pixels.as_chunks_mut::<4>().0.iter_mut() {
         px[3] = if px[3] >= ALPHA_CUT { 255 } else { 0 };
     }
     out
@@ -71,7 +71,7 @@ pub fn safe(img: &Rgba, max: u32) -> Rgba {
 
 /// Whether every pixel is opaque.
 pub fn opaque(img: &Rgba) -> bool {
-    img.pixels.chunks_exact(4).all(|p| p[3] == 255)
+    img.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 255)
 }
 
 /// 8-bit PNG bytes: RGB when every pixel is opaque, else RGBA.
@@ -90,7 +90,9 @@ pub fn png(img: &Rgba) -> Result<Vec<u8>, String> {
         if rgb {
             let data: Vec<u8> = img
                 .pixels
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .flat_map(|p| [p[0], p[1], p[2]])
                 .collect();
             w.write_image_data(&data).map_err(|e| e.to_string())?;
@@ -105,7 +107,7 @@ pub fn png(img: &Rgba) -> Result<Vec<u8>, String> {
 pub fn average(img: &Rgba) -> [u8; 3] {
     let mut sum = [0u64; 3];
     let mut n = 0u64;
-    for p in img.pixels.chunks_exact(4) {
+    for p in img.pixels.as_chunks::<4>().0.iter() {
         if p[3] >= ALPHA_CUT {
             for k in 0..3 {
                 sum[k] += p[k] as u64;
@@ -174,10 +176,10 @@ mod tests {
         assert_eq!((s.width, s.height), (64, 128));
         assert_eq!(pow2(1, 1024), 1);
         assert_eq!(pow2(5000, 1000), 512);
-        assert!(s.pixels.chunks_exact(4).all(|p| p[3] == 255));
+        assert!(s.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
         let s = safe(&img(8, 8, [0, 0, 0, 50]), MAX_SIDE);
         assert_eq!((s.width, s.height), (8, 8));
-        assert!(s.pixels.chunks_exact(4).all(|p| p[3] == 0));
+        assert!(s.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 0));
     }
 
     #[test]
